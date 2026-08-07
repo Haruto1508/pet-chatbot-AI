@@ -1,0 +1,361 @@
+import React, { useState, useEffect } from 'react';
+import { Settings, User, Bell, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle } from 'lucide-react';
+import { UserProfile, ChatSession } from '../../types';
+import { api } from '../../services/api';
+import { useNotification } from '../../contexts/NotificationContext';
+
+interface Props {
+  currentUser: UserProfile;
+  onUpdateUser: (updates: Partial<UserProfile>) => void;
+}
+
+export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser }) => {
+  const { showSuccess } = useNotification();
+  const [userName, setUserName] = useState(currentUser.name);
+  const email = currentUser.email;
+  const [notifications, setNotifications] = useState({
+    emergencyAlerts: true,
+    vaccineReminders: true,
+    newsletter: false
+  });
+  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [storageInfo, setStorageInfo] = useState<{ usage: number; quota: number } | null>(null);
+
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  
+  // Modal states
+  const [showClearCacheModal, setShowClearCacheModal] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    setUserName(currentUser.name);
+  }, [currentUser]);
+
+  const loadSessions = async () => {
+    try {
+      const data = await api.getChatSessions(currentUser.id);
+      setChatSessions(data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Recalculate storage whenever chatSessions changes
+  React.useEffect(() => {
+    if (chatSessions.length === 0) {
+      setStorageInfo({ usage: 0, quota: 500 * 1024 * 1024 }); // Supabase free = 500MB
+      return;
+    }
+    // Calculate total size of all chat session data
+    let totalBytes = 0;
+    for (const session of chatSessions) {
+      totalBytes += new Blob([JSON.stringify(session)]).size;
+    }
+    setStorageInfo({ usage: totalBytes, quota: 500 * 1024 * 1024 });
+  }, [chatSessions]);
+
+  React.useEffect(() => {
+    loadSessions();
+  }, [currentUser.id]);
+
+  const confirmClearCache = async () => {
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      for (const name of cacheNames) {
+        await caches.delete(name);
+      }
+    }
+    loadSessions(); // triggers storage recalculation via useEffect
+    setShowClearCacheModal(false);
+    showSuccess('Đã dọn dẹp bộ nhớ đệm trình duyệt!');
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
+    try {
+      await api.deleteChatSession(sessionToDelete);
+      setChatSessions(prev => prev.filter(s => s.id !== sessionToDelete));
+      showSuccess('Đã xóa đoạn chat!');
+    } catch (e) {
+      showError('Xóa thất bại');
+    } finally {
+      setSessionToDelete(null);
+    }
+  };
+
+  const calculateSize = (obj: any) => {
+    const str = JSON.stringify(obj);
+    const bytes = new Blob([str]).size;
+    return (bytes / 1024).toFixed(2) + ' KB';
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    onUpdateUser({ name: userName });
+    showSuccess('Cập nhật thông tin cài đặt thành công!');
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  return (
+    <div className="w-full px-4 py-6 space-y-6">
+      {/* Header */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center">
+            <Settings className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Quản Lý Tài Khoản & Cài Đặt</h2>
+            <p className="text-xs text-slate-500">
+              Thiết lập thông tin cá nhân, cài đặt thông báo khẩn cấp và kết nối tài khoản Google.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {savedSuccess && (
+        <div className="p-4 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-2xl text-xs font-bold flex items-center gap-2">
+          <Check className="w-4 h-4 text-emerald-600" /> Cập nhật thông tin cài đặt thành công!
+        </div>
+      )}
+
+      {/* Settings Form */}
+      <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
+        {/* User Profile Section */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
+            <User className="w-4 h-4 text-emerald-600" /> Thông Tin Cá Nhân
+          </h3>
+
+          <div className="flex items-center gap-4">
+            <img
+              src={currentUser.avatar}
+              alt={currentUser.name}
+              className="w-16 h-16 rounded-full object-cover border-2 border-emerald-500"
+            />
+            <div>
+              <span className="text-xs font-bold text-slate-800 block">{currentUser.name}</span>
+              <span className="text-xs text-slate-500 block">{currentUser.email}</span>
+              <span className="inline-block mt-1 text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 uppercase">
+                {currentUser.role}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Họ và Tên</label>
+              <input
+                type="text"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 block mb-1">Email Google</label>
+              <input
+                type="email"
+                disabled
+                value={email}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Notifications Preference */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
+            <Bell className="w-4 h-4 text-amber-600" /> Cài Đặt Thông Báo
+          </h3>
+
+          <div className="space-y-3 text-xs">
+            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
+              <div>
+                <span className="font-bold text-slate-800 block">Thông báo cảnh báo đỏ (Cấp Bách)</span>
+                <span className="text-slate-500">Nhận cảnh báo ngay lập tức khi phát hiện triệu chứng nguy hiểm</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={notifications.emergencyAlerts}
+                onChange={(e) => setNotifications({ ...notifications, emergencyAlerts: e.target.checked })}
+                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+              />
+            </label>
+
+            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
+              <div>
+                <span className="font-bold text-slate-800 block">Nhắc lịch tiêm vắc-xin & Tái khám</span>
+                <span className="text-slate-500">Gửi nhắc nhở lịch tiêm phòng định kỳ cho chó mèo</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={notifications.vaccineReminders}
+                onChange={(e) => setNotifications({ ...notifications, vaccineReminders: e.target.checked })}
+                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Browser Storage & History Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
+            <Database className="w-4 h-4 text-blue-600" /> Quản Lý Dữ Liệu & Bộ Nhớ
+          </h3>
+          
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-600">
+                <p className="font-bold text-slate-800 mb-1 flex items-center gap-1.5">
+                  Dung lượng lịch sử Chat AI
+                  {storageInfo && (storageInfo.usage / storageInfo.quota) > 0.8 && (
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-500" title="Sắp đầy!" />
+                  )}
+                </p>
+                <p>Dữ liệu đoạn chat được lưu trên Supabase Cloud Database.</p>
+              </div>
+              
+              {storageInfo ? (
+                <div className="flex-shrink-0 text-right w-full sm:w-auto">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowClearCacheModal(true)}
+                      className="text-[11px] px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:text-red-600 hover:border-red-200 transition-colors shadow-xs"
+                    >
+                      Dọn rác Cache
+                    </button>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">
+                        Đã dùng: {storageInfo.usage < 1024 * 1024
+                          ? (storageInfo.usage / 1024).toFixed(2) + ' KB'
+                          : (storageInfo.usage / (1024 * 1024)).toFixed(2) + ' MB'}
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        Giới hạn: {(storageInfo.quota / (1024 * 1024)).toFixed(0)} MB
+                      </p>
+                    </div>
+                  </div>
+                  <div className="w-full sm:w-48 h-1.5 bg-slate-200 rounded-full overflow-hidden flex-shrink-0">
+                    <div 
+                      className={`h-full rounded-full transition-all ${
+                        (storageInfo.usage / storageInfo.quota) > 0.8 ? 'bg-red-500' :
+                        (storageInfo.usage / storageInfo.quota) > 0.5 ? 'bg-yellow-500' : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${Math.min(100, (storageInfo.usage / storageInfo.quota) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500">Đang tính toán...</div>
+              )}
+            </div>
+            
+            {/* Chat History List */}
+            <div className="border-t border-slate-200/60 pt-4 mt-2">
+              <p className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5 text-slate-500" /> Danh sách lịch sử chat đã lưu
+              </p>
+              {chatSessions.length === 0 ? (
+                <p className="text-[11px] text-slate-500 italic">Không có lịch sử chat nào.</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                  {chatSessions.map(session => (
+                    <div key={session.id} className="flex items-center justify-between p-2.5 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors group">
+                      <div className="overflow-hidden">
+                        <p className="text-xs font-bold text-slate-700 truncate">{session.title || 'Đoạn chat'}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5 flex gap-2">
+                          <span>{new Date(session.createdAt).toLocaleDateString('vi-VN')}</span>
+                          <span className="text-emerald-600 font-medium">{calculateSize(session.messages)}</span>
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSessionToDelete(session.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 opacity-0 group-hover:opacity-100"
+                        title="Xóa đoạn chat này"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-4 border-t border-slate-100 flex justify-end">
+          <button
+            type="submit"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
+          >
+            <Save className="w-4 h-4" /> Lưu Thay Đổi
+          </button>
+        </div>
+      </form>
+
+      {/* Clear Cache Modal */}
+      {showClearCacheModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+              <Database className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-center text-slate-900 mb-2">Dọn Dẹp Cache</h3>
+            <p className="text-sm text-center text-slate-500 mb-6">
+              Bạn có chắc chắn muốn xóa bộ nhớ đệm của trình duyệt không? Lịch sử chat sẽ KHÔNG bị ảnh hưởng.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowClearCacheModal(false)}
+                className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmClearCache}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-xs"
+              >
+                Xác nhận Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Session Modal */}
+      {sessionToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl animate-in zoom-in-95 duration-200">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-center text-slate-900 mb-2">Xóa Lịch Sử Chat</h3>
+            <p className="text-sm text-center text-slate-500 mb-6">
+              Bạn có chắc chắn muốn xóa vĩnh viễn đoạn chat này không? Hành động này không thể hoàn tác.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSessionToDelete(null)}
+                className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={confirmDeleteSession}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-xs"
+              >
+                Xóa ngay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

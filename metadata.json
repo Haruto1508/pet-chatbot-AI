@@ -1,0 +1,6 @@
+{
+  "name": "PetCare AI - Tư Vấn & Hồ Sơ Bệnh Án Thú Cưng",
+  "description": "Hệ thống AI tư vấn sức khỏe thú cưng, phân loại mức độ nguy hiểm khẩn cấp, tổng hợp hồ sơ bệnh án, tìm kiếm phòng khám thú y và quản trị tri thức RAG.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
