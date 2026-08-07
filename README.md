@@ -83,23 +83,73 @@ Hệ thống phân định quyền truy cập tự động dựa trên Email Goo
 
 ---
 
-## 🛠️ 6. HƯỚNG DẪN CHẠY DỰ ÁN (LOCAL DEVELOPMENT)
+## 🛠️ 6. HƯỚNG DẪN SETUP & CHẠY DỰ ÁN (LOCAL DEVELOPMENT)
 
-1. **Cài đặt phụ thuộc**:
+Thực hiện tuần tự các bước dưới đây để chạy đầy đủ cả Frontend, Backend Node.js, Database Supabase và Service AI nhận diện hình ảnh Python.
+
+### 📥 Bước 1: Clone dự án và cài đặt Node.js dependencies
+Mở Terminal và chạy các lệnh sau:
+```bash
+# Clone repository
+git clone https://github.com/Haruto1508/pet-chatbot-AI.git
+
+# Di chuyển vào thư mục dự án
+cd pet-chatbot-AI
+
+# Cài đặt các thư viện Node.js
+npm install
+```
+
+### 🔑 Bước 2: Thiết lập biến môi trường (`.env`)
+Tạo một file tên là `.env` ở thư mục gốc của dự án (dựa trên file `.env.example`) và điền đầy đủ các thông tin:
+```env
+GEMINI_API_KEY="your_google_gemini_api_key_here"
+APP_URL="http://localhost:3000"
+GOOGLE_MAPS_PLATFORM_KEY="your_google_maps_api_key"
+SUPABASE_URL="https://your_project_reference.supabase.co"
+SUPABASE_ANON_KEY="your_supabase_anon_public_key"
+```
+
+### 🗄️ Bước 3: Thiết lập Cơ sở dữ liệu Supabase (Vector DB & RAG)
+Dự án sử dụng cơ sở dữ liệu Vector để tìm kiếm ngữ cảnh RAG nâng cao.
+1. Truy cập vào trang quản trị Supabase SQL Editor của bạn.
+2. Sao chép và chạy nội dung trong file [scripts/setup_vector_db.sql](file:///d:/Study%20Materials/Semester%208/EXE201/petcare-ai/scripts/setup_vector_db.sql) để tạo bảng, kích hoạt phần mở rộng `pgvector` và hàm RPC tìm kiếm tương đồng vector (`match_articles`).
+3. Chạy câu lệnh Node.js sau để nạp dữ liệu mẫu (Seed Data) và các bài viết tri thức thú y ban đầu vào Supabase:
    ```bash
-   npm install
+   npx tsx scripts/seedSupabase.ts
    ```
-2. **Cấu hình biến môi trường**:
-   Tạo file `.env` (dựa theo `.env.example`):
-   ```env
-   GEMINI_API_KEY=your_google_gemini_api_key_here
-   ```
-3. **Khởi chạy ứng dụng**:
-   ```bash
-   npm run dev
-   ```
-   Ứng dụng sẽ chạy tại địa chỉ: `http://localhost:3000`.
+
+### 🐍 Bước 4: Setup Service AI Nhận Diện Triệu Chứng Bệnh (Python ResNet)
+Thư mục `python_ai_service` chứa API nhận diện hình ảnh vết thương, nấm da, viêm da cho thú cưng.
+```bash
+# Di chuyển vào thư mục python service
+cd python_ai_service
+
+# Tạo môi trường ảo (Virtual Environment)
+python -m venv venv
+
+# Kích hoạt môi trường ảo:
+# Trên Windows:
+venv\Scripts\activate
+# Trên macOS/Linux:
+source venv/bin/activate
+
+# Cài đặt các thư viện Python cần thiết
+pip install -r requirements.txt
+
+# Khởi chạy FastAPI server trên cổng 8000
+uvicorn main:app --reload --port 8000
+```
+*Giao diện API Python sẽ hoạt động tại địa chỉ: `http://localhost:8000`.*
+
+### 🚀 Bước 5: Chạy ứng dụng Web chính (React + Node.js)
+Mở một terminal mới (vẫn ở thư mục gốc của dự án `pet-chatbot-AI`) và chạy:
+```bash
+npm run dev
+```
+*Hệ thống Web chính sẽ hoạt động tại địa chỉ: `http://localhost:3000`.*
 
 ---
 
 © 2026 PetCare AI System. Được phát triển dựa trên **Google Gemini AI** & **React 19**.
+
