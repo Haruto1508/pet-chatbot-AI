@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Menu,
   HeartPulse,
@@ -6,9 +6,12 @@ import {
   ShieldCheck,
   Sparkles,
   PhoneCall,
-  LogIn
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { UserProfile } from '../../types';
+import { LogoutConfirmModal } from './LogoutConfirmModal';
+import { AdminNotifications } from '../admin/AdminNotifications';
 
 interface HeaderProps {
   currentTab: string;
@@ -16,6 +19,7 @@ interface HeaderProps {
   isAuthLoading?: boolean;
   onOpenLoginModal: () => void;
   onToggleSidebar: () => void;
+  onNavigateToTab: (tab: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -23,8 +27,10 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   isAuthLoading = false,
   onOpenLoginModal,
-  onToggleSidebar
+  onToggleSidebar,
+  onNavigateToTab
 }) => {
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const isAdmin = currentUser.role === 'admin';
 
   // Map active tab to human readable title
@@ -128,6 +134,8 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           ) : (
             <>
+              {isAdmin && <AdminNotifications onNavigateToTab={onNavigateToTab} />}
+              
               {/* Quick role status badge */}
               <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-[11px] font-bold">
                 <span className="text-slate-500">Google Auth:</span>
@@ -169,14 +177,11 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   </div>
                   <button
-                    onClick={async () => {
-                      const { supabase } = await import('../../services/supabaseClient');
-                      await supabase.auth.signOut();
-                    }}
-                    className="text-slate-500 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50"
+                    onClick={() => setShowLogoutModal(true)}
+                    className="text-slate-500 hover:text-red-600 transition-colors p-1.5 rounded-lg hover:bg-red-50 flex items-center gap-1"
                     title="Đăng Xuất"
                   >
-                    <LogIn className="w-4 h-4 rotate-180" />
+                    <LogOut className="w-4 h-4 text-red-500" />
                   </button>
                 </div>
               )}
@@ -184,6 +189,18 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        userName={currentUser.name}
+        userEmail={currentUser.email}
+        onConfirm={async () => {
+          const { supabase } = await import('../../services/supabaseClient');
+          await supabase.auth.signOut();
+        }}
+      />
     </header>
   );
 };

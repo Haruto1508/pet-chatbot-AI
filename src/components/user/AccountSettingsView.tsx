@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Bell, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle } from 'lucide-react';
+import { Settings, User, Bell, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut } from 'lucide-react';
 import { UserProfile, ChatSession } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { LogoutConfirmModal } from '../common/LogoutConfirmModal';
 
 interface Props {
   currentUser: UserProfile;
@@ -10,7 +11,7 @@ interface Props {
 }
 
 export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser }) => {
-  const { showSuccess } = useNotification();
+  const { showSuccess, showError } = useNotification();
   const [userName, setUserName] = useState(currentUser.name);
   const email = currentUser.email;
   const [notifications, setNotifications] = useState({
@@ -25,6 +26,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
   
   // Modal states
   const [showClearCacheModal, setShowClearCacheModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
   React.useEffect(() => {
@@ -213,7 +215,9 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
                 <p className="font-bold text-slate-800 mb-1 flex items-center gap-1.5">
                   Dung lượng lịch sử Chat AI
                   {storageInfo && (storageInfo.usage / storageInfo.quota) > 0.8 && (
-                    <AlertTriangle className="w-3.5 h-3.5 text-red-500" title="Sắp đầy!" />
+                    <span title="Sắp đầy!">
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                    </span>
                   )}
                 </p>
                 <p>Dữ liệu đoạn chat được lưu trên Supabase Cloud Database.</p>
@@ -289,7 +293,19 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
           </div>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 flex justify-end">
+        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+          {currentUser.id !== 'guest' ? (
+            <button
+              type="button"
+              onClick={() => setShowLogoutModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-xs border border-red-200 transition-all cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" /> Đăng Xuất Tài Khoản
+            </button>
+          ) : (
+            <div />
+          )}
+
           <button
             type="submit"
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
@@ -298,6 +314,18 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
           </button>
         </div>
       </form>
+
+      {/* Logout Confirm Modal */}
+      <LogoutConfirmModal
+        isOpen={showLogoutModal}
+        onClose={() => setShowLogoutModal(false)}
+        userName={currentUser.name}
+        userEmail={currentUser.email}
+        onConfirm={async () => {
+          const { supabase } = await import('../../services/supabaseClient');
+          await supabase.auth.signOut();
+        }}
+      />
 
       {/* Clear Cache Modal */}
       {showClearCacheModal && (

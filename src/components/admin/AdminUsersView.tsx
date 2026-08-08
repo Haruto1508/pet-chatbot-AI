@@ -13,6 +13,10 @@ export const AdminUsersView: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
 
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [userToToggleStatus, setUserToToggleStatus] = useState<UserProfile | null>(null);
+  const [unlockRequests, setUnlockRequests] = useState<any[]>([]);
+
   const loadUsers = async () => {
     setLoading(true);
     try {
@@ -27,17 +31,38 @@ export const AdminUsersView: React.FC = () => {
 
   useEffect(() => {
     loadUsers();
+    try {
+      const reqs = JSON.parse(localStorage.getItem('petcare_unlock_requests') || '[]');
+      setUnlockRequests(reqs);
+    } catch (e) {
+      console.error(e);
+    }
   }, []);
 
-  const handleToggleStatus = async (user: UserProfile) => {
+  const handleToggleClick = (user: UserProfile) => {
+    setUserToToggleStatus(user);
+    setStatusModalOpen(true);
+  };
+
+  const confirmToggleStatus = async () => {
+    if (!userToToggleStatus) return;
     try {
-      const newStatus = user.status === 'active' ? 'suspended' : 'active';
-      await api.updateUserStatus(user.id, newStatus);
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u));
-      showSuccess(`Đã ${newStatus === 'active' ? 'mở khóa' : 'khóa'} tài khoản ${user.name}`);
+      const newStatus = userToToggleStatus.status === 'active' ? 'suspended' : 'active';
+      await api.updateUserStatus(userToToggleStatus.id, newStatus);
+      setUsers(prev => prev.map(u => u.id === userToToggleStatus.id ? { ...u, status: newStatus } : u));
+      
+      if (newStatus === 'active') {
+        const updatedReqs = unlockRequests.filter(r => r.userId !== userToToggleStatus.id && r.userEmail !== userToToggleStatus.email);
+        setUnlockRequests(updatedReqs);
+        localStorage.setItem('petcare_unlock_requests', JSON.stringify(updatedReqs));
+      }
+
+      showSuccess(`Đã ${newStatus === 'active' ? 'mở khóa' : 'khóa'} tài khoản ${userToToggleStatus.name}`);
     } catch (e) {
       console.error(e);
       showError('Cập nhật trạng thái thất bại');
+    } finally {
+      setUserToToggleStatus(null);
     }
   };
 
@@ -130,6 +155,16 @@ export const AdminUsersView: React.FC = () => {
                         <div>
                           <span className="font-bold text-slate-900 block">{u.name}</span>
                           <span className="text-[11px] text-slate-500 block">{u.email}</span>
+                          {(() => {
+                            const req = unlockRequests.find(r => r.userId === u.id || r.userEmail === u.email);
+                            if (!req || u.status !== 'suspended') return null;
+                            return (
+                              <div className="mt-1 bg-amber-50 border border-amber-200 text-amber-900 text-[10px] p-1.5 rounded-lg max-w-xs shadow-2xs">
+                                <span className="font-bold block text-amber-800">📩 Đã gửi yêu cầu mở khóa:</span>
+                                <span className="italic line-clamp-2">"{req.reason}"</span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </td>
@@ -163,9 +198,9 @@ export const AdminUsersView: React.FC = () => {
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => handleToggleStatus(u)}
+                          onClick={() => handleToggleClick(u)}
                           title={u.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-                          className={`p-1.5 rounded-lg border font-semibold text-[11px] transition-all ${
+                          className={`p-1.5 rounded-lg border font-semibold text-[11px] transition-all cursor-pointer ${
                             u.status === 'active'
                               ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
                               : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
@@ -182,7 +217,7 @@ export const AdminUsersView: React.FC = () => {
                           <button
                             onClick={() => handleDeleteClick(u.id)}
                             title="Xóa người dùng"
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -196,6 +231,29 @@ export const AdminUsersView: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Confirm Lock/Unlock Status Modal */}
+      <ConfirmModal
+        isOpen={statusModalOpen}
+        onClose={() => {
+          setStatusModalOpen(false);
+          setUserToToggleStatus(null);
+        }}
+        onConfirm={confirmToggleStatus}
+        title={
+          userToToggleStatus?.status === 'active'
+            ? 'Xác nhận khóa tài khoản'
+            : 'Xác nhận mở khóa tài khoản'
+        }
+        message={
+          userToToggleStatus?.status === 'active'
+            ? `Bạn có chắc chắn muốn khóa tài khoản "${userToToggleStatus?.name}" (${userToToggleStatus?.email}) không? Người dùng sẽ bị tạm dừng quyền đăng nhập hệ thống.`
+            : `Bạn có chắc chắn muốn khôi phục quyền hoạt động cho tài khoản "${userToToggleStatus?.name}" (${userToToggleStatus?.email}) không?`
+        }
+        confirmText={userToToggleStatus?.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa'}
+        cancelText="Hủy bỏ"
+      />
+
       {/* Confirm Delete Modal */}
       <ConfirmModal
         isOpen={deleteModalOpen}

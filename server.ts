@@ -13,7 +13,7 @@ async function startServer() {
 
   app.use(express.json({ limit: '10mb' }));
 
-  let chatSessionCount = 124; // Initial metric counter
+  // Metric counters are fetched dynamically
 
   // Gemini AI Client Helper (Lazy initialization)
   function getGeminiClient(): GoogleGenAI {
@@ -101,23 +101,24 @@ async function startServer() {
   // System Stats
   app.get('/api/stats', async (_req: Request, res: Response) => {
     try {
-      const [users, pets, records, red, yellow, green] = await Promise.all([
+      const [users, pets, records, red, yellow, green, chatSessions] = await Promise.all([
         supabase.from('users').select('*', { count: 'exact', head: true }),
         supabase.from('pets').select('*', { count: 'exact', head: true }),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'RED'),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'YELLOW'),
-        supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'GREEN')
+        supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'GREEN'),
+        supabase.from('chat_sessions').select('*', { count: 'exact', head: true })
       ]);
 
       res.json({
         totalUsers: users.count || 0,
-        activeChats: chatSessionCount,
+        activeChats: chatSessions.count || 0,
         totalPets: pets.count || 0,
         totalMedicalRecords: records.count || 0,
-        triageRedCount: (red.count || 0) + 18,
-        triageYellowCount: (yellow.count || 0) + 34,
-        triageGreenCount: (green.count || 0) + 72
+        triageRedCount: red.count || 0,
+        triageYellowCount: yellow.count || 0,
+        triageGreenCount: green.count || 0
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -690,7 +691,7 @@ async function startServer() {
 
   // --- AI CHAT ENDPOINT (Server-Side Gemini API) ---
   app.post('/api/chat', async (req: Request, res: Response) => {
-    chatSessionCount += 1;
+
     const { message, petId, petInfo, imageBase64, history } = req.body;
 
     try {

@@ -7,7 +7,9 @@ import { supabase } from './services/supabaseClient';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
 import { LoginModal } from './components/common/LoginModal';
+import { SuspendedAccountModal } from './components/common/SuspendedAccountModal';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { NotFoundView } from './components/common/NotFoundView';
 
 // Lazy-loaded User Views (only loaded when user navigates to the tab)
 const PetChatView = lazy(() => import('./components/user/PetChatView').then(m => ({ default: m.PetChatView })));
@@ -50,11 +52,12 @@ const guestUser: UserProfile = {
 };
 
 export function App() {
-  const validTabs = ['chat', 'records', 'record_detail', 'news', 'emergency', 'clinics', 'pets', 'account', 'admin_dashboard', 'admin_users', 'admin_records', 'admin_clinics', 'admin_rag', 'admin_config'];
+  const validTabs = ['chat', 'records', 'record_detail', 'news', 'emergency', 'clinics', 'pets', 'account', 'admin_dashboard', 'admin_users', 'admin_records', 'admin_clinics', 'admin_rag', 'admin_config', 'not_found'];
   
   const getInitialTab = () => {
     const path = window.location.pathname.substring(1);
-    return validTabs.includes(path) ? path : 'chat';
+    if (!path) return 'chat';
+    return validTabs.includes(path) ? path : 'not_found';
   };
 
   const [currentUser, setCurrentUser] = useState<UserProfile>(guestUser);
@@ -95,7 +98,8 @@ export function App() {
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname.substring(1);
-      setCurrentTab(validTabs.includes(path) ? path : 'chat');
+      if (!path) setCurrentTab('chat');
+      else setCurrentTab(validTabs.includes(path) ? path : 'not_found');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -237,6 +241,7 @@ export function App() {
             isAuthLoading={isAuthLoading}
             onOpenLoginModal={() => setIsLoginModalOpen(true)}
             onToggleSidebar={toggleSidebar}
+            onNavigateToTab={setCurrentTab}
           />
 
           {/* Body Content Views */}
@@ -330,6 +335,8 @@ export function App() {
                 {currentTab === 'admin_config' && <AdminSystemConfigView />}
               </>
             )}
+
+            {currentTab === 'not_found' && <NotFoundView />}
             </Suspense>
           </main>
 
@@ -351,6 +358,17 @@ export function App() {
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
       />
+
+      {/* Suspended Account Overlay Modal */}
+      {currentUser.status === 'suspended' && (
+        <SuspendedAccountModal
+          currentUser={currentUser}
+          onLogoutAndSwitch={async () => {
+            await supabase.auth.signOut();
+            setIsLoginModalOpen(true);
+          }}
+        />
+      )}
     </div>
     </NotificationProvider>
   );

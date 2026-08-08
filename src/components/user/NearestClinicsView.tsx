@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MapPin, Phone, Star, Clock, AlertCircle, Search, Navigation, ExternalLink, ShieldCheck, LocateFixed } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { MapPin, Phone, Star, Clock, AlertCircle, Search, Navigation, ExternalLink, ShieldCheck, LocateFixed, RefreshCw, Compass } from 'lucide-react';
 import { VetClinic } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -7,6 +7,7 @@ import { useNotification } from '../../contexts/NotificationContext';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
+
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -27,11 +28,15 @@ const userIcon = new L.Icon({
   shadowSize: [41, 41]
 });
 
-const ChangeView: React.FC<{ center: [number, number], zoom: number }> = ({ center, zoom }) => {
+// Component to dynamically re-center map whenever target location or zoom changes
+const DynamicMapView: React.FC<{ center: { lat: number; lng: number }; zoom: number }> = ({ center, zoom }) => {
   const map = useMap();
   useEffect(() => {
-    map.setView(center, zoom);
-  }, [center, zoom, map]);
+    if (center && typeof center.lat === 'number' && typeof center.lng === 'number') {
+      map.flyTo([center.lat, center.lng], zoom, { duration: 1.2 });
+      setTimeout(() => map.invalidateSize(), 200);
+    }
+  }, [center.lat, center.lng, zoom, map]);
   return null;
 };
 
@@ -41,21 +46,124 @@ export const NearestClinicsView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [emergencyOnly, setEmergencyOnly] = useState(false);
   const [selectedClinic, setSelectedClinic] = useState<VetClinic | null>(null);
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  
+  // Location States
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationSource, setLocationSource] = useState<'gps' | 'ip' | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
+
+  // Map Target State for smooth panning/zooming
+  const [mapTarget, setMapTarget] = useState<{ lat: number; lng: number; zoom: number }>({
+    lat: 10.776889,
+    lng: 106.700806,
+    zoom: 14
+  });
   
   const { showSuccess, showError } = useNotification();
+
+  const fetchIPLocation = async (): Promise<{ lat: number; lng: number } | null> => {
+    try {
+      const res = await fetch('https://ipapi.co/json/');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+          return { lat: data.latitude, lng: data.longitude };
+        }
+      }
+    } catch (e) {
+      console.warn('ipapi.co lookup failed, trying fallback...', e);
+    }
+
+    try {
+      const res2 = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
+      if (res2.ok) {
+        const data2 = await res2.json();
+        if (data2 && typeof data2.latitude === 'number' && typeof data2.longitude === 'number') {
+          return { lat: data2.latitude, lng: data2.longitude };
+        }
+      }
+    } catch (e2) {
+      console.warn('BigDataCloud lookup failed...', e2);
+    }
+
+    return null;
+  };
+
+  const detectLocation = useCallback(async (isAuto = false) => {
+    setLocationLoading(true);
+
+    const getBrowserPosition = (options: PositionOptions) => {
+      return new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation not supported'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, options);
+      });
+    };
+
+    // Attempt 1: Browser GPS High Accuracy
+    try {
+      const pos = await getBrowserPosition({ enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 });
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setUserLocation(loc);
+      setLocationSource('gps');
+      setLocationLoading(false);
+      setMapTarget({ lat: loc.lat, lng: loc.lng, zoom: 15 });
+      showSuccess(isAuto ? 'Tự động định vị GPS thành công!' : 'Đã cập nhật vị trí GPS của bạn!');
+      return;
+    } catch (err: any) {
+      console.warn('GPS High Accuracy failed/timed out, checking fallback...', err);
+      if (err?.code !== 1) { // If not explicitly PERMISSION_DENIED
+        try {
+          const pos = await getBrowserPosition({ enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 });
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserLocation(loc);
+          setLocationSource('gps');
+          setLocationLoading(false);
+          setMapTarget({ lat: loc.lat, lng: loc.lng, zoom: 15 });
+          showSuccess('Xác định vị trí thành công!');
+          return;
+        } catch (err2) {
+          console.warn('GPS Low Accuracy failed, switching to IP Geolocation...', err2);
+        }
+      }
+    }
+
+    // Attempt 2: IP Geolocation Fallback
+    const ipLoc = await fetchIPLocation();
+    if (ipLoc) {
+      setUserLocation(ipLoc);
+      setLocationSource('ip');
+      setLocationLoading(false);
+      setMapTarget({ lat: ipLoc.lat, lng: ipLoc.lng, zoom: 14 });
+      showSuccess(isAuto ? 'Đã ước tính vị trí của bạn qua địa chỉ IP!' : 'Đã lấy vị trí ước tính qua IP!');
+      return;
+    }
+
+    // Attempt 3: Default fallback (Ho Chi Minh City center)
+    setLocationLoading(false);
+    const defaultLoc = { lat: 10.776889, lng: 106.700806 };
+    setUserLocation(defaultLoc);
+    setLocationSource('ip');
+    setMapTarget({ lat: defaultLoc.lat, lng: defaultLoc.lng, zoom: 13 });
+    if (!isAuto) {
+      showError('Không thể lấy vị trí GPS. Đã đặt vị trí mặc định tại trung tâm TP.HCM.');
+    }
+  }, [showSuccess, showError]);
+
+  useEffect(() => {
+    detectLocation(true);
+  }, []);
 
   const loadClinics = async () => {
     setLoading(true);
     try {
       const data = await api.getClinics(searchTerm);
       setClinics(data);
-      if (data.length > 0 && !selectedClinic) {
-        setSelectedClinic(data[0]);
-      }
     } catch (e) {
       console.error('Error loading clinics:', e);
+      showError('Lỗi tải danh sách phòng khám');
     } finally {
       setLoading(false);
     }
@@ -66,7 +174,7 @@ export const NearestClinicsView: React.FC = () => {
   }, [searchTerm]);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Radius of the earth in km
+    const R = 6371; // Earth radius in km
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
     const a = 
@@ -90,29 +198,40 @@ export const NearestClinicsView: React.FC = () => {
       return 0;
     });
 
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      showError('Trình duyệt của bạn không hỗ trợ định vị.');
-      return;
-    }
-    setLocationLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setUserLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-        setLocationLoading(false);
-        showSuccess('Đã cập nhật vị trí của bạn!');
-      },
-      (error) => {
-        setLocationLoading(false);
-        showError('Không thể lấy vị trí. Vui lòng cấp quyền truy cập vị trí (hoặc mở GPS).');
+  // Automatically select the nearest clinic whenever user location or clinic list updates
+  useEffect(() => {
+    if (processedClinics.length > 0) {
+      if (!selectedClinic || !processedClinics.some(c => c.id === selectedClinic.id)) {
+        const closest = processedClinics[0];
+        setSelectedClinic(closest);
+        // Only update mapTarget to closest clinic if userLocation is null initially
+        if (!userLocation) {
+          setMapTarget({ lat: closest.lat, lng: closest.lng, zoom: 15 });
+        }
       }
-    );
+    }
+  }, [userLocation, emergencyOnly, clinics]);
+
+  const handleSelectClinic = (clinic: VetClinic) => {
+    setSelectedClinic(clinic);
+    setMapTarget({ lat: clinic.lat, lng: clinic.lng, zoom: 16 });
+  };
+
+  const handleRecenterUserLocation = () => {
+    if (userLocation) {
+      setMapTarget({ lat: userLocation.lat, lng: userLocation.lng, zoom: 16 });
+      showSuccess('Đã chuyển góc nhìn bản đồ về vị trí của bạn!');
+    } else {
+      detectLocation(false);
+    }
   };
 
   const getGoogleMapsDirectionsUrl = (clinic: VetClinic) => {
+    if (userLocation) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${clinic.lat},${clinic.lng}&destination_place_id=${encodeURIComponent(
+        clinic.name
+      )}`;
+    }
     return `https://www.google.com/maps/dir/?api=1&destination=${clinic.lat},${clinic.lng}&destination_place_id=${encodeURIComponent(
       clinic.name
     )}`;
@@ -129,7 +248,7 @@ export const NearestClinicsView: React.FC = () => {
           <div>
             <h2 className="text-xl font-bold text-slate-900">Tìm Bệnh Viện & Phòng Khám Thú Y Gần Nhất</h2>
             <p className="text-xs text-slate-500">
-              Tra cứu phòng khám uy tín, dịch vụ cấp cứu 24/7 và dẫn đường bản đồ Google Maps.
+              Tự động định vị vị trí thực tế của bạn, tính khoảng cách, dịch vụ cấp cứu 24/7 và chỉ đường bản đồ.
             </p>
           </div>
         </div>
@@ -139,7 +258,7 @@ export const NearestClinicsView: React.FC = () => {
           onClick={() => setEmergencyOnly(!emergencyOnly)}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
             emergencyOnly
-              ? 'bg-red-600 text-white shadow-md'
+              ? 'bg-red-600 text-white shadow-md ring-2 ring-red-300'
               : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
           }`}
         >
@@ -148,37 +267,77 @@ export const NearestClinicsView: React.FC = () => {
         </button>
       </div>
 
-      {/* Search & Location Input */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Tìm phòng khám theo tên, địa chỉ, quận huyện..."
-            className="w-full text-xs sm:text-sm pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-xs"
-          />
+      {/* Location Status Bar */}
+      <div className="bg-purple-50/70 border border-purple-200/80 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+            {locationLoading ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : locationSource === 'gps' ? (
+              <LocateFixed className="w-4 h-4 text-emerald-300" />
+            ) : (
+              <Compass className="w-4 h-4 text-amber-300" />
+            )}
+          </div>
+          <div>
+            <span className="font-bold text-slate-800 block">
+              Trạng thái định vị: {' '}
+              {locationLoading ? (
+                <span className="text-purple-700 animate-pulse">Đang định vị vị trí của bạn...</span>
+              ) : userLocation ? (
+                <span className="text-emerald-700 font-extrabold">
+                  {locationSource === 'gps' ? '📍 GPS Độ Chính Xác Cao' : '🌐 Ước Tính Theo Địa Chỉ IP'}
+                </span>
+              ) : (
+                <span className="text-slate-500">Chưa định vị</span>
+              )}
+            </span>
+            {userLocation && (
+              <span className="text-[11px] text-slate-500">
+                Tọa độ hiện tại: [{userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}] • Đã cập nhật khoảng cách phòng khám
+              </span>
+            )}
+          </div>
         </div>
-        
-        <button
-          onClick={handleGetLocation}
-          disabled={locationLoading}
-          className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs sm:text-sm shadow-xs whitespace-nowrap disabled:opacity-50 transition-colors"
-        >
-          {locationLoading ? (
-            <div className="w-4 h-4 border-2 border-slate-300 border-t-purple-600 rounded-full animate-spin" />
-          ) : (
-            <LocateFixed className="w-4 h-4 text-purple-600" />
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {userLocation && (
+            <button
+              onClick={handleRecenterUserLocation}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700 font-bold shadow-xs transition-all text-xs"
+            >
+              <LocateFixed className="w-3.5 h-3.5" />
+              Định vị lại bản đồ
+            </button>
           )}
-          {userLocation ? 'Cập nhật lại vị trí' : 'Phòng khám gần tôi'}
-        </button>
+
+          <button
+            onClick={() => detectLocation(false)}
+            disabled={locationLoading}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-purple-200 text-purple-700 hover:bg-purple-100/50 font-bold shadow-xs whitespace-nowrap disabled:opacity-50 transition-all text-xs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${locationLoading ? 'animate-spin' : ''}`} />
+            {locationLoading ? 'Đang định vị...' : 'Cập nhật GPS'}
+          </button>
+        </div>
+      </div>
+
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Tìm phòng khám theo tên, địa chỉ, quận huyện..."
+          className="w-full text-xs sm:text-sm pl-10 pr-4 py-3 rounded-2xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-xs"
+        />
       </div>
 
       {/* Content Layout: Map Embed + Clinic Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Side: Clinic Cards List */}
-        <div className="lg:col-span-5 space-y-3 max-h-[600px] overflow-y-auto pr-1">
+        <div className="lg:col-span-5 space-y-3 max-h-[620px] overflow-y-auto pr-1">
           {loading ? (
             <div className="text-center py-12 text-slate-500 text-xs">Đang tải danh sách phòng khám...</div>
           ) : processedClinics.length === 0 ? (
@@ -187,21 +346,29 @@ export const NearestClinicsView: React.FC = () => {
               <p className="text-xs font-semibold text-slate-700">Không tìm thấy phòng khám phù hợp.</p>
             </div>
           ) : (
-            processedClinics.map((clinic) => {
+            processedClinics.map((clinic, index) => {
               const isSelected = selectedClinic?.id === clinic.id;
+              const isClosest = index === 0 && clinic.distanceKm !== undefined;
               return (
                 <div
                   key={clinic.id}
-                  onClick={() => setSelectedClinic(clinic)}
+                  onClick={() => handleSelectClinic(clinic)}
                   className={`bg-white rounded-2xl p-4 border transition-all cursor-pointer space-y-3 ${
                     isSelected
-                      ? 'border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/30'
+                      ? 'border-purple-600 ring-2 ring-purple-500/20 bg-purple-50/30 shadow-sm'
                       : 'border-slate-200 hover:border-slate-300 shadow-xs'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">{clinic.name}</h3>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="text-sm font-bold text-slate-900">{clinic.name}</h3>
+                        {isClosest && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            ⚡ Gần bạn nhất
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-slate-500 mt-1 line-clamp-2">{clinic.address}</p>
                     </div>
 
@@ -213,7 +380,7 @@ export const NearestClinicsView: React.FC = () => {
                       )}
                       {clinic.distanceKm !== undefined && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 whitespace-nowrap flex items-center gap-1">
-                          <Navigation className="w-3 h-3" />
+                          <Navigation className="w-3 h-3 text-purple-600" />
                           {clinic.distanceKm.toFixed(1)} km
                         </span>
                       )}
@@ -230,7 +397,7 @@ export const NearestClinicsView: React.FC = () => {
                     <a
                       href={`tel:${clinic.phone}`}
                       onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg hover:bg-emerald-100"
+                      className="flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors"
                     >
                       <Phone className="w-3.5 h-3.5" /> {clinic.phone}
                     </a>
@@ -243,100 +410,137 @@ export const NearestClinicsView: React.FC = () => {
 
         {/* Right Side: Map & Selected Clinic Details */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-4 flex flex-col">
-          {selectedClinic ? (
-            <>
-              {/* Leaflet Map Frame */}
-              <div className="relative w-full h-[350px] lg:h-[450px] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-inner z-0">
-                <MapContainer 
-                  center={[selectedClinic.lat, selectedClinic.lng]} 
-                  zoom={14} 
-                  scrollWheelZoom={true} 
-                  style={{ height: '100%', width: '100%', zIndex: 10 }}
+          {/* Leaflet Map Frame */}
+          <div className="relative w-full h-[350px] lg:h-[450px] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-inner z-0">
+            <MapContainer 
+              center={[mapTarget.lat, mapTarget.lng]} 
+              zoom={mapTarget.zoom} 
+              scrollWheelZoom={true} 
+              style={{ height: '100%', width: '100%', zIndex: 10 }}
+            >
+              <DynamicMapView center={{ lat: mapTarget.lat, lng: mapTarget.lng }} zoom={mapTarget.zoom} />
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              
+              {/* Clinics Markers */}
+              {processedClinics.map(clinic => (
+                <Marker 
+                  key={clinic.id} 
+                  position={[clinic.lat, clinic.lng]}
+                  eventHandlers={{ click: () => handleSelectClinic(clinic) }}
                 >
-                  <ChangeView center={[selectedClinic.lat, selectedClinic.lng]} zoom={15} />
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  
-                  {/* Clinics Markers */}
-                  {processedClinics.map(clinic => (
-                    <Marker 
-                      key={clinic.id} 
-                      position={[clinic.lat, clinic.lng]}
-                      eventHandlers={{ click: () => setSelectedClinic(clinic) }}
-                    >
-                      <Popup>
-                        <div className="font-sans">
-                          <strong className="block text-sm text-slate-800">{clinic.name}</strong>
-                          <span className="text-xs text-slate-500">{clinic.address}</span>
-                        </div>
-                      </Popup>
-                    </Marker>
-                  ))}
+                  <Popup>
+                    <div className="font-sans space-y-1">
+                      <strong className="block text-sm text-slate-800">{clinic.name}</strong>
+                      <span className="text-xs text-slate-500 block">{clinic.address}</span>
+                      {clinic.distanceKm !== undefined && (
+                        <span className="text-xs font-bold text-purple-700 block">
+                          Cách bạn: {clinic.distanceKm.toFixed(1)} km
+                        </span>
+                      )}
+                      <a
+                        href={`tel:${clinic.phone}`}
+                        className="text-xs font-bold text-emerald-700 hover:underline block pt-1"
+                      >
+                        📞 {clinic.phone}
+                      </a>
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
 
-                  {/* User Location Marker */}
-                  {userLocation && (
-                    <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon}>
-                      <Popup>
-                        <strong className="text-red-600">Vị trí của bạn</strong>
-                      </Popup>
-                    </Marker>
-                  )}
-                </MapContainer>
+              {/* User Location Marker */}
+              {userLocation && (
+                <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon}>
+                  <Popup>
+                    <div className="font-sans text-center">
+                      <strong className="text-red-600 block text-xs">🔴 Vị trí của bạn</strong>
+                      <span className="text-[11px] text-slate-500 block">
+                        [{userLocation.lat.toFixed(4)}, {userLocation.lng.toFixed(4)}]
+                      </span>
+                      <span className="text-[10px] text-emerald-700 font-bold block pt-1">
+                        {locationSource === 'gps' ? 'Định vị GPS' : 'Ước tính IP'}
+                      </span>
+                    </div>
+                  </Popup>
+                </Marker>
+              )}
+            </MapContainer>
+
+            {/* Map Floating Control Buttons */}
+            <div className="absolute top-3 right-3 z-[400] flex flex-col gap-2">
+              {userLocation && (
+                <button
+                  onClick={handleRecenterUserLocation}
+                  className="bg-white text-slate-800 px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-50 transition-all hover:scale-105"
+                >
+                  <LocateFixed className="w-4 h-4 text-red-600" />
+                  Vị trí của tôi
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Clinic Detail Panel */}
+          {selectedClinic ? (
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    {selectedClinic.name}
+                    {selectedClinic.distanceKm !== undefined && (
+                      <span className="text-xs text-purple-700 font-semibold bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                        {selectedClinic.distanceKm.toFixed(1)} km
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{selectedClinic.address}</p>
+                </div>
+
+                <a
+                  href={getGoogleMapsDirectionsUrl(selectedClinic)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-all whitespace-nowrap self-start sm:self-auto"
+                >
+                  <Navigation className="w-4 h-4" />
+                  Dẫn Đường Google Maps
+                </a>
               </div>
 
-              {/* Clinic Detail Panel */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900">{selectedClinic.name}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">{selectedClinic.address}</p>
-                  </div>
-
-                  <a
-                    href={getGoogleMapsDirectionsUrl(selectedClinic)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-all whitespace-nowrap"
-                  >
-                    <Navigation className="w-4 h-4" />
-                    Chỉ Đường Google Maps
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="font-bold text-slate-700 block">📞 Số điện thoại:</span>
+                  <a href={`tel:${selectedClinic.phone}`} className="text-emerald-700 font-bold hover:underline">
+                    {selectedClinic.phone}
                   </a>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                    <span className="font-bold text-slate-700 block">📞 Số điện thoại:</span>
-                    <a href={`tel:${selectedClinic.phone}`} className="text-emerald-700 font-bold hover:underline">
-                      {selectedClinic.phone}
-                    </a>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
-                    <span className="font-bold text-slate-700 block">⏰ Giờ hoạt động:</span>
-                    <span className="text-slate-800 font-medium">{selectedClinic.openingHours}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-slate-100">
-                  <span className="text-xs font-bold text-slate-800 block mb-1">🏥 Dịch vụ cung cấp:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(selectedClinic.services || []).map((srv, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[11px] px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 font-semibold border border-purple-200/60"
-                      >
-                        ✓ {srv}
-                      </span>
-                    ))}
-                  </div>
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                  <span className="font-bold text-slate-700 block">⏰ Giờ hoạt động:</span>
+                  <span className="text-slate-800 font-medium">{selectedClinic.openingHours}</span>
                 </div>
               </div>
-            </>
+
+              <div className="pt-2 border-t border-slate-100">
+                <span className="text-xs font-bold text-slate-800 block mb-1">🏥 Dịch vụ cung cấp:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(selectedClinic.services || []).map((srv, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[11px] px-2.5 py-1 rounded-lg bg-purple-50 text-purple-800 font-semibold border border-purple-200/60"
+                    >
+                      ✓ {srv}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center py-20 text-slate-400 text-xs">
-              Chọn một phòng khám bên trái để xem bản đồ và chi tiết.
+            <div className="flex-1 flex items-center justify-center py-6 text-slate-400 text-xs">
+              Chọn một phòng khám bên trái để xem chi tiết và dịch vụ.
             </div>
           )}
         </div>

@@ -96,6 +96,7 @@ export interface VetClinic {
   openingHours: string;
   services: string[];
   imageUrl: string;
+  distanceKm?: number;
 }
 
 export interface SystemConfig {
