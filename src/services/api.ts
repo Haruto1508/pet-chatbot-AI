@@ -13,8 +13,9 @@ import {
 
 export const api = {
   // Stats
-  getStats: async (): Promise<SystemStats> => {
-    const res = await fetch('/api/stats');
+  getStats: async (timeRange?: string): Promise<SystemStats> => {
+    const url = timeRange ? `/api/stats?timeRange=${timeRange}` : '/api/stats';
+    const res = await fetch(url);
     return res.json();
   },
 
@@ -47,6 +48,25 @@ export const api = {
 
   deleteUser: async (id: string): Promise<void> => {
     await fetch(`/api/users/${id}`, { method: 'DELETE' });
+  },
+
+  // Unlock Requests
+  getUnlockRequests: async (): Promise<any[]> => {
+    const res = await fetch('/api/unlock-requests');
+    return res.json();
+  },
+
+  createUnlockRequest: async (payload: { userId: string; userEmail: string; reason: string }): Promise<any> => {
+    const res = await fetch('/api/unlock-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return res.json();
+  },
+
+  deleteUnlockRequest: async (id: string): Promise<void> => {
+    await fetch(`/api/unlock-requests/${id}`, { method: 'DELETE' });
   },
 
   // Pets

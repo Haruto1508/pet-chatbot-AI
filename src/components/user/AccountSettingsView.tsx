@@ -100,7 +100,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
   };
 
   return (
-    <div className="w-full px-4 py-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3">

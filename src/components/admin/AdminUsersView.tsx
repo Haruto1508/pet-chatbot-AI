@@ -5,7 +5,11 @@ import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { ConfirmModal } from '../common/ConfirmModal';
 
-export const AdminUsersView: React.FC = () => {
+interface AdminUsersViewProps {
+  currentUser: UserProfile;
+}
+
+export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -17,26 +21,26 @@ export const AdminUsersView: React.FC = () => {
   const [userToToggleStatus, setUserToToggleStatus] = useState<UserProfile | null>(null);
   const [unlockRequests, setUnlockRequests] = useState<any[]>([]);
 
-  const loadUsers = async () => {
+  const loadUsersAndRequests = async () => {
     setLoading(true);
     try {
-      const data = await api.getUsers();
-      setUsers(data);
+      const [usersData, reqsData] = await Promise.all([
+        api.getUsers(),
+        api.getUnlockRequests()
+      ]);
+      setUsers(Array.isArray(usersData) ? usersData : []);
+      setUnlockRequests(Array.isArray(reqsData) ? reqsData : []);
     } catch (e) {
-      console.error('Error loading users:', e);
+      console.error('Error loading data:', e);
+      setUsers([]);
+      setUnlockRequests([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadUsers();
-    try {
-      const reqs = JSON.parse(localStorage.getItem('petcare_unlock_requests') || '[]');
-      setUnlockRequests(reqs);
-    } catch (e) {
-      console.error(e);
-    }
+    loadUsersAndRequests();
   }, []);
 
   const handleToggleClick = (user: UserProfile) => {
@@ -52,9 +56,12 @@ export const AdminUsersView: React.FC = () => {
       setUsers(prev => prev.map(u => u.id === userToToggleStatus.id ? { ...u, status: newStatus } : u));
       
       if (newStatus === 'active') {
-        const updatedReqs = unlockRequests.filter(r => r.userId !== userToToggleStatus.id && r.userEmail !== userToToggleStatus.email);
-        setUnlockRequests(updatedReqs);
-        localStorage.setItem('petcare_unlock_requests', JSON.stringify(updatedReqs));
+        const reqsToDelete = unlockRequests.filter(r => r.userId === userToToggleStatus.id || r.userEmail === userToToggleStatus.email);
+        if (reqsToDelete.length > 0) {
+          await Promise.all(reqsToDelete.map(r => api.deleteUnlockRequest(r.id)));
+          setUnlockRequests(prev => prev.filter(r => r.userId !== userToToggleStatus.id && r.userEmail !== userToToggleStatus.email));
+          window.dispatchEvent(new Event('petcare_notifications_updated'));
+        }
       }
 
       showSuccess(`Đã ${newStatus === 'active' ? 'mở khóa' : 'khóa'} tài khoản ${userToToggleStatus.name}`);
@@ -84,12 +91,13 @@ export const AdminUsersView: React.FC = () => {
   };
 
   const filteredUsers = users.filter(u =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    u.id !== currentUser.id && // Hide current user
+    (u.name.toLowerCase().includes(search.toLowerCase()) ||
+    u.email.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -193,7 +201,7 @@ export const AdminUsersView: React.FC = () => {
                       )}
                     </td>
 
-                    <td className="p-4 text-slate-500">{u.createdAt}</td>
+                    <td className="p-4 text-slate-500">{new Date(u.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
 
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2">

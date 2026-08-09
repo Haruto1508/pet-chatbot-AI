@@ -84,7 +84,7 @@ export const EmergencyFirstAidView: React.FC = () => {
   ];
 
   return (
-    <div className="w-full px-4 py-6 space-y-6">
+    <div className="space-y-6">
       {/* Banner */}
       <div className="bg-red-600 text-white p-6 rounded-2xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">

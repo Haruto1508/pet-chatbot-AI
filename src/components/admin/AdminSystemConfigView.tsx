@@ -14,10 +14,35 @@ export const AdminSystemConfigView: React.FC = () => {
   const loadConfig = async () => {
     setLoading(true);
     try {
-      const data = await api.getSystemConfig();
-      setConfig(data);
+      const data: any = await api.getSystemConfig();
+      if (data && !data.error) {
+        // Ensure defaults if fields are missing
+        setConfig({
+          aiModel: data.aiModel || 'gemini-1.5-flash',
+          temperature: data.temperature || 0.7,
+          systemPrompt: data.systemPrompt || 'Bạn là trợ lý thú y AI...',
+          maxTokens: data.maxTokens || 2048,
+          emergencyKeywords: data.emergencyKeywords || ['máu', 'co giật', 'khó thở']
+        });
+      } else {
+        // Fallback default config if DB is empty or returned error
+        setConfig({
+          aiModel: 'gemini-1.5-flash',
+          temperature: 0.7,
+          systemPrompt: 'Bạn là trợ lý thú y AI chuyên nghiệp. Hãy tư vấn ngắn gọn, chính xác.',
+          maxTokens: 2048,
+          emergencyKeywords: ['máu', 'co giật', 'khó thở']
+        });
+      }
     } catch (e) {
       console.error('Error loading system config:', e);
+      setConfig({
+        aiModel: 'gemini-1.5-flash',
+        temperature: 0.7,
+        systemPrompt: 'Bạn là trợ lý thú y AI...',
+        maxTokens: 2048,
+        emergencyKeywords: ['máu', 'co giật', 'khó thở']
+      });
     } finally {
       setLoading(false);
     }
@@ -49,7 +74,7 @@ export const AdminSystemConfigView: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-md flex items-center justify-between">
         <div className="flex items-center gap-3">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, ShieldAlert, UserCog, CheckCircle, Info } from 'lucide-react';
+import { Bell, ShieldAlert, UserCog, CheckCircle, Info, X, Trash2 } from 'lucide-react';
+import { api } from '../../services/api';
 
 interface NotificationItem {
   id: string;
@@ -8,7 +9,7 @@ interface NotificationItem {
   message: string;
   time: string;
   isRead: boolean;
-  actionTab: string; // The tab to route to
+  actionTab: string;
 }
 
 interface AdminNotificationsProps {
@@ -20,51 +21,62 @@ export const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onNaviga
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // Load notifications from local storage and mock system alerts
-    const loadNotifications = () => {
-      const notifs: NotificationItem[] = [];
-      
-      // 1. Unlock requests
-      try {
-        const unlockReqs = JSON.parse(localStorage.getItem('petcare_unlock_requests') || '[]');
+  const loadNotifications = async () => {
+    const notifs: NotificationItem[] = [];
+    
+    // Read persisted states
+    const readIds: string[] = JSON.parse(localStorage.getItem('petcare_read_notifs') || '[]');
+    const deletedSysIds: string[] = JSON.parse(localStorage.getItem('petcare_deleted_sys_notifs') || '[]');
+    
+    // 1. Unlock requests
+    try {
+      const unlockReqs = await api.getUnlockRequests();
+      if (Array.isArray(unlockReqs)) {
         unlockReqs.forEach((req: any) => {
           notifs.push({
             id: req.id,
             type: 'unlock_request',
             title: 'Yêu cầu mở khóa tài khoản',
             message: `Người dùng ${req.userEmail} yêu cầu mở khóa: "${req.reason}"`,
-            time: req.createdAt,
-            isRead: false,
+            time: new Date(req.createdAt).toLocaleString('vi-VN'),
+            isRead: readIds.includes(req.id),
             actionTab: 'admin_users'
           });
         });
-      } catch (e) {
-        console.error(e);
+      } else {
+        console.warn('API did not return an array for unlock requests:', unlockReqs);
       }
+    } catch (e) {
+      console.error('Error fetching unlock requests:', e);
+    }
 
-      // 2. Mock System Alerts
+    // 2. Mock System Alerts
+    if (!deletedSysIds.includes('sys_1')) {
       notifs.push({
         id: 'sys_1',
         type: 'system_alert',
         title: 'Cảnh báo bộ nhớ đệm',
         message: 'Dung lượng lưu trữ vector cho RAG đã đạt 80%.',
         time: new Date().toLocaleString('vi-VN'),
-        isRead: false,
+        isRead: readIds.includes('sys_1'),
         actionTab: 'admin_config'
       });
+    }
 
-      // Sort by newest first (assuming IDs with timestamp or just simple reverse)
-      setNotifications(notifs.reverse());
-    };
+    // Sort: System alerts first, then unlock requests (newest first)
+    // unlockReqs are already newest-first because we used [newRequest, ...existingRequests]
+    // So we just need to ensure the system alert is where we want it (e.g., top)
+    const sysAlerts = notifs.filter(n => n.type === 'system_alert');
+    const userReqs = notifs.filter(n => n.type === 'unlock_request');
+    
+    setNotifications([...sysAlerts, ...userReqs]);
+  };
 
+  useEffect(() => {
     loadNotifications();
 
-    // Listen for storage changes if in same window (for demo purposes)
     const handleStorageChange = () => loadNotifications();
     window.addEventListener('storage', handleStorageChange);
-    
-    // Custom event to refresh when new unlock request is submitted
     window.addEventListener('petcare_notifications_updated', handleStorageChange);
 
     return () => {
@@ -73,7 +85,6 @@ export const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onNaviga
     };
   }, []);
 
-  // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -88,22 +99,75 @@ export const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onNaviga
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
+  const markAsRead = (id: string) => {
+    const readIds: string[] = JSON.parse(localStorage.getItem('petcare_read_notifs') || '[]');
+    if (!readIds.includes(id)) {
+      readIds.push(id);
+      localStorage.setItem('petcare_read_notifs', JSON.stringify(readIds));
+    }
+  };
+
   const handleNotificationClick = (notif: NotificationItem) => {
-    // Mark as read
-    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, isRead: true } : n));
+    markAsRead(notif.id);
+    loadNotifications();
     setIsOpen(false);
     onNavigateToTab(notif.actionTab);
   };
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    const readIds: string[] = JSON.parse(localStorage.getItem('petcare_read_notifs') || '[]');
+    notifications.forEach(n => {
+      if (!readIds.includes(n.id)) readIds.push(n.id);
+    });
+    localStorage.setItem('petcare_read_notifs', JSON.stringify(readIds));
+    loadNotifications();
+  };
+
+  const handleDelete = async (e: React.MouseEvent, notif: NotificationItem) => {
+    e.stopPropagation();
+    
+    if (notif.type === 'unlock_request') {
+      try {
+        await api.deleteUnlockRequest(notif.id);
+        window.dispatchEvent(new Event('petcare_notifications_updated'));
+      } catch (err) {
+        console.error('Error deleting unlock request:', err);
+      }
+    } else {
+      const deletedSysIds = JSON.parse(localStorage.getItem('petcare_deleted_sys_notifs') || '[]');
+      if (!deletedSysIds.includes(notif.id)) {
+        deletedSysIds.push(notif.id);
+        localStorage.setItem('petcare_deleted_sys_notifs', JSON.stringify(deletedSysIds));
+      }
+    }
+    
+    loadNotifications();
+  };
+
+  const clearAllNotifications = async () => {
+    if (window.confirm('Bạn có chắc muốn xóa toàn bộ thông báo?')) {
+      // Clear unlock requests via API
+      const unlockReqs = notifications.filter(n => n.type === 'unlock_request');
+      try {
+        await Promise.all(unlockReqs.map(req => api.deleteUnlockRequest(req.id)));
+      } catch (err) {
+        console.error('Error clearing unlock requests:', err);
+      }
+      
+      const deletedSysIds = JSON.parse(localStorage.getItem('petcare_deleted_sys_notifs') || '[]');
+      deletedSysIds.push('sys_1');
+      localStorage.setItem('petcare_deleted_sys_notifs', JSON.stringify(deletedSysIds));
+      
+      window.dispatchEvent(new Event('petcare_notifications_updated'));
+      loadNotifications();
+    }
   };
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors"
+        className="relative p-2 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors cursor-pointer"
         title="Thông báo hệ thống"
       >
         <Bell className="w-5 h-5" />
@@ -116,14 +180,25 @@ export const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onNaviga
         <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in slide-in-from-top-2 duration-200">
           <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
             <h3 className="font-bold text-sm text-slate-800">Thông báo quản trị</h3>
-            {unreadCount > 0 && (
-              <button
-                onClick={markAllAsRead}
-                className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold px-2 py-1 bg-emerald-50 rounded-lg transition-colors"
-              >
-                Đánh dấu đã đọc
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-[10px] text-emerald-600 hover:text-emerald-700 font-bold px-2 py-1 bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                >
+                  Đánh dấu đã đọc
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  onClick={clearAllNotifications}
+                  className="text-[10px] text-red-600 hover:text-red-700 font-bold px-2 py-1 bg-red-50 rounded-lg transition-colors cursor-pointer"
+                  title="Xóa tất cả"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="max-h-[60vh] overflow-y-auto">
@@ -135,10 +210,10 @@ export const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onNaviga
             ) : (
               <ul className="divide-y divide-slate-100">
                 {notifications.map(notif => (
-                  <li key={notif.id}>
+                  <li key={notif.id} className="relative group">
                     <button
                       onClick={() => handleNotificationClick(notif)}
-                      className={`w-full text-left p-4 hover:bg-slate-50 transition-colors flex gap-3 ${
+                      className={`w-full text-left p-4 hover:bg-slate-50 transition-colors flex gap-3 cursor-pointer pr-10 ${
                         !notif.isRead ? 'bg-amber-50/30' : ''
                       }`}
                     >
@@ -173,6 +248,15 @@ export const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onNaviga
                       {!notif.isRead && (
                         <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-2"></div>
                       )}
+                    </button>
+                    
+                    {/* Delete Notification Button */}
+                    <button
+                      onClick={(e) => handleDelete(e, notif)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                      title="Xóa thông báo"
+                    >
+                      <X className="w-4 h-4" />
                     </button>
                   </li>
                 ))}

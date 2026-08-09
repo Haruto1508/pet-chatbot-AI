@@ -550,7 +550,7 @@ export const PetChatView: React.FC<Props> = ({
   );
 
   return (
-    <div className="flex h-full w-full gap-4 max-w-7xl mx-auto">
+    <div className="flex h-full w-full gap-4 relative">
       {/* Desktop Sidebar for Chat History */}
       {isSidebarOpen && (
         <div className="w-72 flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm hidden md:flex flex-col overflow-hidden">
@@ -633,28 +633,28 @@ export const PetChatView: React.FC<Props> = ({
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 min-w-0 flex flex-col gap-2.5 sm:gap-3 h-full">
-        {/* Top Banner / Pet Selector Header */}
-        <div className="shrink-0 bg-white rounded-2xl p-3 sm:p-3.5 border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
+        {/* Compact Header Toolbar */}
+        <div className="shrink-0 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-slate-200 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-slate-50/50 z-10">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Sidebar toggle (desktop) */}
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors hidden md:block"
+              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors hidden md:block"
               title={isSidebarOpen ? "Đóng lịch sử" : "Mở lịch sử"}
             >
-              {isSidebarOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+              {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
             </button>
 
             {/* Mobile History toggle */}
             <button
               onClick={() => setIsMobileHistoryOpen(true)}
-              className="p-2 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors md:hidden relative"
+              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors md:hidden relative"
               title="Lịch sử chat"
             >
-              <History className="w-5 h-5" />
+              <History className="w-4 h-4" />
               {sessions.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-emerald-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
                   {sessions.length > 9 ? '9+' : sessions.length}
                 </span>
               )}
@@ -664,46 +664,46 @@ export const PetChatView: React.FC<Props> = ({
               <img
                 src={selectedPet.avatarUrl}
                 alt={selectedPet.name}
-                className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl object-cover border-2 border-emerald-500 shadow-2xs"
+                className="w-8 h-8 rounded-xl object-cover border border-emerald-500 shadow-2xs"
               />
             ) : (
-              <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
-                <PawPrint className="w-5 h-5 sm:w-6 sm:h-6" />
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                <PawPrint className="w-4 h-4" />
               </div>
             )}
 
-            <div>
+            <div className="flex flex-col">
               <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                  {selectedPet ? `Đang Tư Vấn Cho: ${selectedPet.name}` : 'Tư Vấn Thú Cưng Chung'}
+                <h2 className="text-sm font-bold text-slate-900 leading-tight">
+                  {selectedPet ? `Tư Vấn: ${selectedPet.name}` : 'Tư Vấn Chung'}
                 </h2>
                 {selectedPet && (
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                    {selectedPet.species} - {selectedPet.breed}
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold hidden sm:inline-block">
+                    {selectedPet.species}
                   </span>
                 )}
               </div>
-              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              <p className="text-[10px] text-slate-500 leading-tight hidden sm:block">
                 {selectedPet
-                  ? `${selectedPet.gender} | ${selectedPet.age} tháng tuổi | ${selectedPet.weight}kg`
-                  : 'Chọn thú cưng từ danh sách để chẩn đoán chính xác hơn.'}
+                  ? `${selectedPet.breed} | ${selectedPet.age} tháng | ${selectedPet.weight}kg`
+                  : 'Chọn thú cưng để tư vấn chính xác hơn.'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
             <select
               value={selectedPet?.id || ''}
               onChange={(e) => {
                 const pet = pets.find(p => p.id === e.target.value) || null;
                 setSelectedPet(pet);
               }}
-              className="text-xs font-semibold px-2.5 py-1.5 sm:py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 sm:flex-initial"
+              className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 sm:flex-initial"
             >
-              <option value="">-- Tất cả / Chung --</option>
+              <option value="">-- Chọn Thú Cưng --</option>
               {pets.map(p => (
                 <option key={p.id} value={p.id}>
-                  🐾 {p.name} ({p.species} - {p.breed})
+                  {p.name}
                 </option>
               ))}
             </select>
@@ -711,22 +711,21 @@ export const PetChatView: React.FC<Props> = ({
             <button
               onClick={handleCreateMedicalRecord}
               disabled={isSummarizing || messages.length <= 1}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold shadow-2xs whitespace-nowrap transition-all"
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold shadow-2xs whitespace-nowrap transition-all"
             >
               {isSummarizing ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <FilePlus className="w-4 h-4" />
+                <FilePlus className="w-3.5 h-3.5" />
               )}
-              Lưu Hồ Sơ
+              <span className="hidden sm:inline">Lưu Hồ Sơ</span>
+              <span className="sm:hidden">Lưu</span>
             </button>
           </div>
         </div>
 
-
         {/* Main Chat Box */}
-        <div className="flex-1 min-h-0 bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-4 bg-slate-50/50 scrollbar-thin">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-4 bg-slate-50/50 scrollbar-thin">
             {messages.map((msg) => {
               const isUser = msg.sender === 'user';
               return (
@@ -924,7 +923,6 @@ export const PetChatView: React.FC<Props> = ({
             </button>
           </div>
         </div>
-      </div>
 
       {/* Confirmation Modals */}
       {(sessionToDelete || isDeletingAll) && (

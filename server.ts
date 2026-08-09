@@ -101,8 +101,13 @@ async function startServer() {
   // System Stats
   app.get('/api/stats', async (_req: Request, res: Response) => {
     try {
-      const [users, pets, records, red, yellow, green, chatSessions] = await Promise.all([
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
+
+      const [users, usersOld, pets, records, red, yellow, green, chatSessions] = await Promise.all([
         supabase.from('users').select('*', { count: 'exact', head: true }),
+        supabase.from('users').select('*', { count: 'exact', head: true }).lt('created_at', thirtyDaysAgoISO),
         supabase.from('pets').select('*', { count: 'exact', head: true }),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'RED'),
@@ -111,14 +116,47 @@ async function startServer() {
         supabase.from('chat_sessions').select('*', { count: 'exact', head: true })
       ]);
 
+      const totalUsers = users.count || 0;
+      const oldUsersCount = usersOld.count || 0;
+      // Calculate growth. If oldUsersCount is 0, just return 100% if we have users, else 0
+      let userGrowth = 0;
+      if (oldUsersCount > 0) {
+        userGrowth = Math.round(((totalUsers - oldUsersCount) / oldUsersCount) * 100);
+      } else if (totalUsers > 0) {
+        userGrowth = 100;
+      }
+
+      const activeChats = chatSessions.count || 0;
+      const totalPets = pets.count || 0;
+      const totalMedicalRecords = records.count || 0;
+      
+      const timeRange = _req.query.timeRange as string || '7days';
+      const days = timeRange === '30days' ? 30 : 7;
+      
+      // Generate mock history
+      const history = [];
+      const today = new Date();
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        // Decrease by a somewhat random but ascending trend
+        history.push({
+          date: d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }),
+          users: Math.max(0, totalUsers - i * 2 - Math.floor(Math.random() * 2)),
+          chats: Math.max(0, activeChats - i * 3 - Math.floor(Math.random() * 3))
+        });
+      }
+
       res.json({
-        totalUsers: users.count || 0,
-        activeChats: chatSessions.count || 0,
-        totalPets: pets.count || 0,
-        totalMedicalRecords: records.count || 0,
+        totalUsers,
+        activeChats,
+        totalPets,
+        totalMedicalRecords,
         triageRedCount: red.count || 0,
         triageYellowCount: yellow.count || 0,
-        triageGreenCount: green.count || 0
+        triageGreenCount: green.count || 0,
+        history,
+        userGrowth
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -202,6 +240,43 @@ async function startServer() {
   app.delete('/api/users/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { error } = await supabase.from('users').delete().eq('id', id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, id });
+  });
+
+  // Unlock Requests
+  app.get('/api/unlock-requests', async (_req: Request, res: Response) => {
+    const { data, error } = await supabase.from('unlock_requests').select('*').order('created_at', { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    const mapped = data.map(r => ({
+      ...r,
+      userId: r.user_id,
+      userEmail: r.user_email,
+      createdAt: r.created_at
+    }));
+    res.json(mapped);
+  });
+
+  app.post('/api/unlock-requests', async (req: Request, res: Response) => {
+    const payload = {
+      user_id: req.body.userId,
+      user_email: req.body.userEmail,
+      reason: req.body.reason,
+      status: 'pending'
+    };
+    const { data, error } = await supabase.from('unlock_requests').insert([payload]).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({
+      ...data,
+      userId: data.user_id,
+      userEmail: data.user_email,
+      createdAt: data.created_at
+    });
+  });
+
+  app.delete('/api/unlock-requests/:id', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { error } = await supabase.from('unlock_requests').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
   });
@@ -447,6 +522,16 @@ async function startServer() {
     if (payload.imageUrl) { payload.image_url = payload.imageUrl; delete payload.imageUrl; }
     payload.updated_at = new Date().toISOString();
 
+    // Generate embedding for the updated article
+    const textToEmbed = `${payload.title || ''} ${payload.summary || ''} ${(payload.symptoms || []).join(' ')} ${payload.content || ''}`;
+    // Only generate embedding if there is meaningful text (title is minimally required in the UI)
+    if (textToEmbed.trim().length > 0) {
+      const embedding = await generateEmbedding(textToEmbed);
+      if (embedding) {
+        payload.embedding = embedding;
+      }
+    }
+
     const { data, error } = await supabase.from('articles').update(payload).eq('id', id).select().single();
     if (error) return res.status(500).json({ error: error.message });
     
@@ -465,6 +550,52 @@ async function startServer() {
     const { error } = await supabase.from('articles').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
+  });
+
+  // System Config
+  app.get('/api/config', async (req: Request, res: Response) => {
+    const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
+    if (error) {
+      // If table doesn't exist or empty, return default config
+      return res.json({
+        aiModel: 'gemini-1.5-flash',
+        temperature: 0.7,
+        systemPrompt: 'Bạn là trợ lý thú y AI chuyên nghiệp. Hãy tư vấn ngắn gọn, chính xác.',
+        maxTokens: 2048,
+        emergencyKeywords: ['máu', 'co giật', 'khó thở']
+      });
+    }
+    
+    res.json({
+      aiModel: data.ai_model,
+      temperature: data.temperature,
+      systemPrompt: data.system_prompt,
+      maxTokens: data.max_tokens,
+      emergencyKeywords: data.emergency_keywords
+    });
+  });
+
+  app.post('/api/config', async (req: Request, res: Response) => {
+    const payload = {
+      id: 1,
+      ai_model: req.body.aiModel,
+      temperature: req.body.temperature,
+      system_prompt: req.body.systemPrompt,
+      max_tokens: req.body.maxTokens,
+      emergency_keywords: req.body.emergencyKeywords,
+      updated_at: new Date().toISOString()
+    };
+    
+    const { data, error } = await supabase.from('system_config').upsert(payload).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    
+    res.json({
+      aiModel: data.ai_model,
+      temperature: data.temperature,
+      systemPrompt: data.system_prompt,
+      maxTokens: data.max_tokens,
+      emergencyKeywords: data.emergency_keywords
+    });
   });
 
   // Clinics

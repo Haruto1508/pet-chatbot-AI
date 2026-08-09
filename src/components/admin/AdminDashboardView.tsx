@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, PawPrint, FileText, ShieldAlert, MessageSquare, Activity, ArrowUpRight } from 'lucide-react';
+import { LayoutDashboard, Users, PawPrint, FileText, ShieldAlert, MessageSquare, Activity, ArrowUpRight, ArrowDownRight, TrendingUp } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { SystemStats, MedicalRecord } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
@@ -8,11 +9,12 @@ export const AdminDashboardView: React.FC = () => {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [recentRecords, setRecentRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState('7days');
 
-  const loadData = async () => {
+  const loadData = async (range: string) => {
     setLoading(true);
     try {
-      const sData = await api.getStats();
+      const sData = await api.getStats(range);
       const rData = await api.getMedicalRecords();
       setStats(sData);
       setRecentRecords(rData.slice(0, 5));
@@ -24,8 +26,8 @@ export const AdminDashboardView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    loadData(timeRange);
+  }, [timeRange]);
 
   if (loading || !stats) {
     return <div className="text-center py-20 text-xs text-slate-500">Đang tải dữ liệu thống kê Admin...</div>;
@@ -37,7 +39,7 @@ export const AdminDashboardView: React.FC = () => {
   const greenPct = Math.round((stats.triageGreenCount / totalTriage) * 100);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <div className="space-y-6">
       {/* Top Banner */}
       <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-md flex items-center justify-between">
         <div>
@@ -59,8 +61,9 @@ export const AdminDashboardView: React.FC = () => {
             <Users className="w-5 h-5 text-blue-600" />
           </div>
           <p className="text-2xl font-black text-slate-900">{stats.totalUsers}</p>
-          <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
-            +12% so với tháng trước <ArrowUpRight className="w-3 h-3" />
+          <span className={`text-[10px] font-bold flex items-center gap-0.5 ${stats.userGrowth && stats.userGrowth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+            {stats.userGrowth && stats.userGrowth >= 0 ? '+' : ''}{stats.userGrowth || 0}% so với tháng trước 
+            {stats.userGrowth && stats.userGrowth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
           </span>
         </div>
 
@@ -91,6 +94,51 @@ export const AdminDashboardView: React.FC = () => {
           <span className="text-[10px] text-purple-600 font-bold">Đã lưu từ AI</span>
         </div>
       </div>
+
+      {/* Growth Chart */}
+      {stats.history && stats.history.length > 0 && (
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-blue-600" /> Xu Hướng Tăng Trưởng
+            </h3>
+            <select
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none text-slate-600 focus:border-blue-500 bg-slate-50"
+            >
+              <option value="7days">7 Ngày Qua</option>
+              <option value="30days">30 Ngày Qua (Tháng)</option>
+            </select>
+          </div>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={stats.history} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="colorChats" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                <RechartsTooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' }}
+                  itemStyle={{ fontSize: '13px', fontWeight: 'bold' }}
+                  labelStyle={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}
+                />
+                <Area type="monotone" dataKey="users" name="Người Dùng" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorUsers)" />
+                <Area type="monotone" dataKey="chats" name="Cuộc Chat" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorChats)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Triage Danger Level Proportions */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">

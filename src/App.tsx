@@ -328,7 +328,7 @@ export function App() {
             {currentUser.role === 'admin' && (
               <>
                 {currentTab === 'admin_dashboard' && <AdminDashboardView />}
-                {currentTab === 'admin_users' && <AdminUsersView />}
+                {currentTab === 'admin_users' && <AdminUsersView currentUser={currentUser} />}
                 {currentTab === 'admin_records' && <AdminPetsRecordsView />}
                 {currentTab === 'admin_clinics' && <AdminClinicsView />}
                 {currentTab === 'admin_rag' && <AdminKnowledgeRAGView />}
@@ -340,16 +340,7 @@ export function App() {
             </Suspense>
           </main>
 
-          {/* Footer */}
-          <footer className="shrink-0 bg-white border-t border-slate-200 py-2.5 px-4 text-center text-[11px] text-slate-500">
-            <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-slate-800">PetCare AI Assistant</span>
-                <span>— Hệ thống Y tế & Sơ cứu Thú cưng 24/7</span>
-              </div>
-              <p>© 2026 PetCare AI. Phân quyền Google Account & Tích hợp Gemini 3.6 Flash.</p>
-            </div>
-          </footer>
+
         </div>
       </div>
 

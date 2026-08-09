@@ -115,4 +115,15 @@ export interface SystemStats {
   triageRedCount: number;
   triageYellowCount: number;
   triageGreenCount: number;
+  history?: any[];
+  userGrowth?: number;
+}
+
+export interface UnlockRequest {
+  id: string;
+  userId: string;
+  userEmail: string;
+  reason: string;
+  status: 'pending' | 'resolved';
+  createdAt: string;
 }

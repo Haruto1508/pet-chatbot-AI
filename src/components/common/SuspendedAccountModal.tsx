@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldAlert, Send, LogOut, UserPlus, CheckCircle, Lock, Mail, HelpCircle } from 'lucide-react';
 import { UserProfile } from '../../types';
+import { api } from '../../services/api';
 
 interface SuspendedAccountModalProps {
   currentUser: UserProfile;
@@ -15,28 +16,26 @@ export const SuspendedAccountModal: React.FC<SuspendedAccountModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleSubmitUnlockRequest = (e: React.FormEvent) => {
+  const handleSubmitUnlockRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) return;
 
     setIsSubmitting(true);
-    // Save request to localStorage so admin can inspect or simulate unlock request
-    const existingRequests = JSON.parse(localStorage.getItem('petcare_unlock_requests') || '[]');
-    const newRequest = {
-      id: `req_${Date.now()}`,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userEmail: currentUser.email,
-      reason: reason.trim(),
-      createdAt: new Date().toLocaleString('vi-VN')
-    };
-    localStorage.setItem('petcare_unlock_requests', JSON.stringify([newRequest, ...existingRequests]));
-    window.dispatchEvent(new Event('petcare_notifications_updated'));
-
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      await api.createUnlockRequest({
+        userId: currentUser.id,
+        userEmail: currentUser.email,
+        reason: reason.trim()
+      });
+      // Vẫn giữ dispatch event để update state local nếu có component nào đang nghe (optional)
+      window.dispatchEvent(new Event('petcare_notifications_updated'));
       setIsSubmitted(true);
-    }, 600);
+    } catch (error) {
+      console.error('Error submitting unlock request:', error);
+      alert('Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại sau.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

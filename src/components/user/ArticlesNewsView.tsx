@@ -42,7 +42,7 @@ export const ArticlesNewsView: React.FC = () => {
   });
 
   return (
-    <div className="w-full px-4 py-6 space-y-6">
+    <div className="space-y-6">
       {/* Article Detail Page View */}
       {activeArticle ? (
         <div className="w-full space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-300">

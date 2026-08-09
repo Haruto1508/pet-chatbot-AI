@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, LogOut, AlertTriangle } from 'lucide-react';
 
 interface LogoutConfirmModalProps {
@@ -32,7 +33,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
       <div 
         className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl border border-slate-100 relative animate-in zoom-in-95 duration-200 space-y-5"
@@ -107,6 +108,7 @@ export const LogoutConfirmModal: React.FC<LogoutConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
