@@ -965,7 +965,7 @@ async function startServer() {
       let resnetPrediction = '';
       if (imageBase64) {
         try {
-          const resnetRes = await fetch('http://localhost:8000/predict', {
+          const resnetRes = await fetch('https://pet-chatbot-ai.onrender.com/predict', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image_base64: imageBase64 })

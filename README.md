@@ -119,28 +119,10 @@ Dự án sử dụng cơ sở dữ liệu Vector để tìm kiếm ngữ cảnh 
    npx tsx scripts/seedSupabase.ts
    ```
 
-### 🐍 Bước 4: Setup Service AI Nhận Diện Triệu Chứng Bệnh (Python ResNet)
-Thư mục `python_ai_service` chứa API nhận diện hình ảnh vết thương, nấm da, viêm da cho thú cưng.
-```bash
-# Di chuyển vào thư mục python service
-cd python_ai_service
-
-# Tạo môi trường ảo (Virtual Environment)
-python -m venv venv
-
-# Kích hoạt môi trường ảo:
-# Trên Windows:
-venv\Scripts\activate
-# Trên macOS/Linux:
-source venv/bin/activate
-
-# Cài đặt các thư viện Python cần thiết
-pip install -r requirements.txt
-
-# Khởi chạy FastAPI server trên cổng 8000
-uvicorn main:app --reload --port 8000
-```
-*Giao diện API Python sẽ hoạt động tại địa chỉ: `http://localhost:8000`.*
+### ☁️ Bước 4: Kết nối Service AI Nhận Diện Bệnh (Đã được Cloud hóa)
+Toàn bộ mô hình AI nhận diện hình ảnh (PyTorch ResNet) đã được nhóm triển khai độc lập thành công trên nền tảng đám mây (Render Cloud).
+Do đó, người tải code **không cần** phải cài đặt Python hay tải các file Model nặng nề về máy tính cá nhân nữa. Mã nguồn Node.js/React sẽ tự động gọi qua API Cloud.
+*(Tuy nhiên, nếu bạn là Developer muốn huấn luyện lại model, mã nguồn gốc vẫn được lưu giữ tại thư mục `python_ai_service`).*
 
 ### 🚀 Bước 5: Chạy ứng dụng Web chính (React + Node.js)
 Mở một terminal mới (vẫn ở thư mục gốc của dự án `pet-chatbot-AI`) và chạy:
