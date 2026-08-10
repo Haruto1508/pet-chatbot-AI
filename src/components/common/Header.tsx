@@ -87,10 +87,6 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="flex items-center gap-1">
               <PhoneCall className="w-3 h-3 text-amber-300" /> Hotline: <strong className="text-amber-300">0903 123 456</strong>
             </span>
-            <span>|</span>
-            <span className="flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-emerald-300" /> Powered by Google Gemini AI
-            </span>
           </div>
         </div>
       </div>
