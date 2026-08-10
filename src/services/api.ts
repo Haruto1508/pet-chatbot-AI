@@ -254,6 +254,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(session)
     });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Lỗi hệ thống');
+    }
     return res.json();
   },
 

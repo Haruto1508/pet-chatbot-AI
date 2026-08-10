@@ -261,34 +261,39 @@ export const PetChatView: React.FC<Props> = ({
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
       const initialTitle = queryText.length > 30 ? queryText.substring(0, 30) + '...' : queryText;
-      try {
-        const newSession = await api.createChatSession({
-          userId: currentUser.id,
-          petId: selectedPet?.id || null,
-          title: initialTitle,
-          messages: newMessages
-        });
-        activeSessionId = newSession.id;
-        setCurrentSessionId(activeSessionId);
-        setSessions(prev => [newSession, ...prev]);
+      
+      if (currentUser.id !== 'guest') {
+        try {
+          const newSession = await api.createChatSession({
+            userId: currentUser.id,
+            petId: selectedPet?.id || null,
+            title: initialTitle,
+            messages: newMessages
+          });
+          activeSessionId = newSession.id;
+          setCurrentSessionId(activeSessionId);
+          setSessions(prev => [newSession, ...prev]);
 
-        // Generate smart title in the background
-        api.generateTitle(queryText).then(async ({ title }) => {
-          if (title && activeSessionId) {
-             await api.updateChatSession(activeSessionId, { title });
-             setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title } : s));
-          }
-        }).catch(console.error);
-        
-      } catch (e) {
-        console.error(e);
+          // Generate smart title in the background
+          api.generateTitle(queryText).then(async ({ title }) => {
+            if (title && activeSessionId) {
+               await api.updateChatSession(activeSessionId, { title });
+               setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title } : s));
+            }
+          }).catch(console.error);
+          
+        } catch (e) {
+          console.error(e);
+        }
       }
     } else {
-      try {
-        await api.updateChatSession(activeSessionId, { messages: newMessages });
-        setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: newMessages } : s));
-      } catch (e) {
-        console.error(e);
+      if (currentUser.id !== 'guest') {
+        try {
+          await api.updateChatSession(activeSessionId, { messages: newMessages });
+          setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: newMessages } : s));
+        } catch (e) {
+          console.error(e);
+        }
       }
     }
 
