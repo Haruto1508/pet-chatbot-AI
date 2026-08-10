@@ -178,6 +178,10 @@ export const api = {
   getClinics: async (search?: string): Promise<VetClinic[]> => {
     const url = search ? `/api/clinics?search=${encodeURIComponent(search)}` : '/api/clinics';
     const res = await fetch(url);
+    if (!res.ok) {
+      console.error(await res.text());
+      return [];
+    }
     return res.json();
   },
 
@@ -187,6 +191,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(clinic)
     });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Lỗi thêm phòng khám');
+    }
     return res.json();
   },
 
@@ -196,6 +204,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(clinic)
     });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Lỗi cập nhật phòng khám');
+    }
     return res.json();
   },
 

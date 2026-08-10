@@ -92,14 +92,19 @@ export const AdminClinicsView: React.FC = () => {
       imageUrl: formData.imageUrl
     };
 
-    if (editingClinic) {
-      await api.updateClinic(editingClinic.id, payload);
-    } else {
-      await api.createClinic(payload);
+    try {
+      if (editingClinic) {
+        await api.updateClinic(editingClinic.id, payload);
+        showSuccess('Cập nhật thành công!');
+      } else {
+        await api.createClinic(payload);
+        showSuccess('Thêm phòng khám mới thành công!');
+      }
+      setIsModalOpen(false);
+      loadClinics();
+    } catch (e: any) {
+      showError(e.message || 'Có lỗi xảy ra, vui lòng thử lại.');
     }
-
-    setIsModalOpen(false);
-    loadClinics();
   };
 
   const handleDelete = (id: string) => {
