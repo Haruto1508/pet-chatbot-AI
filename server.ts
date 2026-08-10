@@ -1223,6 +1223,12 @@ YÊU CẦU:
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`PetCare AI Server running on http://0.0.0.0:${PORT}`);
+    
+    // Tự động "đánh thức" Python AI Server trên Render ngay khi khởi động Dev Server
+    console.log('Sending wake up call to Render AI Service...');
+    fetch('https://pet-chatbot-ai.onrender.com/docs')
+      .then(() => console.log('✅ Render AI Service is awake!'))
+      .catch((e) => console.log('⚠️ Failed to ping Render AI Service (it might be sleeping heavily):', e.message));
   });
 }
 
