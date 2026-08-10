@@ -552,6 +552,106 @@ async function startServer() {
     res.json({ success: true, id });
   });
 
+  // Vet Clinics
+  app.get('/api/clinics', async (req: Request, res: Response) => {
+    let query = supabase.from('vet_clinics').select('*').order('created_at', { ascending: false });
+    
+    if (req.query.search) {
+      query = query.ilike('name', `%${req.query.search}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+    
+    const mapped = data.map(c => ({
+      id: c.id,
+      name: c.name,
+      address: c.address,
+      phone: c.phone,
+      lat: c.lat,
+      lng: c.lng,
+      rating: c.rating,
+      isEmergency247: c.is_emergency_247,
+      openingHours: c.opening_hours,
+      services: c.services || [],
+      imageUrl: c.image_url
+    }));
+    res.json(mapped);
+  });
+
+  app.post('/api/clinics', async (req: Request, res: Response) => {
+    const payload = {
+      name: req.body.name,
+      address: req.body.address,
+      phone: req.body.phone,
+      lat: req.body.lat,
+      lng: req.body.lng,
+      rating: req.body.rating,
+      is_emergency_247: req.body.isEmergency247,
+      opening_hours: req.body.openingHours,
+      services: req.body.services,
+      image_url: req.body.imageUrl
+    };
+    
+    const { data, error } = await supabase.from('vet_clinics').insert([payload]).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    
+    res.json({
+      id: data.id,
+      name: data.name,
+      address: data.address,
+      phone: data.phone,
+      lat: data.lat,
+      lng: data.lng,
+      rating: data.rating,
+      isEmergency247: data.is_emergency_247,
+      openingHours: data.opening_hours,
+      services: data.services,
+      imageUrl: data.image_url
+    });
+  });
+
+  app.put('/api/clinics/:id', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const payload = {
+      name: req.body.name,
+      address: req.body.address,
+      phone: req.body.phone,
+      lat: req.body.lat,
+      lng: req.body.lng,
+      rating: req.body.rating,
+      is_emergency_247: req.body.isEmergency247,
+      opening_hours: req.body.openingHours,
+      services: req.body.services,
+      image_url: req.body.imageUrl,
+      updated_at: new Date().toISOString()
+    };
+    
+    const { data, error } = await supabase.from('vet_clinics').update(payload).eq('id', id).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    
+    res.json({
+      id: data.id,
+      name: data.name,
+      address: data.address,
+      phone: data.phone,
+      lat: data.lat,
+      lng: data.lng,
+      rating: data.rating,
+      isEmergency247: data.is_emergency_247,
+      openingHours: data.opening_hours,
+      services: data.services,
+      imageUrl: data.image_url
+    });
+  });
+
+  app.delete('/api/clinics/:id', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { error } = await supabase.from('vet_clinics').delete().eq('id', id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true, id });
+  });
+
   // System Config
   app.get('/api/config', async (req: Request, res: Response) => {
     const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
