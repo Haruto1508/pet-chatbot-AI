@@ -2,12 +2,13 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { supabase } from './src/services/supabaseClient';
 import { TriageLevel } from './src/types';
 
-async function startServer() {
+let appInstance: express.Express | null = null;
+
+async function startServer(isVercel = false) {
   const app = express();
   const PORT = 3000;
 
@@ -1206,6 +1207,10 @@ YÊU CẦU:
   });
 
 
+  if (isVercel) {
+    return app;
+  }
+
   // Serve static assets in production or use Vite middleware in development
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(process.cwd(), 'dist');
@@ -1214,6 +1219,7 @@ YÊU CẦU:
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
@@ -1232,4 +1238,13 @@ YÊU CẦU:
   });
 }
 
-startServer();
+export default async function getApp() {
+  if (!appInstance) {
+    appInstance = await startServer(true) as express.Express;
+  }
+  return appInstance;
+}
+
+if (process.env.VERCEL !== '1') {
+  startServer();
+}
