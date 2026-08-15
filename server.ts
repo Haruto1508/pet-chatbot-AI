@@ -1213,6 +1213,12 @@ YÊU CẦU:
   });
 
 
+  // Global Error Handler
+  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    console.error('Unhandled Error:', err);
+    res.status(500).json({ error: err.message || 'Internal Server Error' });
+  });
+
   if (isVercel) {
     return app;
   }
