@@ -12,7 +12,9 @@ async function startServer(isVercel = false) {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+  if (!isVercel) {
+    app.use(express.json({ limit: '10mb' }));
+  }
 
   // Metric counters are fetched dynamically
 
@@ -712,24 +714,28 @@ async function startServer(isVercel = false) {
 
   // --- CHAT SESSIONS (History) ---
   app.get('/api/chat-sessions', async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
-    const petId = req.query.petId as string;
-    let query = supabase.from('chat_sessions').select('*').order('updated_at', { ascending: false });
-    
-    if (userId) query = query.eq('user_id', userId);
-    if (petId) query = query.eq('pet_id', petId);
-    
-    const { data, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
-    
-    const mapped = data.map(s => ({
-      ...s,
-      userId: s.user_id,
-      petId: s.pet_id,
-      createdAt: s.created_at,
-      updatedAt: s.updated_at
-    }));
-    res.json(mapped);
+    try {
+      const userId = req.query.userId as string;
+      const petId = req.query.petId as string;
+      let query = supabase.from('chat_sessions').select('*').order('updated_at', { ascending: false });
+      
+      if (userId) query = query.eq('user_id', userId);
+      if (petId) query = query.eq('pet_id', petId);
+      
+      const { data, error } = await query;
+      if (error) return res.status(500).json({ error: error.message });
+      
+      const mapped = data.map(s => ({
+        ...s,
+        userId: s.user_id,
+        petId: s.pet_id,
+        createdAt: s.created_at,
+        updatedAt: s.updated_at
+      }));
+      res.json(mapped);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   app.get('/api/chat-sessions/:id', async (req: Request, res: Response) => {
