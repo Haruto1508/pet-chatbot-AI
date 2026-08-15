@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import crypto from 'crypto';
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { supabase } from './src/services/supabaseClient';
