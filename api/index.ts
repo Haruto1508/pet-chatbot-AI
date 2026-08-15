@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import getApp from '../dist/server.cjs';
+import getApp from '../server.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const app = await getApp();
