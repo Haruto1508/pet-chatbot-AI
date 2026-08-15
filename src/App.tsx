@@ -67,6 +67,11 @@ export function App() {
   
   // Sync tab with URL (including query parameters for record_detail)
   useEffect(() => {
+    // Do not interfere if Supabase is processing an OAuth redirect
+    if (window.location.hash && window.location.hash.includes('access_token')) {
+      return;
+    }
+
     let currentPath = `/${currentTab}`;
     if (currentTab === 'record_detail' && selectedRecord) {
       currentPath += `?id=${selectedRecord.id}`;
