@@ -1,9 +1,17 @@
 {
   "outputDirectory": "dist",
-  "rewrites": [
+  "routes": [
     {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "src": "/api/(.*)",
+      "dest": "/api/[...path]"
+    },
+    {
+      "src": "/(.*\\.(js|css|ico|png|svg|webp|woff|woff2|ttf|map|json))",
+      "dest": "/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
