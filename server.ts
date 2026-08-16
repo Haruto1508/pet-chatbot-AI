@@ -12,9 +12,9 @@ async function startServer(isVercel = false) {
   const app = express();
   const PORT = 3000;
 
-  if (!isVercel) {
-    app.use(express.json({ limit: '10mb' }));
-  }
+  // Always register JSON body parser (was missing for Vercel, causing req.body = undefined on POST)
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // Metric counters are fetched dynamically
 
