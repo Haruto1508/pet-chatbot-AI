@@ -3,8 +3,8 @@ import crypto from 'crypto';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
-import { supabase } from './src/services/supabaseClient';
-import { TriageLevel } from './src/types';
+import { supabase } from './src/services/supabaseClient.js';
+import { TriageLevel } from './src/types.js';
 
 let appInstance: express.Express | null = null;
 

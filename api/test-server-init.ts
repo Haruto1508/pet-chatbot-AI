@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import getApp from '../server';
+import getApp from '../server.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Stage 2: Can we call getApp() to init Express?
