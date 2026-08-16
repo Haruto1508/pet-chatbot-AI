@@ -101,6 +101,22 @@ async function startServer(isVercel = false) {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Debug: Check environment variables (safe - shows only presence, not values)
+  app.get('/api/debug', (_req: Request, res: Response) => {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+    res.json({
+      env: process.env.NODE_ENV || 'unknown',
+      isVercel: process.env.VERCEL === '1',
+      vars: {
+        SUPABASE_URL: supabaseUrl ? `✅ Set (${supabaseUrl.substring(0, 20)}...)` : '❌ MISSING',
+        SUPABASE_ANON_KEY: supabaseKey ? `✅ Set (${supabaseKey.substring(0, 10)}...)` : '❌ MISSING',
+        GEMINI_API_KEY: geminiKey ? `✅ Set (${geminiKey.substring(0, 6)}...)` : '❌ MISSING',
+      }
+    });
+  });
+
   // System Stats
   app.get('/api/stats', async (_req: Request, res: Response) => {
     try {
