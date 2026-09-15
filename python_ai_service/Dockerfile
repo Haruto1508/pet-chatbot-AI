@@ -4,16 +4,16 @@ FROM python:3.10-slim
 # Thiết lập thư mục làm việc bên trong container
 WORKDIR /app
 
+# Upgrade pip trước để tránh lỗi metadata wheels mới
+RUN pip install --no-cache-dir --upgrade pip
+
 # Copy danh sách thư viện vào trước (giúp cache lại các bước cài đặt)
 COPY requirements.txt .
 
-# 1. Cài đặt PyTorch phiên bản CPU (RẤT QUAN TRỌNG khi deploy lên Cloud giá rẻ/miễn phí)
-# Nếu cài bản PyTorch có GPU mặc định sẽ nặng > 2.5GB (gây quá tải server và lâu)
-# Bản CPU chỉ khoảng ~200MB
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# 1. Cài đặt PyTorch CPU dùng --extra-index-url (để pip vẫn tìm thấy dependencies trên PyPI)
+RUN pip install --no-cache-dir torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
 
 # 2. Cài các thư viện còn lại trong requirements.txt
-# (đã lọc bỏ torch và torchvision ra khỏi bước này do đã cài ở trên)
 RUN grep -v "torch" requirements.txt > req_no_torch.txt && \
     pip install --no-cache-dir -r req_no_torch.txt
 
