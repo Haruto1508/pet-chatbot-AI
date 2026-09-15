@@ -578,7 +578,7 @@ async function startServer(isVercel = false) {
     if (error) {
       // If table doesn't exist or empty, return default config
       return res.json({
-        aiModel: 'gemini-1.5-flash',
+        aiModel: 'gemini-2.5-flash',
         temperature: 0.7,
         systemPrompt: 'Bạn là trợ lý thú y AI chuyên nghiệp. Hãy tư vấn ngắn gọn, chính xác.',
         maxTokens: 2048,
@@ -832,7 +832,7 @@ async function startServer(isVercel = false) {
       const prompt = `Tạo một tiêu đề SIÊU NGẮN (tối đa 4-6 chữ) tóm tắt nội dung sau (nếu là chào hỏi thì ghi "Trò chuyện chung", không dùng ngoặc kép): "${cleanMessage}"`;
       
       const genConfig = {
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         contents: { parts: [{ text: prompt }] }
       };
       
@@ -1016,9 +1016,12 @@ Vui lòng viết chi tiết, có chiều sâu chuyên khoa để hỗ trợ ngư
 
       let streamSucceeded = false;
       let lastError: any = null;
-      // Multi-tier model fallback: Configured model -> 2.5 Flash -> 2.0 Flash -> 2.0 Flash Lite -> 1.5 Flash 8B -> 1.5 Flash Latest
+      let requestedModel = sysConfig.aiModel;
+      if (!requestedModel || requestedModel === 'gemini-1.5-flash') {
+        requestedModel = 'gemini-2.5-flash';
+      }
       const modelCandidates = [
-        sysConfig.aiModel,
+        requestedModel,
         'gemini-2.5-flash',
         'gemini-2.0-flash',
         'gemini-2.0-flash-lite',
@@ -1168,7 +1171,7 @@ Vui lòng viết chi tiết, có chiều sâu chuyên khoa để hỗ trợ ngư
       const ai = getGeminiClient();
 
       const { data: configData } = await supabase.from('system_config').select('*').eq('id', 1).single();
-      const sysConfig = configData ? { aiModel: configData.ai_model } : { aiModel: 'gemini-1.5-flash' };
+      const sysConfig = configData ? { aiModel: configData.ai_model } : { aiModel: 'gemini-2.5-flash' };
 
       const summaryPrompt = `
 Bạn là Bác sĩ Thú y AI cực kỳ tận tâm và có chuyên môn cao. Hãy đọc đoạn hội thoại chat tư vấn dưới đây và tổng hợp thành 1 Hồ Sơ Bệnh Án chuẩn y khoa thú y chi tiết, đầy đủ và dễ hiểu cho người nuôi.
@@ -1198,7 +1201,7 @@ YÊU CẦU:
       let response;
       try {
         response = await ai.models.generateContent({
-          model: sysConfig.aiModel || 'gemini-1.5-flash',
+          model: sysConfig.aiModel || 'gemini-2.5-flash',
           contents: summaryPrompt,
           config: {
             responseMimeType: 'application/json'
