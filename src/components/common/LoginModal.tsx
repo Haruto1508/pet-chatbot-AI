@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, LogIn, AlertCircle } from 'lucide-react';
+import { X, LogIn, AlertCircle } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 
 interface Props {
@@ -26,22 +26,24 @@ export const LoginModal: React.FC<Props> = ({
           redirectTo: window.location.origin
         }
       });
-      if (error) throw error;
-      // On success, Supabase redirects the user to Google
-    } catch (error: any) {
-      console.error('Error logging in with Google:', error.message);
-      setErrorMsg(error.message || 'Đã có lỗi xảy ra khi đăng nhập bằng Google.');
+
+      if (error) {
+        setErrorMsg(error.message || 'Đã có lỗi xảy ra khi đăng nhập bằng Google.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Lỗi hệ thống khi xác thực Google.');
+    } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-100 relative">
+        {/* Close Button */}
         <button
           onClick={onClose}
-          disabled={isLoading}
-          className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100 transition-all disabled:opacity-50"
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-all"
         >
           <X className="w-5 h-5" />
         </button>
@@ -62,22 +64,6 @@ export const LoginModal: React.FC<Props> = ({
           <p className="text-xs text-slate-500 mt-1">
             Kết nối với tài khoản Google để trải nghiệm đầy đủ tính năng.
           </p>
-        </div>
-
-        {/* Info Banner */}
-        <div className="mb-6 p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl text-xs space-y-1.5">
-          <div className="font-bold text-slate-800 flex items-center gap-1.5">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-             Bảo mật phân quyền (Mới cập nhật):
-          </div>
-          <ul className="text-slate-600 space-y-1 pl-5 list-disc text-[11px]">
-            <li>
-              Chỉ các tài khoản được <strong>chỉ định đích danh</strong> (VD: email của bạn hoặc đuôi <code className="bg-amber-100 text-amber-900 px-1 py-0.5 rounded">@petcare.ai</code>) mới được cấp quyền Admin tự động.
-            </li>
-            <li>
-              Mọi tài khoản còn lại đều mặc định là <strong>User Thường</strong>. Quản trị viên cấp cao có thể nâng cấp quyền thủ công trong Database.
-            </li>
-          </ul>
         </div>
 
         {errorMsg && (

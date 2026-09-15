@@ -376,7 +376,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Admin Switcher or Banner for Google Admin */}
-            {isAdminRole ? (
+            {isAdminRole && (
               <div className="p-3 m-3 bg-amber-50 border border-amber-200/80 rounded-2xl">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] font-bold text-amber-900 flex items-center gap-1">
@@ -394,20 +394,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <ShieldCheck className="w-3.5 h-3.5" />
                   <span>Vào Trang Quản Trị Admin</span>
-                </button>
-              </div>
-            ) : (
-              <div className="p-3 m-3 bg-slate-50 border border-slate-200 rounded-2xl text-center">
-                <p className="text-[11px] text-slate-500 mb-1.5">
-                  Bạn có tài khoản Google Admin?
-                </p>
-                <button
-                  onClick={onOpenLoginModal}
-                  className="w-full py-1.5 bg-slate-800 hover:bg-slate-900 text-amber-300 hover:text-amber-200 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 border border-slate-700"
-                  title="Đăng Nhập Google Admin"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Đăng Nhập Google Admin</span>
                 </button>
               </div>
             )}
