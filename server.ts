@@ -1014,7 +1014,7 @@ Vui lòng viết chi tiết, có chiều sâu chuyên khoa để hỗ trợ ngư
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
-      let stream: any;
+      let streamSucceeded = false;
       let lastError: any = null;
       // Multi-tier model fallback: Configured model -> 2.5 Flash -> 2.0 Flash -> 1.5 Flash (rock solid)
       const modelCandidates = [
@@ -1025,112 +1025,123 @@ Vui lòng viết chi tiết, có chiều sâu chuyên khoa để hỗ trợ ngư
       ].filter(Boolean);
       const fallbackModels = [...new Set(modelCandidates)];
 
+      // Helper to send SSE formatted chunk
+      const sendEvent = (type: string, data: any) => {
+        res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+      };
+
       for (const targetModel of fallbackModels) {
         try {
           console.log(`[Gemini] Gọi model: ${targetModel}...`);
-          stream = await ai.models.generateContentStream({
+          const stream = await ai.models.generateContentStream({
             model: targetModel,
             contents: { parts: contents },
             config: {
               temperature: sysConfig.temperature || 0.4
             }
           });
-          lastError = null;
-          break; // Thành công
+
+          // Test reading first chunk: phát hiện ngay nếu model bị lỗi 503
+          const iterator = stream[Symbol.asyncIterator]();
+          const firstChunk = await iterator.next();
+
+          if (firstChunk.done && !firstChunk.value) {
+            continue;
+          }
+
+          // Model phản hồi tốt! Tiến hành stream đầy đủ cho client
+          let fullText = '';
+          let isInsideTriage = false;
+          let triageBuffer = '';
+          let triageSent = false;
+
+          const handleChunk = (chunkText: string) => {
+            if (!chunkText) return;
+            fullText += chunkText;
+
+            if (!triageSent && !isCasualGreeting) {
+              if (!isInsideTriage && fullText.includes('[[TRIAGE_ALERT]]')) {
+                isInsideTriage = true;
+              }
+              if (isInsideTriage) {
+                triageBuffer = fullText;
+                if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
+                  isInsideTriage = false;
+                  triageSent = true;
+                  const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
+                  if (alertMatch && alertMatch[1]) {
+                    try {
+                      const parsed = JSON.parse(alertMatch[1].trim());
+                      sendEvent('triage', {
+                        triageLevel: parsed.level || 'GREEN',
+                        triageDetails: {
+                          riskTitle: parsed.title || 'THÔNG TIN SỨC KHỎE',
+                          urgency: parsed.urgency || '',
+                          immediateActions: parsed.actions || []
+                        }
+                      });
+                    } catch (e) {
+                      console.error('Error parsing Triage Alert JSON from Gemini response:', e);
+                    }
+                  }
+                  const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
+                  if (afterTriage && afterTriage.length > 0) {
+                    const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
+                    if (cleanAfterTriage.length > 0) {
+                      sendEvent('chunk', { text: cleanAfterTriage });
+                    }
+                  }
+                }
+                return;
+              }
+            }
+            sendEvent('chunk', { text: chunkText });
+          };
+
+          // Gửi chunk đầu tiên
+          if (firstChunk.value?.text) {
+            handleChunk(firstChunk.value.text);
+          }
+
+          // Gửi các chunk tiếp theo
+          while (true) {
+            const nextResult = await iterator.next();
+            if (nextResult.done) break;
+            if (nextResult.value?.text) {
+              handleChunk(nextResult.value.text);
+            }
+          }
+
+          // Check fallback keywords nếu chưa gửi triage
+          if (!triageSent && !isCasualGreeting) {
+            const textLower = fullText.toLowerCase();
+            if ((sysConfig.emergencyKeywords || []).some((k: string) => textLower.includes(k.toLowerCase()))) {
+              sendEvent('triage', {
+                triageLevel: 'RED',
+                triageDetails: {
+                  riskTitle: 'CẤP BÁCH / NGUY HIỂM CAO (Cảnh báo tự động)',
+                  urgency: 'Cần đưa đến trạm thú y ngay lập tức!',
+                  immediateActions: ['Giữ ấm', 'Đưa đến bệnh viện thú y gần nhất']
+                }
+              });
+            }
+          }
+
+          sendEvent('done', { rawText: fullText });
+          res.end();
+          streamSucceeded = true;
+          break; // Hoàn tất thành công!
+
         } catch (err: any) {
           lastError = err;
           console.warn(`[Gemini] Model ${targetModel} gặp lỗi (${err?.status || err?.message}). Chuyển sang model dự phòng tiếp theo...`);
-          await new Promise(resolve => setTimeout(resolve, 800));
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 
-      if (!stream) {
+      if (!streamSucceeded) {
         throw lastError || new Error('Tất cả các model Gemini đều không phản hồi.');
       }
-
-      let fullText = '';
-      let isInsideTriage = false;
-      let triageBuffer = '';
-      let triageSent = false;
-
-      // Helper to send SSE formatted chunk
-      const sendEvent = (type: string, data: any) => {
-        res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
-      };
-
-      for await (const chunk of stream) {
-        const text = chunk.text;
-        if (!text) continue;
-        
-        fullText += text;
-
-        if (!triageSent && !isCasualGreeting) {
-          // Check if we entered triage block
-          if (!isInsideTriage && fullText.includes('[[TRIAGE_ALERT]]')) {
-            isInsideTriage = true;
-          }
-          
-          if (isInsideTriage) {
-            triageBuffer = fullText;
-            
-            // Check if we exited triage block
-            if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
-              isInsideTriage = false;
-              triageSent = true;
-              
-              // Extract and parse
-              const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
-              if (alertMatch && alertMatch[1]) {
-                try {
-                  const parsed = JSON.parse(alertMatch[1].trim());
-                  sendEvent('triage', {
-                    triageLevel: parsed.level || 'GREEN',
-                    triageDetails: {
-                      riskTitle: parsed.title || 'THÔNG TIN SỨC KHỎE',
-                      urgency: parsed.urgency || '',
-                      immediateActions: parsed.actions || []
-                    }
-                  });
-                } catch (e) {
-                  console.error('Error parsing Triage Alert JSON from Gemini response:', e);
-                }
-              }
-              
-              // Send the rest of the text that came after [[/TRIAGE_ALERT]]
-              const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
-              if (afterTriage && afterTriage.length > 0) {
-                // Ensure we clean up leading newlines from the split
-                const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
-                if (cleanAfterTriage.length > 0) {
-                  sendEvent('chunk', { text: cleanAfterTriage });
-                }
-              }
-            }
-            continue; // Skip normal chunk sending while accumulating triage
-          }
-        }
-        
-        // If not inside triage, stream normal chunks
-        sendEvent('chunk', { text });
-      }
-
-      // Check fallback keywords if no triage was sent and it's not a casual greeting
-      if (!triageSent && !isCasualGreeting) {
-         const textLower = fullText.toLowerCase();
-         if ((sysConfig.emergencyKeywords || []).some((k: string) => textLower.includes(k.toLowerCase()))) {
-           sendEvent('triage', {
-             triageLevel: 'RED',
-             triageDetails: {
-               riskTitle: 'CẤP BÁCH / NGUY HIỂM CAO (Cảnh báo tự động)',
-               urgency: 'Cần đưa đến trạm thú y ngay lập tức!',
-               immediateActions: ['Giữ ấm', 'Đưa đến bệnh viện thú y gần nhất']
-             }
-           });
-         }
-      }
-
-      sendEvent('done', { rawText: fullText });
-      res.end();
 
     } catch (err: any) {
       console.error('Gemini API Error:', err);
