@@ -870,7 +870,7 @@ async function startServer(isVercel = false) {
         systemPrompt: configData.system_prompt,
         maxTokens: configData.max_tokens,
         emergencyKeywords: configData.emergency_keywords
-      } : { aiModel: 'gemini-3.6-flash', temperature: 0.4, systemPrompt: '', emergencyKeywords: [] };
+      } : { aiModel: 'gemini-2.5-flash', temperature: 0.4, systemPrompt: '', emergencyKeywords: [] };
 
       let petContextPrompt = '';
       if (petInfo) {
@@ -1015,31 +1015,37 @@ Vui lòng viết chi tiết, có chiều sâu chuyên khoa để hỗ trợ ngư
       res.setHeader('Connection', 'keep-alive');
 
       let stream: any;
-      const genConfig = {
-        model: sysConfig.aiModel || 'gemini-3.6-flash',
-        contents: { parts: contents },
-        config: {
-          temperature: sysConfig.temperature || 0.4
-        }
-      };
+      let lastError: any = null;
+      // Multi-tier model fallback: Configured model -> 2.5 Flash -> 2.0 Flash -> 1.5 Flash (rock solid)
+      const modelCandidates = [
+        sysConfig.aiModel,
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash'
+      ].filter(Boolean);
+      const fallbackModels = [...new Set(modelCandidates)];
 
-      let retries = 1; // retry to call gemini api one more time
-      for (let attempt = 0; attempt <= retries; attempt++) {
+      for (const targetModel of fallbackModels) {
         try {
-          stream = await ai.models.generateContentStream(genConfig);
-          break; // Success
-        } catch (err: any) {
-          if (err?.status === 503 || err?.message?.includes('503') || err?.message?.includes('overloaded')) {
-            if (attempt < retries) {
-              console.warn(`Gemini API 503 overloaded. Retrying attempt ${attempt + 1}/${retries}...`);
-              // Try fallback model if configured, or just wait and retry
-              if (genConfig.model === 'gemini-3.6-flash') genConfig.model = 'gemini-3.5-flash';
-              await new Promise(resolve => setTimeout(resolve, 1500)); // wait 1.5s
-              continue;
+          console.log(`[Gemini] Gọi model: ${targetModel}...`);
+          stream = await ai.models.generateContentStream({
+            model: targetModel,
+            contents: { parts: contents },
+            config: {
+              temperature: sysConfig.temperature || 0.4
             }
-          }
-          throw err; // Out of retries or not a 503
+          });
+          lastError = null;
+          break; // Thành công
+        } catch (err: any) {
+          lastError = err;
+          console.warn(`[Gemini] Model ${targetModel} gặp lỗi (${err?.status || err?.message}). Chuyển sang model dự phòng tiếp theo...`);
+          await new Promise(resolve => setTimeout(resolve, 800));
         }
+      }
+
+      if (!stream) {
+        throw lastError || new Error('Tất cả các model Gemini đều không phản hồi.');
       }
 
       let fullText = '';
