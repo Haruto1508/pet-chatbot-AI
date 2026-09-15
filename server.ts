@@ -35,7 +35,7 @@ async function startServer(isVercel = false) {
     try {
       const ai = getGeminiClient();
       const response = await ai.models.embedContent({
-        model: 'gemini-embedding-2',
+        model: 'text-embedding-004',
         contents: text,
       });
       return response.embeddings?.[0]?.values || null;
@@ -1016,12 +1016,14 @@ Vui lòng viết chi tiết, có chiều sâu chuyên khoa để hỗ trợ ngư
 
       let streamSucceeded = false;
       let lastError: any = null;
-      // Multi-tier model fallback: Configured model -> 2.5 Flash -> 2.0 Flash -> 1.5 Flash (rock solid)
+      // Multi-tier model fallback: Configured model -> 2.5 Flash -> 2.0 Flash -> 2.0 Flash Lite -> 1.5 Flash 8B -> 1.5 Flash Latest
       const modelCandidates = [
         sysConfig.aiModel,
         'gemini-2.5-flash',
         'gemini-2.0-flash',
-        'gemini-1.5-flash'
+        'gemini-2.0-flash-lite',
+        'gemini-1.5-flash-8b',
+        'gemini-1.5-flash-latest'
       ].filter(Boolean);
       const fallbackModels = [...new Set(modelCandidates)];
 
