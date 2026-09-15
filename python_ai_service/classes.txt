@@ -1,6 +1,4 @@
-Dermatitis
+Bacterial_dermatosis
 Fungal_infections
 Healthy
-Hypersensitivity
-demodicosis
-ringworm
+Hypersensitivity_allergic_dermatosis

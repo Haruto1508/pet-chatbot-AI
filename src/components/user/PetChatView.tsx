@@ -5,9 +5,7 @@ import {
   Loader2,
   FilePlus,
   PawPrint,
-  Bot,
   User,
-  AlertTriangle,
   CheckCircle,
   X,
   Trash2,
@@ -18,9 +16,11 @@ import {
   Search,
   Clock,
   Calendar,
-  ChevronDown,
   History,
-  Sparkles
+  Sparkles,
+  Copy,
+  ThumbsUp,
+  ThumbsDown
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord } from '../../types';
@@ -117,6 +117,7 @@ export const PetChatView: React.FC<Props> = ({
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [editRecordDraft, setEditRecordDraft] = useState<Partial<MedicalRecord> | null>(null);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -729,112 +730,144 @@ export const PetChatView: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Main Chat Box */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-4 bg-slate-50/50 scrollbar-thin">
+        {/* Main Chat Box — ChatGPT Style */}
+        <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6">
             {messages.map((msg) => {
               const isUser = msg.sender === 'user';
-              return (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3 max-w-4xl ${isUser ? 'ml-auto flex-row-reverse' : ''}`}
-                >
-                  <div
-                    className={`w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-xs overflow-hidden ${
-                      isUser
-                        ? 'bg-slate-100 text-slate-500'
-                        : 'bg-emerald-50 border border-emerald-100'
-                    }`}
-                  >
-                    {isUser ? (
-                      currentUser?.avatar ? (
-                        <img src={currentUser.avatar} alt="User" className="w-full h-full object-cover" />
-                      ) : (
-                        <User className="w-5 h-5" />
-                      )
-                    ) : (
-                      <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-1" />
-                    )}
-                  </div>
 
-                  <div className="space-y-2 max-w-[88%]">
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                      <span className="font-bold text-slate-700">
-                        {isUser ? currentUser?.name || 'Bạn' : 'PetCare AI Doctor'}
-                      </span>
-                      <span>• {msg.timestamp}</span>
-                      {!isUser && msg.triageLevel && (
-                        <TriageBadge level={msg.triageLevel} compact={true} />
-                      )}
-                    </div>
-
-                    <div
-                      className={`p-4 rounded-2xl text-xs sm:text-sm leading-relaxed ${
-                        isUser
-                          ? 'bg-emerald-600 text-white rounded-tr-none shadow-xs'
-                          : 'bg-white text-slate-800 border border-slate-200/90 rounded-tl-none shadow-xs'
-                      }`}
-                    >
+              if (isUser) {
+                return (
+                  <div key={msg.id} className="py-4 flex justify-end">
+                    <div className="max-w-[80%] flex flex-col items-end gap-2">
                       {msg.imageUrl && (
                         <img
                           src={msg.imageUrl}
                           alt="Triệu chứng thú cưng"
-                          className="max-w-xs rounded-xl border border-slate-200 mb-3 object-cover shadow-xs"
+                          className="max-w-[280px] rounded-2xl border border-slate-200 object-cover shadow-sm"
                         />
                       )}
-
-                      {isUser ? (
-                        <p className="whitespace-pre-wrap">{msg.text}</p>
-                      ) : (
-                        <div className="flex flex-col gap-4">
-                          <div className="markdown-body prose prose-emerald prose-xs max-w-none prose-strong:text-emerald-800 prose-strong:font-extrabold prose-headings:text-emerald-800 prose-li:marker:text-emerald-600">
-                            <Markdown>{msg.text}</Markdown>
-                          </div>
-                          
-                          {msg.triageDetails && (
-                            <div className={`mt-2 p-3 rounded-xl border-l-4 ${
-                              msg.triageLevel === 'RED' ? 'border-red-500 bg-red-50 text-red-900' :
-                              msg.triageLevel === 'YELLOW' ? 'border-amber-500 bg-amber-50 text-amber-900' :
-                              'border-emerald-500 bg-emerald-50 text-emerald-900'
-                            }`}>
-                              <h4 className="font-bold mb-1.5 flex items-center gap-1.5">
-                                <AlertTriangle className="w-4 h-4" />
-                                {msg.triageDetails.riskTitle}
-                              </h4>
-                              <p className="font-medium text-[13px] mb-2">{msg.triageDetails.urgency}</p>
-                              {msg.triageDetails.immediateActions && msg.triageDetails.immediateActions.length > 0 && (
-                                <div className="mt-2">
-                                  <span className="font-bold text-[13px] uppercase tracking-wide">Cách xử lý sơ cứu:</span>
-                                  <ul className="list-disc list-inside mt-1 space-y-1 text-[13px]">
-                                    {msg.triageDetails.immediateActions.map((action, idx) => (
-                                      <li key={idx}><strong>{action.split(':')[0]}</strong>{action.includes(':') ? `:${action.split(':')[1]}` : ''}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          )}
+                      {msg.text && (
+                        <div className="bg-slate-100 text-slate-900 rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
+                          {msg.text}
                         </div>
                       )}
+                      <span className="text-[10px] text-slate-400 pr-1">{msg.timestamp}</span>
                     </div>
+                  </div>
+                );
+              }
+
+              // AI message — full width, clean, ChatGPT style
+              const triageTooltip = msg.triageDetails
+                ? `${msg.triageDetails.riskTitle}\n${msg.triageDetails.urgency}${
+                    msg.triageDetails.immediateActions?.length
+                      ? '\n• ' + msg.triageDetails.immediateActions.join('\n• ')
+                      : ''
+                  }`
+                : '';
+
+              return (
+                <div key={msg.id} className="group py-6">
+                  {/* AI Header: logo + name + triage badge */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                      <img
+                        src="/logo.png"
+                        alt="PetCare AI"
+                        className="w-full h-full object-contain p-0.5"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
+
+                    {msg.triageLevel && (
+                      <span
+                        title={triageTooltip}
+                        className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full cursor-help select-none ${
+                          msg.triageLevel === 'RED'
+                            ? 'bg-red-100 text-red-700'
+                            : msg.triageLevel === 'YELLOW'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-emerald-100 text-emerald-700'
+                        }`}
+                      >
+                        {msg.triageLevel === 'RED' ? '🔴' : msg.triageLevel === 'YELLOW' ? '🟡' : '🟢'}
+                        <span className="hidden sm:inline">
+                          {msg.triageDetails?.riskTitle || (msg.triageLevel === 'GREEN' ? 'Bình thường' : msg.triageLevel)}
+                        </span>
+                      </span>
+                    )}
+
+                    <span className="text-[10px] text-slate-400 ml-auto">{msg.timestamp}</span>
+                  </div>
+
+                  {/* AI Content */}
+                  <div className="pl-8 markdown-body prose prose-sm max-w-none text-slate-800
+                    prose-headings:text-slate-900 prose-headings:font-bold
+                    prose-strong:text-slate-900 prose-strong:font-semibold
+                    prose-li:marker:text-slate-400
+                    prose-a:text-emerald-600 prose-a:no-underline hover:prose-a:underline
+                    prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-emerald-700
+                    prose-blockquote:border-emerald-400 prose-blockquote:text-slate-600">
+                    {msg.imageUrl && (
+                      <img
+                        src={msg.imageUrl}
+                        alt="Triệu chứng thú cưng"
+                        className="max-w-[280px] rounded-xl border border-slate-200 mb-4 object-cover shadow-sm"
+                      />
+                    )}
+                    <Markdown>{msg.text}</Markdown>
+                  </div>
+
+                  {/* Action buttons — appear on hover */}
+                  <div className="pl-8 mt-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(msg.text);
+                        setCopiedMsgId(msg.id);
+                        setTimeout(() => setCopiedMsgId(null), 2000);
+                      }}
+                      title="Sao chép"
+                      className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      {copiedMsgId === msg.id ? (
+                        <><CheckCircle className="w-3.5 h-3.5 text-emerald-600" /><span className="text-[11px] text-emerald-600 font-medium">Đã sao chép</span></>
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button title="Hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                      <ThumbsUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button title="Không hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                      <ThumbsDown className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );
             })}
 
+            {/* Typing dots loading indicator */}
             {isLoading && (
-              <div className="flex gap-3 max-w-lg">
-                <div className="w-9 h-9 rounded-2xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 animate-pulse">
-                  <Bot className="w-5 h-5" />
+              <div className="py-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                    <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-0.5" />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
                 </div>
-                <div className="bg-white p-4 rounded-2xl rounded-tl-none border border-slate-200 flex items-center gap-3 text-xs text-slate-600 font-semibold shadow-xs">
-                  <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
-                  <span>PetCare AI đang phân tích...</span>
+                <div className="pl-8 flex items-center gap-1.5">
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }} />
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1s' }} />
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1s' }} />
                 </div>
               </div>
             )}
 
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="h-4" />
           </div>
+        </div>
 
           <div className="shrink-0 p-2 sm:p-2.5 bg-white border-t border-slate-100 flex gap-1.5 overflow-x-auto scrollbar-none">
             {promptSuggestions.map((prompt, idx) => (

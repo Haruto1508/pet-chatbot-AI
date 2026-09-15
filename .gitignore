@@ -50,7 +50,10 @@ coverage/
 *.py[cod]
 *$py.class
 **/dataset/
+Dogs/
+*.zip
 *.pth
+!python_ai_service/disease_model.pth
 *.onnx
 *.h5
 

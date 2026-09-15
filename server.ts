@@ -886,8 +886,13 @@ async function startServer(isVercel = false) {
 `;
       }
 
-      // If image is provided, query the Python ResNet AI Service
+      // --- ResNet AI Service: Chẩn đoán hình ảnh ---
+      // Chiến lược token-saving:
+      //   confidence ≥ 70% + model thật → Gemini nhận TEXT label (KHÔNG gửi ảnh) → tiết kiệm ~800 tokens
+      //   confidence < 70% hoặc mock    → Gemini nhận cả ảnh + label gợi ý
       let resnetPrediction = '';
+      let imageForGemini: string | null = imageBase64 || null; // ảnh sẽ gửi vào Gemini
+
       if (imageBase64) {
         try {
           const resnetRes = await fetch('https://pet-chatbot-ai.onrender.com/predict', {
@@ -895,26 +900,52 @@ async function startServer(isVercel = false) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image_base64: imageBase64 })
           });
+
           if (resnetRes.ok) {
             const resnetData = await resnetRes.json();
+
             if (resnetData.success) {
-              resnetPrediction = `
-[KẾT QUẢ CHẨN ĐOÁN HÌNH ẢNH TỪ HỆ THỐNG AI Y KHOA (ResNet)]:
-- Bệnh chẩn đoán: ${resnetData.prediction.class_name}
-- Độ tin cậy (Confidence): ${resnetData.prediction.confidence}%
-- Lời nhắn hệ thống: Dựa vào kết quả này và kiến thức chuyên môn, hãy xác nhận xem chẩn đoán có phù hợp với hình ảnh và mô tả của người dùng không, sau đó tư vấn cụ thể.
+              const pred       = resnetData.prediction;
+              const isMock     = resnetData.is_mock;
+              const confidence = pred.confidence as number;
+              const top3List   = (pred.top3 || []) as Array<{ class_name: string; class_name_vi: string; confidence: number }>;
+              const top3Text   = top3List.map((p, i) => `  ${i + 1}. ${p.class_name_vi} (${p.class_name}): ${p.confidence}%`).join('\n');
+
+              // Enhance RAG với tên bệnh để lấy kiến thức liên quan
+              const diseaseForRAG = `${message} ${pred.class_name} ${pred.class_name_vi}`;
+              const enhancedRAG   = await searchRAGKnowledge(diseaseForRAG);
+              if (enhancedRAG) ragContext = enhancedRAG;
+
+              if (!isMock && confidence >= 70) {
+                // ✅ HIGH CONFIDENCE: KHÔNG gửi ảnh vào Gemini → tiết kiệm token
+                imageForGemini = null;
+                resnetPrediction = `
+[CHẨN ĐOÁN HÌNH ẢNH TỪ AI CHUYÊN BIỆT (ResNet18 — Độ tin cậy CAO)]:
+- Chẩn đoán chính: ${pred.class_name_vi} (${pred.class_name}) — ${confidence}%
+- Top-3 chẩn đoán phân biệt:
+${top3Text}
+- Hướng dẫn: Model đã phân tích ảnh với độ tin cậy cao. Hãy xác nhận chẩn đoán, giải thích triệu chứng điển hình và đưa ra phác đồ điều trị cụ thể.
 `;
-              // Enhance RAG Context by dynamically adding the disease name to the query
-              const enhancedRAG = await searchRAGKnowledge(`${message} ${resnetData.prediction.class_name}`);
-              if (enhancedRAG) {
-                // we'll use enhancedRAG over standard ragContext if it found something
-                // (Note: ignoring constant override error by appending to prompt instead)
+                console.log(`[ResNet] High confidence (${confidence}%) → Gemini nhận TEXT only, tiết kiệm ảnh tokens.`);
+              } else {
+                // ⚠️ LOW CONFIDENCE hoặc MOCK: giữ ảnh, thêm gợi ý
+                const label = isMock ? '[Chế độ thử nghiệm]' : `[Độ tin cậy thấp: ${confidence}%]`;
+                resnetPrediction = `
+[GỢI Ý NHẬN DIỆN HÌNH ẢNH ${label}]:
+- Dự đoán ban đầu: ${pred.class_name_vi} (${pred.class_name}) — ${confidence}%
+- Top-3 gợi ý:
+${top3Text}
+- Hướng dẫn: Hãy phân tích ảnh trực tiếp để xác nhận chẩn đoán chính xác hơn.
+`;
+                // imageForGemini giữ nguyên = imageBase64 (Gemini phân tích ảnh)
+                console.log(`[ResNet] Low confidence/mock (${confidence}%, mock=${isMock}) → Gemini nhận cả ảnh.`);
               }
             }
           }
         } catch (e) {
           console.error("Lỗi khi kết nối đến Python ResNet AI:", e);
-          resnetPrediction = "\n(Hệ thống nhận diện ảnh nội bộ hiện không phản hồi, hãy phân tích ảnh bằng mắt thường - Vision API.)\n";
+          // Giữ imageForGemini = imageBase64, Gemini tự phân tích ảnh
+          resnetPrediction = '\n(Hệ thống nhận diện ảnh chuyên biệt đang không phản hồi — Gemini sẽ phân tích ảnh trực tiếp.)\n';
         }
       }
 
@@ -954,11 +985,11 @@ LƯU Ý QUAN TRỌNG:
 1. BẮT BUỘC chèn khối Triage Alert ngay đầu phản hồi (tuyệt đối không dùng markdown block xung quanh). Hãy viết liền trên 1 dòng để tối ưu tốc độ:
 [[TRIAGE_ALERT]]{"level": "RED|YELLOW|GREEN", "title": "Tóm tắt bệnh", "urgency": "Mức độ khẩn cấp", "actions": ["Hành động 1", "Hành động 2"]}[[/TRIAGE_ALERT]]
 
-2. Sau khối trên, trả lời ngắn gọn, súc tích bằng Tiếng Việt với đúng 3 mục sau:
-- **Triệu chứng**: Liệt kê ngắn gọn các triệu chứng nhận biết chính của tình trạng này.
-- **Tình trạng**: Chẩn đoán sơ bộ tình trạng của thú cưng là gì, mức độ nghiêm trọng ra sao.
-- **Cách phòng ngừa**: Các biện pháp phòng ngừa hoặc chăm sóc tại nhà để tránh tái phát.
-KHÔNG viết thêm bất kỳ mục nào khác ngoài 3 mục trên. Giữ mỗi mục tối đa 3-4 câu.
+2. Sau khối trên, trình bày câu trả lời bằng Tiếng Việt chi tiết, rõ ràng và đầy đủ bằng các gạch đầu dòng chuyên nghiệp:
+- **Chẩn đoán sơ bộ**: Phân tích kỹ tình trạng của thú cưng, đưa ra các chẩn đoán phân biệt và giải thích cụ thể nguyên nhân tại sao thú cưng gặp hiện tượng đó.
+- **Xử lý & Sơ cứu tại nhà**: Cung cấp hướng dẫn sơ cứu đầy đủ, chi tiết từng bước cụ thể mà chủ nuôi cần thực hiện ngay lập tức, nêu rõ những việc nên làm và những gì tuyệt đối không được làm (ví dụ: các loại thức ăn/nước uống kiêng, nhiệt độ môi trường, cách xử lý vật lý...).
+- **Khi nào cần đi thú y ngay**: Liệt kê rõ ràng và chi tiết các triệu chứng cảnh báo đỏ nguy hiểm đòi hỏi phải đưa đi cấp cứu gấp.
+Vui lòng viết chi tiết, có chiều sâu chuyên khoa để hỗ trợ người dùng tốt nhất, không viết sơ sài hay quá ngắn gọn.
 
 🚨 BẢO MẬT & GIỚI HẠN (QUAN TRỌNG):
 - BẠN CHỈ LÀ BÁC SĨ THÚ Y AI. TUYỆT ĐỐI KHÔNG trả lời các chủ đề chính trị, tôn giáo, code lập trình, hay bất cứ gì ngoài thú y/động vật.
@@ -968,11 +999,12 @@ KHÔNG viết thêm bất kỳ mục nào khác ngoài 3 mục trên. Giữ mỗ
       }
 
       const contents: any[] = [];
-      if (imageBase64) {
+      if (imageForGemini) {
+        // Chỉ gửi ảnh vào Gemini khi ResNet không đủ tin cậy (hoặc không gọi được)
         contents.push({
           inlineData: {
             mimeType: 'image/jpeg',
-            data: imageBase64.replace(/^data:image\/\w+;base64,/, '')
+            data: imageForGemini.replace(/^data:image\/\w+;base64,/, '')
           }
         });
       }
