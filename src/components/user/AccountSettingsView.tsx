@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Bell, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut } from 'lucide-react';
+import { Settings, User, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut } from 'lucide-react';
 import { UserProfile, ChatSession } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -14,11 +14,6 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
   const { showSuccess, showError } = useNotification();
   const [userName, setUserName] = useState(currentUser.name);
   const email = currentUser.email;
-  const [notifications, setNotifications] = useState({
-    emergencyAlerts: true,
-    vaccineReminders: true,
-    newsletter: false
-  });
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ usage: number; quota: number } | null>(null);
 
@@ -110,7 +105,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
           <div>
             <h2 className="text-xl font-bold text-slate-900">Quản Lý Tài Khoản & Cài Đặt</h2>
             <p className="text-xs text-slate-500">
-              Thiết lập thông tin cá nhân, cài đặt thông báo khẩn cấp và kết nối tài khoản Google.
+              Thiết lập thông tin cá nhân và quản lý dữ liệu tài khoản.
             </p>
           </div>
         </div>
@@ -168,40 +163,6 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
           </div>
         </div>
 
-        {/* Notifications Preference */}
-        <div className="space-y-4 pt-4 border-t border-slate-100">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
-            <Bell className="w-4 h-4 text-amber-600" /> Cài Đặt Thông Báo
-          </h3>
-
-          <div className="space-y-3 text-xs">
-            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
-              <div>
-                <span className="font-bold text-slate-800 block">Thông báo cảnh báo đỏ (Cấp Bách)</span>
-                <span className="text-slate-500">Nhận cảnh báo ngay lập tức khi phát hiện triệu chứng nguy hiểm</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={notifications.emergencyAlerts}
-                onChange={(e) => setNotifications({ ...notifications, emergencyAlerts: e.target.checked })}
-                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-              />
-            </label>
-
-            <label className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer">
-              <div>
-                <span className="font-bold text-slate-800 block">Nhắc lịch tiêm vắc-xin & Tái khám</span>
-                <span className="text-slate-500">Gửi nhắc nhở lịch tiêm phòng định kỳ cho chó mèo</span>
-              </div>
-              <input
-                type="checkbox"
-                checked={notifications.vaccineReminders}
-                onChange={(e) => setNotifications({ ...notifications, vaccineReminders: e.target.checked })}
-                className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
-              />
-            </label>
-          </div>
-        </div>
 
         {/* Browser Storage & History Section */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
