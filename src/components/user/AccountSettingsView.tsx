@@ -254,7 +254,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
           </div>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
           {currentUser.id !== 'guest' ? (
             <button
               type="button"
