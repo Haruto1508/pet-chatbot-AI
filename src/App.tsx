@@ -4,8 +4,8 @@ import { initialUsers, initialPets } from './data/initialData';
 import { api } from './services/api';
 import { supabase } from './services/supabaseClient';
 
-import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
+
 import { LoginModal } from './components/common/LoginModal';
 import { SuspendedAccountModal } from './components/common/SuspendedAccountModal';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -116,9 +116,9 @@ export function App() {
 
   const toggleSidebar = () => {
     if (window.innerWidth >= 1024) {
-      setIsDesktopSidebarOpen(!isDesktopSidebarOpen);
+      setIsDesktopSidebarOpen(prev => !prev);
     } else {
-      setIsOpenMobileSidebar(!isOpenMobileSidebar);
+      setIsOpenMobileSidebar(prev => !prev);
     }
   };
 
@@ -225,33 +225,48 @@ export function App() {
   return (
     <NotificationProvider>
       <div className="h-screen h-dvh w-screen overflow-hidden bg-slate-100/70 text-slate-900 font-sans flex antialiased selection:bg-emerald-200">
-        {/* App Shell with Sidebar */}
-      <div className="flex w-full h-full overflow-hidden">
-        {/* Left Sidebar Navigation */}
-        <Sidebar
-          currentTab={currentTab}
-          setCurrentTab={setCurrentTab}
-          currentUser={currentUser}
-          onOpenLoginModal={() => setIsLoginModalOpen(true)}
-          isOpenMobile={isOpenMobileSidebar}
-          onCloseMobile={() => setIsOpenMobileSidebar(false)}
-          isDesktopOpen={isDesktopSidebarOpen}
-        />
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-          <Header
-            currentUser={currentUser}
+        {/* App Shell */}
+        <div className="flex w-full h-full overflow-hidden">
+          {/* Left Sidebar Navigation */}
+          <Sidebar
             currentTab={currentTab}
-            isAuthLoading={isAuthLoading}
+            setCurrentTab={setCurrentTab}
+            currentUser={currentUser}
             onOpenLoginModal={() => setIsLoginModalOpen(true)}
-            onToggleSidebar={toggleSidebar}
-            onNavigateToTab={setCurrentTab}
+            isOpenMobile={isOpenMobileSidebar}
+            onCloseMobile={() => setIsOpenMobileSidebar(false)}
+            isDesktopOpen={isDesktopSidebarOpen}
+            onToggleDesktop={() => setIsDesktopSidebarOpen(prev => !prev)}
           />
 
-          {/* Body Content Views */}
+          {/* Collapsed sidebar toggle button (desktop only) */}
+          {!isDesktopSidebarOpen && (
+            <button
+              onClick={() => setIsDesktopSidebarOpen(true)}
+              className="hidden lg:flex items-center justify-center w-8 h-full border-r border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all flex-shrink-0"
+              title="Mở Sidebar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+
+          {/* Mobile open sidebar button */}
+          <button
+            onClick={() => setIsOpenMobileSidebar(true)}
+            className="lg:hidden fixed top-3 left-3 z-30 p-2 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-50 transition-all"
+            title="Mở Menu"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           <main
-            className={`flex-1 min-h-0 w-full mx-auto ${
+            className={`flex-1 min-h-0 w-full mx-auto pt-10 lg:pt-0 ${
               currentTab === 'chat'
                 ? 'flex flex-col p-2 sm:p-4 overflow-hidden max-w-7xl'
                 : 'overflow-y-auto p-3 sm:p-6 max-w-7xl'
@@ -344,8 +359,7 @@ export function App() {
             {currentTab === 'not_found' && <NotFoundView />}
             </Suspense>
           </main>
-
-
+          </div>
         </div>
       </div>
 
@@ -365,7 +379,6 @@ export function App() {
           }}
         />
       )}
-    </div>
     </NotificationProvider>
   );
 }
