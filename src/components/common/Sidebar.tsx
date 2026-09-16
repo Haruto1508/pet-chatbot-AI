@@ -52,7 +52,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'chat',
       label: 'Chat AI Tư Vấn Bệnh',
       icon: MessageSquare,
-      badge: 'Gemini 3.6',
       color: 'text-emerald-600 bg-emerald-50'
     },
     {
