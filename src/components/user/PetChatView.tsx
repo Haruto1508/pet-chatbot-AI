@@ -741,7 +741,7 @@ export const PetChatView: React.FC<Props> = ({
             </div> */}
           </div>
 
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* <div className="flex items-center gap-1.5 flex-shrink-0">
             <select
               value={selectedPet?.id || ''}
               onChange={(e) => {
@@ -771,7 +771,7 @@ export const PetChatView: React.FC<Props> = ({
               <span className="hidden sm:inline">Lưu Hồ Sơ</span>
               <span className="sm:hidden">Lưu</span>
             </button>
-          </div>
+          </div> */}
         </div>
 
         {/* Main Chat Box — ChatGPT Style */}
