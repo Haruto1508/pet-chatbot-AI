@@ -139,7 +139,7 @@ export const PetChatView: React.FC<Props> = ({
   const getWelcomeMsg = (): ChatMessage => ({
     id: 'msg_welcome',
     sender: 'ai',
-    text: `Xin chào! Tôi là **PetCare AI Assistant** - Bác sĩ Thú y Trực tuyến hỗ trợ 24/7. 🐾\n\nHãy mô tả chi tiết các triệu chứng hoặc câu hỏi về sức khỏe, dinh dưỡng thú cưng của bạn. Tôi sẽ chẩn đoán ban đầu, đưa ra hướng dẫn sơ cứu và phân loại mức độ nguy hiểm theo **Khung Cảnh Báo 🔴 Đỏ / 🟡 Vàng / 🟢 Xanh**.\n\n*Lưu ý: Nếu cần lưu lại để theo dõi lâu dài, hãy bấm nút **"Lưu hồ sơ bệnh án"** bên dưới.*`,
+    text: `Xin chào! Tôi là **PetCare AI Assistant** - Bác sĩ Thú y Trực tuyến hỗ trợ 24/7. 🐾\n\nHãy mô tả chi tiết các triệu chứng hoặc câu hỏi về sức khỏe, dinh dưỡng thú cưng của bạn. Tôi sẽ chẩn đoán ban đầu, đưa ra hướng dẫn sơ cứu và phân loại mức độ nguy hiểm theo **Khung Cảnh Báo 🔴 Đỏ / 🟡 Vàng / 🟢 Xanh**.`,
     timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     triageLevel: 'GREEN'
   });
@@ -710,7 +710,7 @@ export const PetChatView: React.FC<Props> = ({
               )}
             </button>
 
-            {selectedPet ? (
+            {/* {selectedPet ? (
               <img
                 src={selectedPet.avatarUrl}
                 alt={selectedPet.name}
@@ -738,7 +738,7 @@ export const PetChatView: React.FC<Props> = ({
                   ? `${selectedPet.breed} | ${selectedPet.age} tháng | ${selectedPet.weight}kg`
                   : 'Chọn thú cưng để tư vấn chính xác hơn.'}
               </p>
-            </div>
+            </div> */}
           </div>
 
           <div className="flex items-center gap-1.5 flex-shrink-0">

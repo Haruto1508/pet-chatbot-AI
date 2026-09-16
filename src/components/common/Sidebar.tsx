@@ -30,10 +30,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const userNavItems = [
     { id: "chat", label: "Chat AI Tư Vấn", icon: MessageSquare },
-    { id: "records", label: "Hồ Sơ Bệnh Án", icon: FileText },
+    // { id: "records", label: "Hồ Sơ Bệnh Án", icon: FileText },
     { id: "news", label: "Tin Tức & Bệnh Lý", icon: Newspaper },
     { id: "emergency", label: "Sơ Cứu Khẩn Cấp", icon: ShieldAlert, badge: "24/7" },
-    { id: "clinics", label: "Tìm Phòng Khám", icon: MapPin },
+    // { id: "clinics", label: "Tìm Phòng Khám", icon: MapPin },
     { id: "pets", label: "Quản Lý Thú Cưng", icon: PawPrint },
     { id: "account", label: "Tài Khoản & Cài Đặt", icon: Settings },
   ];
