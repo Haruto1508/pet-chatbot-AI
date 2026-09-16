@@ -337,12 +337,14 @@ export const api = {
       history?: ChatMessage[];
     },
     onChunk: (text: string) => void,
-    onTriage: (triageLevel: TriageLevel, triageDetails: any) => void
+    onTriage: (triageLevel: TriageLevel, triageDetails: any) => void,
+    signal?: AbortSignal
   ): Promise<void> => {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal
     });
 
     if (!res.ok || !res.body) {
@@ -353,34 +355,47 @@ export const api = {
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        if (signal?.aborted) {
+          try { await reader.cancel(); } catch {}
+          break;
+        }
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n\n');
-      buffer = lines.pop() || '';
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.type === 'triage') {
-              onTriage(data.triageLevel, data.triageDetails);
-            } else if (data.type === 'chunk') {
-              onChunk(data.text);
-            } else if (data.type === 'error') {
-              throw new Error(data.message || 'Lỗi server');
-            }
-          } catch (e: any) {
-            if (e.message !== 'Lỗi server' && !line.includes('"type":"error"')) {
-               console.error('Error parsing SSE data:', e, line);
-            } else {
-               throw e; // rethrow the actual API error to be caught by the caller
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'triage') {
+                onTriage(data.triageLevel, data.triageDetails);
+              } else if (data.type === 'chunk') {
+                onChunk(data.text);
+              } else if (data.type === 'error') {
+                throw new Error(data.message || 'Lỗi server');
+              }
+            } catch (e: any) {
+              if (e.message !== 'Lỗi server' && !line.includes('"type":"error"')) {
+                 console.error('Error parsing SSE data:', e, line);
+              } else {
+                 throw e; // rethrow the actual API error to be caught by the caller
+              }
             }
           }
         }
       }
+    } catch (e: any) {
+      if (e.name === 'AbortError' || signal?.aborted) {
+        try { await reader.cancel(); } catch {}
+        return;
+      }
+      throw e;
     }
   }
 };

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Send,
+  Square,
   Image as ImageIcon,
   Loader2,
   FilePlus,
@@ -118,14 +119,21 @@ export const PetChatView: React.FC<Props> = ({
   const [editRecordDraft, setEditRecordDraft] = useState<Partial<MedicalRecord> | null>(null);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+  const [hasReceivedFirstChunk, setHasReceivedFirstChunk] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Focus input on mount
+  // Focus input on mount & abort on unmount
   useEffect(() => {
     inputRef.current?.focus();
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, []);
 
   const getWelcomeMsg = (): ChatMessage => ({
@@ -239,9 +247,27 @@ export const PetChatView: React.FC<Props> = ({
     }
   };
 
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    setHasReceivedFirstChunk(false);
+    inputRef.current?.focus();
+  };
+
   const handleSend = async (textToSend?: string) => {
+    if (isLoading) return; // Prevent sending while generating
     const queryText = textToSend || input;
     if (!queryText.trim() && !selectedImage) return;
+
+    // Abort any previous call if still open
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     const userMessage: ChatMessage = {
       id: `usr_${Date.now()}`,
@@ -258,6 +284,7 @@ export const PetChatView: React.FC<Props> = ({
     const imageToSend = selectedImage;
     setSelectedImage(null);
     setIsLoading(true);
+    setHasReceivedFirstChunk(false);
 
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
@@ -313,7 +340,7 @@ export const PetChatView: React.FC<Props> = ({
           history: newMessages
         },
         (chunkText) => {
-          setIsLoading(false);
+          setHasReceivedFirstChunk(true);
           finalText += chunkText;
           setMessages(prev => {
             const exists = prev.some(msg => msg.id === aiMessageId);
@@ -335,7 +362,6 @@ export const PetChatView: React.FC<Props> = ({
           });
         },
         (triageLevel, triageDetails) => {
-          setIsLoading(false);
           finalTriageLevel = triageLevel;
           finalTriageDetails = triageDetails;
           setMessages(prev => {
@@ -356,11 +382,12 @@ export const PetChatView: React.FC<Props> = ({
                 : msg
             );
           });
-        }
+        },
+        abortController.signal
       );
 
       // Save the finalized chat history to the current session in the background
-      if (activeSessionId) {
+      if (activeSessionId && finalText.trim()) {
         setMessages(prev => {
           const finalMessages = [...prev];
           api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(console.error);
@@ -371,16 +398,33 @@ export const PetChatView: React.FC<Props> = ({
         });
       }
     } catch (err: any) {
-      const errMsg: ChatMessage = {
-        id: `err_${Date.now()}`,
-        sender: 'ai',
-        text: `⚠️ **Lỗi kết nối**: ${err.message || 'Không thể kết nối tới hệ thống AI. Vui lòng kiểm tra lại mạng hoặc thử lại.'}`,
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        triageLevel: 'YELLOW'
-      };
-      setMessages(prev => [...prev, errMsg]);
+      if (err.name === 'AbortError' || abortController.signal.aborted) {
+        // User voluntarily stopped response - preserve partial response in chat history
+        if (activeSessionId) {
+          setMessages(prev => {
+            const finalMessages = [...prev];
+            api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(console.error);
+            setSessions(currentSessions => 
+              currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s)
+            );
+            return finalMessages;
+          });
+        }
+      } else {
+        const errMsg: ChatMessage = {
+          id: `err_${Date.now()}`,
+          sender: 'ai',
+          text: `⚠️ **Lỗi kết nối**: ${err.message || 'Không thể kết nối tới hệ thống AI. Vui lòng kiểm tra lại mạng hoặc thử lại.'}`,
+          timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          triageLevel: 'YELLOW'
+        };
+        setMessages(prev => [...prev, errMsg]);
+      }
     } finally {
       setIsLoading(false);
+      setHasReceivedFirstChunk(false);
+      abortControllerRef.current = null;
+      inputRef.current?.focus();
     }
   };
 
@@ -733,7 +777,7 @@ export const PetChatView: React.FC<Props> = ({
         {/* Main Chat Box — ChatGPT Style */}
         <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
           <div className="max-w-3xl mx-auto px-4 sm:px-6">
-            {messages.map((msg) => {
+            {messages.map((msg, idx) => {
               const isUser = msg.sender === 'user';
 
               if (isUser) {
@@ -818,6 +862,9 @@ export const PetChatView: React.FC<Props> = ({
                       />
                     )}
                     <Markdown>{msg.text}</Markdown>
+                    {isLoading && idx === messages.length - 1 && (
+                      <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />
+                    )}
                   </div>
 
                   {/* Action buttons — appear on hover */}
@@ -849,7 +896,7 @@ export const PetChatView: React.FC<Props> = ({
             })}
 
             {/* Typing dots loading indicator */}
-            {isLoading && (
+            {isLoading && !hasReceivedFirstChunk && (
               <div className="py-6">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
@@ -874,12 +921,14 @@ export const PetChatView: React.FC<Props> = ({
               <button
                 key={idx}
                 type="button"
+                disabled={isLoading}
                 onClick={(e) => {
                   e.preventDefault();
+                  if (isLoading) return;
                   setInput(prompt);
                   inputRef.current?.focus();
                 }}
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 whitespace-nowrap transition-all border border-slate-200/60"
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 whitespace-nowrap transition-all border border-slate-200/60 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {prompt}
               </button>
@@ -914,15 +963,16 @@ export const PetChatView: React.FC<Props> = ({
 
             <button
               onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
               title="Đính kèm ảnh triệu chứng thú cưng"
-              className="p-2.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-slate-100 transition-colors"
+              className="p-2.5 rounded-xl text-slate-500 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ImageIcon className="w-5 h-5" />
             </button>
 
             <button
               onClick={handleCreateMedicalRecord}
-              disabled={isSummarizing || messages.length <= 1}
+              disabled={isLoading || isSummarizing || messages.length <= 1}
               title={
                 messages.length <= 1
                   ? 'Hãy chat với AI trước khi lưu hồ sơ'
@@ -941,24 +991,45 @@ export const PetChatView: React.FC<Props> = ({
               type="text"
               ref={inputRef}
               value={input}
+              disabled={isLoading}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !isLoading) {
+                  handleSend();
+                }
+              }}
               placeholder={
-                selectedPet
-                  ? `Mô tả triệu chứng bệnh của ${selectedPet.name}...`
-                  : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'
+                isLoading
+                  ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
+                  : selectedPet
+                    ? `Mô tả triệu chứng bệnh của ${selectedPet.name}...`
+                    : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'
               }
-              className="flex-1 text-xs sm:text-sm px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50"
+              className="flex-1 text-xs sm:text-sm px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/50 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors"
             />
 
-            <button
-              onClick={() => handleSend()}
-              disabled={isLoading || (!input.trim() && !selectedImage)}
-              className="p-2.5 sm:px-5 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold transition-all flex items-center gap-2 shadow-xs"
-            >
-              <Send className="w-4 h-4" />
-              <span className="hidden sm:inline text-xs">Gửi AI</span>
-            </button>
+            {isLoading ? (
+              <button
+                type="button"
+                onClick={handleStop}
+                title="Dừng sinh câu trả lời"
+                className="p-2.5 sm:px-4 sm:py-2.5 rounded-xl bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Square className="w-4 h-4 fill-current" />
+                <span className="text-xs">Dừng</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleSend()}
+                disabled={!input.trim() && !selectedImage}
+                title="Gửi câu hỏi cho AI"
+                className="p-2.5 sm:px-5 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:cursor-not-allowed"
+              >
+                <Send className="w-4 h-4" />
+                <span className="hidden sm:inline text-xs">Gửi AI</span>
+              </button>
+            )}
           </div>
         </div>
 
