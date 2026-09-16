@@ -19,8 +19,8 @@ async function startServer(isVercel = false) {
   // Metric counters are fetched dynamically
 
   // Gemini AI Client Helper (Lazy initialization)
-  function getGeminiClient(): GoogleGenAI {
-    const apiKey = process.env.GEMINI_API_KEY;
+  function getGeminiClient(customApiKey?: string): GoogleGenAI {
+    const apiKey = customApiKey || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       console.warn('GEMINI_API_KEY is missing. Using default fallback mode.');
     }
@@ -31,9 +31,9 @@ async function startServer(isVercel = false) {
   }
 
   // Vector Embedding Helper
-  async function generateEmbedding(text: string): Promise<number[] | null> {
+  async function generateEmbedding(text: string, customApiKey?: string): Promise<number[] | null> {
     try {
-      const ai = getGeminiClient();
+      const ai = getGeminiClient(customApiKey);
       const response = await ai.models.embedContent({
         model: 'text-embedding-004',
         contents: text,
@@ -106,6 +106,19 @@ async function startServer(isVercel = false) {
     const results: Record<string, any> = {};
     const startTime = Date.now();
 
+    // 0. Fetch custom config from DB
+    let customRenderUrl = 'https://pet-chatbot-ai.onrender.com';
+    let customGeminiKey = '';
+    let dbConfig: any = null;
+    try {
+      const { data: cfg } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      if (cfg) {
+        dbConfig = cfg;
+        if (cfg.render_service_url) customRenderUrl = cfg.render_service_url;
+        if (cfg.gemini_api_key) customGeminiKey = cfg.gemini_api_key;
+      }
+    } catch {}
+
     // 1. Check Supabase connection
     try {
       const t0 = Date.now();
@@ -123,50 +136,45 @@ async function startServer(isVercel = false) {
     // 2. Check Render Python AI connection
     try {
       const t0 = Date.now();
-      const renderRes = await fetch('https://pet-chatbot-ai.onrender.com/docs', {
+      const renderRes = await fetch(`${customRenderUrl}/docs`, {
         signal: AbortSignal.timeout(8000)
       });
       results.render = {
         status: renderRes.ok ? 'ok' : 'warn',
         latencyMs: Date.now() - t0,
         message: renderRes.ok ? 'Python AI (ResNet) đang hoạt động' : `HTTP ${renderRes.status}`,
-        url: 'https://pet-chatbot-ai.onrender.com'
+        url: customRenderUrl
       };
     } catch (e: any) {
       results.render = {
         status: 'error',
         latencyMs: null,
         message: e.name === 'TimeoutError' ? 'Timeout — Render đang cold start (bình thường)' : e.message,
-        url: 'https://pet-chatbot-ai.onrender.com'
+        url: customRenderUrl
       };
     }
 
     // 3. Check Gemini API Key
-    const geminiKey = process.env.GEMINI_API_KEY;
+    const activeKey = customGeminiKey || process.env.GEMINI_API_KEY;
     results.gemini = {
-      status: geminiKey ? 'ok' : 'error',
-      message: geminiKey ? 'GEMINI_API_KEY đã được cấu hình' : 'GEMINI_API_KEY bị thiếu!',
-      keyPreview: geminiKey ? geminiKey.substring(0, 8) + '...' + geminiKey.slice(-4) : null
+      status: activeKey ? 'ok' : 'error',
+      message: activeKey
+        ? (customGeminiKey ? 'Gemini API Key (từ Cấu hình Admin)' : 'GEMINI_API_KEY (từ biến môi trường)')
+        : 'GEMINI_API_KEY bị thiếu!',
+      keyPreview: activeKey ? activeKey.substring(0, 8) + '...' + activeKey.slice(-4) : null,
+      source: customGeminiKey ? 'database' : (process.env.GEMINI_API_KEY ? 'env' : 'missing')
     };
 
     // 4. Check active system config (AI model being used)
-    try {
-      const { data: configData } = await supabase.from('system_config').select('ai_model, temperature, updated_at').eq('id', 1).single();
-      results.activeConfig = {
-        status: 'ok',
-        aiModel: configData?.ai_model || 'gemini-2.5-flash (default)',
-        temperature: configData?.temperature ?? 0.4,
-        lastUpdated: configData?.updated_at || null,
-        source: configData ? 'Supabase system_config' : 'Default (hardcoded)'
-      };
-    } catch {
-      results.activeConfig = {
-        status: 'warn',
-        aiModel: 'gemini-2.5-flash (default)',
-        temperature: 0.4,
-        source: 'Default (system_config table not found)'
-      };
-    }
+    results.activeConfig = {
+      status: dbConfig ? 'ok' : 'warn',
+      aiModel: dbConfig?.ai_model || 'gemini-2.5-flash (default)',
+      temperature: dbConfig?.temperature ?? 0.4,
+      lastUpdated: dbConfig?.updated_at || null,
+      source: dbConfig ? 'Supabase system_config' : 'Default (system_config table not found)',
+      apiProvider: dbConfig?.api_provider || 'gemini',
+      autoKeepAliveInterval: dbConfig?.auto_keep_alive_interval ?? 10
+    };
 
     // 5. Environment variables presence check
     results.envVars = {
@@ -181,6 +189,204 @@ async function startServer(isVercel = false) {
     results.checkedAt = new Date().toISOString();
 
     res.json(results);
+  });
+
+  // Keep-Alive & Wake-up Service Endpoint (Pings all services to keep free tier awake)
+  app.all('/api/keep-alive', async (req: Request, res: Response) => {
+    const startTime = Date.now();
+    const specificService = (req.query.service as string) || (req.body?.service as string) || 'all';
+
+    // Retrieve active config for custom URLs / Keys
+    let renderUrl = 'https://pet-chatbot-ai.onrender.com';
+    let geminiKey = process.env.GEMINI_API_KEY;
+    try {
+      const { data: cfg } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      if (cfg) {
+        if (cfg.render_service_url) renderUrl = cfg.render_service_url;
+        if (cfg.gemini_api_key) geminiKey = cfg.gemini_api_key;
+      }
+    } catch {}
+
+    const tasks: Record<string, Promise<any>> = {};
+
+    // 1. Supabase Ping
+    if (specificService === 'all' || specificService === 'supabase') {
+      tasks.supabase = (async () => {
+        const t0 = Date.now();
+        try {
+          const { error } = await supabase.from('users').select('id').limit(1);
+          const latencyMs = Date.now() - t0;
+          return {
+            name: 'Supabase PostgreSQL DB',
+            target: (process.env.SUPABASE_URL || '').replace(/https?:\/\//, '').split('.')[0] + '.supabase.co',
+            status: error ? 'error' : 'ok',
+            latencyMs,
+            message: error ? error.message : 'Database phản hồi sẵn sàng (Connection pool active)'
+          };
+        } catch (err: any) {
+          return {
+            name: 'Supabase PostgreSQL DB',
+            target: 'Supabase',
+            status: 'error',
+            latencyMs: Date.now() - t0,
+            message: err.message || 'Lỗi kết nối Supabase'
+          };
+        }
+      })();
+    }
+
+    // 2. Render Python AI Ping
+    if (specificService === 'all' || specificService === 'render') {
+      tasks.render = (async () => {
+        const t0 = Date.now();
+        try {
+          const resp = await fetch(`${renderUrl}/docs`, { signal: AbortSignal.timeout(12000) });
+          const latencyMs = Date.now() - t0;
+          return {
+            name: 'Render Python AI (ResNet)',
+            target: renderUrl,
+            status: resp.ok ? 'ok' : 'warn',
+            latencyMs,
+            statusCode: resp.status,
+            message: resp.ok
+              ? 'Dịch vụ ResNet AI đã thức tỉnh & phản hồi tức thì'
+              : `Phản hồi HTTP ${resp.status}`
+          };
+        } catch (err: any) {
+          const latencyMs = Date.now() - t0;
+          return {
+            name: 'Render Python AI (ResNet)',
+            target: renderUrl,
+            status: 'error',
+            latencyMs,
+            message: err.name === 'TimeoutError'
+              ? 'Đang khởi động (Cold Start 30-50s) — Đã gửi tín hiệu đánh thức'
+              : err.message
+          };
+        }
+      })();
+    }
+
+    // 3. Gemini API Ping
+    if (specificService === 'all' || specificService === 'gemini') {
+      tasks.gemini = (async () => {
+        const t0 = Date.now();
+        try {
+          if (!geminiKey) {
+            return {
+              name: 'Google Gemini AI Studio',
+              target: 'generativelanguage.googleapis.com',
+              status: 'warn',
+              latencyMs: 0,
+              message: 'Chưa cấu hình GEMINI_API_KEY'
+            };
+          }
+          const ai = getGeminiClient(geminiKey);
+          await ai.models.embedContent({
+            model: 'text-embedding-004',
+            contents: 'ping',
+          });
+          const latencyMs = Date.now() - t0;
+          return {
+            name: 'Google Gemini AI Studio',
+            target: 'text-embedding-004',
+            status: 'ok',
+            latencyMs,
+            message: 'API Key hoạt động tốt & quota sẵn sàng'
+          };
+        } catch (err: any) {
+          return {
+            name: 'Google Gemini AI Studio',
+            target: 'generativelanguage.googleapis.com',
+            status: 'warn',
+            latencyMs: Date.now() - t0,
+            message: `API phản hồi: ${err.message?.substring(0, 120) || 'Lỗi không xác định'}`
+          };
+        }
+      })();
+    }
+
+    // 4. Backend Server Status
+    const backendStatus = {
+      name: 'Node.js Backend Server',
+      target: isVercel ? 'Vercel Serverless' : 'Local Node / Express (Port 3000)',
+      status: 'ok',
+      latencyMs: 1,
+      message: `Hệ thống backend hoạt động bình thường (Uptime: ${Math.floor(process.uptime())}s)`
+    };
+
+    const serviceKeys = Object.keys(tasks);
+    const serviceResults = await Promise.all(Object.values(tasks));
+    const servicesObj: Record<string, any> = { backend: backendStatus };
+    serviceKeys.forEach((k, i) => {
+      servicesObj[k] = serviceResults[i];
+    });
+
+    const totalLatencyMs = Date.now() - startTime;
+    const allOk = Object.values(servicesObj).every(s => s.status === 'ok');
+
+    res.json({
+      status: allOk ? 'ok' : 'partial',
+      totalLatencyMs,
+      timestamp: new Date().toISOString(),
+      services: servicesObj
+    });
+  });
+
+  // Test API Key Endpoint
+  app.post('/api/test-api-key', async (req: Request, res: Response) => {
+    const { apiKey, model = 'gemini-2.5-flash', provider = 'gemini', customBaseUrl } = req.body;
+    if (!apiKey) {
+      return res.status(400).json({ ok: false, error: 'Vui lòng nhập API Key để kiểm tra.' });
+    }
+
+    const t0 = Date.now();
+    try {
+      if (provider === 'gemini') {
+        const testAi = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+        const testRes = await testAi.models.generateContent({
+          model: model || 'gemini-2.5-flash',
+          contents: 'Trả lời đúng 1 chữ: OK',
+        });
+        const text = testRes.candidates?.[0]?.content?.parts?.[0]?.text || 'OK';
+        return res.json({
+          ok: true,
+          latencyMs: Date.now() - t0,
+          model: model || 'gemini-2.5-flash',
+          responsePreview: text.trim(),
+          message: 'API Key hoạt động chính xác và phản hồi thành công!'
+        });
+      } else if (provider === 'openai' || provider === 'custom') {
+        // Test OpenAI or Custom compatible endpoint
+        const baseUrl = customBaseUrl || 'https://api.openai.com/v1';
+        const testRes = await fetch(`${baseUrl}/models`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` },
+          signal: AbortSignal.timeout(8000)
+        });
+        if (!testRes.ok) {
+          const errText = await testRes.text();
+          throw new Error(`HTTP ${testRes.status}: ${errText.substring(0, 100)}`);
+        }
+        return res.json({
+          ok: true,
+          latencyMs: Date.now() - t0,
+          model,
+          message: `Kết nối thành công tới ${baseUrl}!`
+        });
+      } else {
+        return res.json({
+          ok: true,
+          latencyMs: Date.now() - t0,
+          message: 'Đã lưu cấu hình API.'
+        });
+      }
+    } catch (err: any) {
+      return res.status(400).json({
+        ok: false,
+        latencyMs: Date.now() - t0,
+        error: err.message || 'API Key không hợp lệ hoặc đã hết hạn/hết quota.'
+      });
+    }
   });
 
 
@@ -655,50 +861,90 @@ async function startServer(isVercel = false) {
   });
 
 
-  // System Config
-  app.get('/api/config', async (req: Request, res: Response) => {
-    const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
-    if (error) {
-      // If table doesn't exist or empty, return default config
-      return res.json({
-        aiModel: 'gemini-2.5-flash',
-        temperature: 0.7,
-        systemPrompt: 'Bạn là trợ lý thú y AI chuyên nghiệp. Hãy tư vấn ngắn gọn, chính xác.',
-        maxTokens: 2048,
-        emergencyKeywords: ['máu', 'co giật', 'khó thở']
+  // System Config (AI Models, API Keys, Service URLs, Hyperparameters)
+  app.get('/api/config', async (_req: Request, res: Response) => {
+    try {
+      const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      if (error || !data) {
+        return res.json({
+          aiModel: 'gemini-2.5-flash',
+          temperature: 0.7,
+          systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
+          maxTokens: 2048,
+          emergencyKeywords: ['máu', 'co giật', 'khó thở', 'bất tỉnh'],
+          geminiApiKey: process.env.GEMINI_API_KEY || '',
+          backupGeminiApiKey: '',
+          renderServiceUrl: 'https://pet-chatbot-ai.onrender.com',
+          openaiApiKey: '',
+          customApiBaseUrl: '',
+          customModelName: '',
+          apiProvider: 'gemini',
+          autoKeepAliveIntervalMinutes: 10
+        });
+      }
+
+      res.json({
+        aiModel: data.ai_model || 'gemini-2.5-flash',
+        temperature: data.temperature ?? 0.7,
+        systemPrompt: data.system_prompt || '',
+        maxTokens: data.max_tokens ?? 2048,
+        emergencyKeywords: data.emergency_keywords || ['máu', 'co giật', 'khó thở'],
+        geminiApiKey: data.gemini_api_key || (process.env.GEMINI_API_KEY || ''),
+        backupGeminiApiKey: data.backup_gemini_api_key || '',
+        renderServiceUrl: data.render_service_url || 'https://pet-chatbot-ai.onrender.com',
+        openaiApiKey: data.openai_api_key || '',
+        customApiBaseUrl: data.custom_api_base_url || '',
+        customModelName: data.custom_model_name || '',
+        apiProvider: data.api_provider || 'gemini',
+        autoKeepAliveIntervalMinutes: data.auto_keep_alive_interval ?? 10
       });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
     }
-    
-    res.json({
-      aiModel: data.ai_model,
-      temperature: data.temperature,
-      systemPrompt: data.system_prompt,
-      maxTokens: data.max_tokens,
-      emergencyKeywords: data.emergency_keywords
-    });
   });
 
   app.post('/api/config', async (req: Request, res: Response) => {
-    const payload = {
-      id: 1,
-      ai_model: req.body.aiModel,
-      temperature: req.body.temperature,
-      system_prompt: req.body.systemPrompt,
-      max_tokens: req.body.maxTokens,
-      emergency_keywords: req.body.emergencyKeywords,
-      updated_at: new Date().toISOString()
-    };
-    
-    const { data, error } = await supabase.from('system_config').upsert(payload).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    
-    res.json({
-      aiModel: data.ai_model,
-      temperature: data.temperature,
-      systemPrompt: data.system_prompt,
-      maxTokens: data.max_tokens,
-      emergencyKeywords: data.emergency_keywords
-    });
+    try {
+      const payload: Record<string, any> = {
+        id: 1,
+        ai_model: req.body.aiModel,
+        temperature: req.body.temperature,
+        system_prompt: req.body.systemPrompt,
+        max_tokens: req.body.maxTokens,
+        emergency_keywords: req.body.emergencyKeywords,
+        updated_at: new Date().toISOString()
+      };
+
+      if (req.body.geminiApiKey !== undefined) payload.gemini_api_key = req.body.geminiApiKey;
+      if (req.body.backupGeminiApiKey !== undefined) payload.backup_gemini_api_key = req.body.backupGeminiApiKey;
+      if (req.body.renderServiceUrl !== undefined) payload.render_service_url = req.body.renderServiceUrl;
+      if (req.body.openaiApiKey !== undefined) payload.openai_api_key = req.body.openaiApiKey;
+      if (req.body.customApiBaseUrl !== undefined) payload.custom_api_base_url = req.body.customApiBaseUrl;
+      if (req.body.customModelName !== undefined) payload.custom_model_name = req.body.customModelName;
+      if (req.body.apiProvider !== undefined) payload.api_provider = req.body.apiProvider;
+      if (req.body.autoKeepAliveIntervalMinutes !== undefined) payload.auto_keep_alive_interval = req.body.autoKeepAliveIntervalMinutes;
+
+      const { data, error } = await supabase.from('system_config').upsert(payload).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+
+      res.json({
+        aiModel: data.ai_model,
+        temperature: data.temperature,
+        systemPrompt: data.system_prompt,
+        maxTokens: data.max_tokens,
+        emergencyKeywords: data.emergency_keywords,
+        geminiApiKey: data.gemini_api_key,
+        backupGeminiApiKey: data.backup_gemini_api_key,
+        renderServiceUrl: data.render_service_url,
+        openaiApiKey: data.openai_api_key,
+        customApiBaseUrl: data.custom_api_base_url,
+        customModelName: data.custom_model_name,
+        apiProvider: data.api_provider,
+        autoKeepAliveIntervalMinutes: data.auto_keep_alive_interval
+      });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
   });
 
   // Clinics
@@ -773,42 +1019,6 @@ async function startServer(isVercel = false) {
     const { error } = await supabase.from('clinics').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
-  });
-
-  // Config
-  app.get('/api/config', async (_req: Request, res: Response) => {
-    const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
-    if (error) return res.status(500).json({ error: error.message });
-    if (data) {
-      res.json({
-        aiModel: data.ai_model,
-        temperature: data.temperature,
-        systemPrompt: data.system_prompt,
-        maxTokens: data.max_tokens,
-        emergencyKeywords: data.emergency_keywords
-      });
-    } else {
-      res.json({});
-    }
-  });
-
-  app.post('/api/config', async (req: Request, res: Response) => {
-    const payload = {
-      ai_model: req.body.aiModel,
-      temperature: req.body.temperature,
-      system_prompt: req.body.systemPrompt,
-      max_tokens: req.body.maxTokens,
-      emergency_keywords: req.body.emergencyKeywords
-    };
-    const { data, error } = await supabase.from('system_config').upsert({ id: 1, ...payload }).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({
-      aiModel: data.ai_model,
-      temperature: data.temperature,
-      systemPrompt: data.system_prompt,
-      maxTokens: data.max_tokens,
-      emergencyKeywords: data.emergency_keywords
-    });
   });
 
   // --- CHAT SESSIONS (History) ---
@@ -934,7 +1144,10 @@ async function startServer(isVercel = false) {
     const { message, petId, petInfo, imageBase64, history } = req.body;
 
     try {
-      const ai = getGeminiClient();
+      // Retrieve System Config
+      const { data: configData } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      const ai = getGeminiClient(configData?.gemini_api_key);
+      const renderServiceUrl = configData?.render_service_url || 'https://pet-chatbot-ai.onrender.com';
 
       const cleanMessage = (message || '').trim();
       const isCasualGreeting = /^(chào|hi|hello|cảm ơn|thank|dạ|vâng|ok|dạ vâng|ok ạ|không có gì|bye|tạm biệt|hihi|haha|hey|alo)/i.test(cleanMessage) && cleanMessage.length < 40;
@@ -945,8 +1158,6 @@ async function startServer(isVercel = false) {
         ragContext = await searchRAGKnowledge(cleanMessage);
       }
 
-      // Retrieve System Config
-      const { data: configData } = await supabase.from('system_config').select('*').eq('id', 1).single();
       const sysConfig = configData ? {
         aiModel: configData.ai_model,
         temperature: configData.temperature,
@@ -978,7 +1189,7 @@ async function startServer(isVercel = false) {
 
       if (imageBase64) {
         try {
-          const resnetRes = await fetch('https://pet-chatbot-ai.onrender.com/predict', {
+          const resnetRes = await fetch(`${renderServiceUrl}/predict`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image_base64: imageBase64 })
@@ -1257,9 +1468,8 @@ LƯU Ý QUAN TRỌNG VỀ ĐỊNH DẠNG VÀ ĐỘ DÀI:
     const { petInfo, chatHistory, userId } = req.body;
 
     try {
-      const ai = getGeminiClient();
-
       const { data: configData } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      const ai = getGeminiClient(configData?.gemini_api_key);
       const sysConfig = configData ? { aiModel: configData.ai_model } : { aiModel: 'gemini-2.5-flash' };
 
       const summaryPrompt = `

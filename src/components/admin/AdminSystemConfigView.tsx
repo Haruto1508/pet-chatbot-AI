@@ -1,59 +1,30 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import {
   Cpu, Save, ShieldAlert, Check, RefreshCw, Sliders,
-  Database, Server, Zap, Activity, CheckCircle2,
-  XCircle, AlertTriangle, Clock, Eye, EyeOff, Wifi
+  Key, Database, Server, Zap, Activity, CheckCircle2,
+  XCircle, AlertTriangle, Clock, Eye, EyeOff, Sparkles,
+  Layers, Lock, HelpCircle, ArrowRight, ExternalLink
 } from 'lucide-react';
 import { SystemConfig } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 
-type ConnectionStatus = 'idle' | 'checking' | 'done';
-
-interface HealthResult {
-  supabase: { status: string; latencyMs: number | null; message: string; url?: string };
-  render: { status: string; latencyMs: number | null; message: string; url: string };
-  gemini: { status: string; message: string; keyPreview: string | null };
-  activeConfig: { status: string; aiModel: string; temperature: number; lastUpdated?: string; source: string };
-  envVars: { SUPABASE_URL: boolean; SUPABASE_ANON_KEY: boolean; GEMINI_API_KEY: boolean; NODE_ENV: string; VERCEL: boolean };
-  totalLatencyMs: number;
-  checkedAt: string;
-}
-
-function StatusBadge({ status }: { status: string }) {
-  if (status === 'ok') return (
-    <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-      <CheckCircle2 className="w-3 h-3" /> OK
-    </span>
-  );
-  if (status === 'warn') return (
-    <span className="flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-      <AlertTriangle className="w-3 h-3" /> WARN
-    </span>
-  );
-  return (
-    <span className="flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
-      <XCircle className="w-3 h-3" /> L?I
-    </span>
-  );
-}
-
-function LatencyBadge({ ms }: { ms: number | null }) {
-  if (ms === null) return <span className="text-[10px] text-slate-400">�</span>;
-  const color = ms < 300 ? 'text-emerald-600' : ms < 1000 ? 'text-amber-600' : 'text-red-600';
-  return <span className={`text-[11px] font-bold ${color} flex items-center gap-0.5`}><Clock className="w-3 h-3" />{ms}ms</span>;
-}
-
 export const AdminSystemConfigView: React.FC = () => {
-  const { showError, showSuccess } = useNotification();
+  const { showError, showSuccess, showInfo } = useNotification();
+  
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const [healthStatus, setHealthStatus] = useState<ConnectionStatus>('idle');
-  const [healthResult, setHealthResult] = useState<HealthResult | null>(null);
-  const [showKeyPreviews, setShowKeyPreviews] = useState(false);
+  // Key visibility toggles
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [showBackupKey, setShowBackupKey] = useState(false);
+  const [showOpenAIKey, setShowOpenAIKey] = useState(false);
+
+  // API Key Testing states
+  const [testingKey, setTestingKey] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string; latencyMs?: number } | null>(null);
 
   const loadConfig = async () => {
     setLoading(true);
@@ -62,28 +33,46 @@ export const AdminSystemConfigView: React.FC = () => {
       if (data && !data.error) {
         setConfig({
           aiModel: data.aiModel || 'gemini-2.5-flash',
-          temperature: data.temperature || 0.7,
-          systemPrompt: data.systemPrompt || 'Ban la tro ly thu y AI...',
+          temperature: data.temperature ?? 0.4,
+          systemPrompt: data.systemPrompt || '',
           maxTokens: data.maxTokens || 2048,
-          emergencyKeywords: data.emergencyKeywords || ['mau', 'co giat', 'kho tho']
+          emergencyKeywords: data.emergencyKeywords || ['máu', 'co giật', 'khó thở', 'bất tỉnh'],
+          geminiApiKey: data.geminiApiKey || '',
+          backupGeminiApiKey: data.backupGeminiApiKey || '',
+          renderServiceUrl: data.renderServiceUrl || 'https://pet-chatbot-ai.onrender.com',
+          openaiApiKey: data.openaiApiKey || '',
+          customApiBaseUrl: data.customApiBaseUrl || '',
+          customModelName: data.customModelName || '',
+          apiProvider: data.apiProvider || 'gemini',
+          autoKeepAliveIntervalMinutes: data.autoKeepAliveIntervalMinutes || 10
         });
       } else {
         setConfig({
           aiModel: 'gemini-2.5-flash',
-          temperature: 0.7,
-          systemPrompt: 'Ban la tro ly thu y AI chuyen nghiep.',
+          temperature: 0.4,
+          systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
           maxTokens: 2048,
-          emergencyKeywords: ['mau', 'co giat', 'kho tho']
+          emergencyKeywords: ['máu', 'co giật', 'khó thở', 'bất tỉnh'],
+          geminiApiKey: '',
+          backupGeminiApiKey: '',
+          renderServiceUrl: 'https://pet-chatbot-ai.onrender.com',
+          openaiApiKey: '',
+          customApiBaseUrl: '',
+          customModelName: '',
+          apiProvider: 'gemini',
+          autoKeepAliveIntervalMinutes: 10
         });
       }
     } catch (e) {
-      setConfig({ aiModel: 'gemini-2.5-flash', temperature: 0.7, systemPrompt: '', maxTokens: 2048, emergencyKeywords: [] });
+      showError('Không thể tải cấu hình từ máy chủ.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { loadConfig(); }, []);
+  useEffect(() => {
+    loadConfig();
+  }, []);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,262 +80,463 @@ export const AdminSystemConfigView: React.FC = () => {
     setSaving(true);
     try {
       await api.updateSystemConfig(config);
-      showSuccess('Da luu cau hinh he thong AI!');
+      showSuccess('✅ Đã lưu cấu hình AI & API Keys thành công!');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch { showError('Khong the luu cau hinh.'); }
-    finally { setSaving(false); }
-  };
-
-  const handleCheckHealth = async () => {
-    setHealthStatus('checking');
-    setHealthResult(null);
-    try {
-      const result = await api.checkHealth();
-      setHealthResult(result);
-      setHealthStatus('done');
     } catch {
-      showError('Khong the ket noi den server de kiem tra.');
-      setHealthStatus('idle');
+      showError('Không thể lưu cấu hình.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (loading || !config) return <div className="text-center py-20 text-xs text-slate-500">Dang tai cau hinh he thong AI...</div>;
+  const handleTestKey = async () => {
+    if (!config?.geminiApiKey) {
+      showInfo('Vui lòng nhập Gemini API Key để kiểm tra.');
+      return;
+    }
+    setTestingKey(true);
+    setTestResult(null);
+    try {
+      const res = await api.testApiKey({
+        apiKey: config.geminiApiKey,
+        model: config.aiModel || 'gemini-2.5-flash',
+        provider: config.apiProvider || 'gemini',
+        customBaseUrl: config.customApiBaseUrl
+      });
+      if (res.ok) {
+        setTestResult({
+          ok: true,
+          message: res.message || 'API Key hợp lệ và hoạt động tốt!',
+          latencyMs: res.latencyMs
+        });
+        showSuccess(`✅ API Key kiểm tra thành công (${res.latencyMs}ms)!`);
+      } else {
+        setTestResult({
+          ok: false,
+          message: res.error || 'API Key không hợp lệ.'
+        });
+        showError(res.error || 'Lỗi kiểm tra API Key.');
+      }
+    } catch (err: any) {
+      setTestResult({
+        ok: false,
+        message: err.message || 'Lỗi mạng khi kiểm tra API Key.'
+      });
+      showError(err.message || 'Không thể kết nối để kiểm tra.');
+    } finally {
+      setTestingKey(false);
+    }
+  };
+
+  const handleResetPrompt = () => {
+    if (!config) return;
+    if (window.confirm('Khôi phục Lời nhắc Hệ thống (System Prompt) về mẫu Bác sĩ Thú y chuẩn?')) {
+      setConfig({
+        ...config,
+        systemPrompt: `Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Nhiệm vụ của bạn là tư vấn sức khỏe thú cưng (chó, mèo) dựa trên triệu chứng mô tả từ chủ nuôi. Luôn ưu tiên an toàn của thú cưng, trả lời súc tích, đi thẳng vào hành động. Bắt buộc bắt đầu mỗi câu trả lời bằng khối TRIAGE_ALERT để phân loại mức độ nguy hiểm.`
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center gap-2">
+          <RefreshCw className="w-6 h-6 animate-spin text-amber-500" />
+          <span className="text-xs text-slate-500">Đang tải cấu hình AI & API...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!config) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="bg-slate-900 text-white p-5 sm:p-6 rounded-2xl shadow-md flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex items-center gap-3">
-          <Cpu className="w-7 h-7 text-amber-400 flex-shrink-0" />
-          <div>
-            <h2 className="text-lg sm:text-xl font-bold">Cau Hinh Mo Hinh AI Gemini & Protocol Canh Bao</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Tuy chinh tham so sinh tu, System Prompt va danh sach tu khoa phan loai cap cuu.</p>
+    <div className="space-y-6 pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="p-2 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <h1 className="text-xl font-bold text-slate-900">Cấu Hình AI & Quản Lý API Keys</h1>
           </div>
+          <p className="text-sm text-slate-500">
+            Cấu hình mô hình AI, quản lý API Keys (Gemini, OpenAI, Custom), kết nối Python AI ResNet và tinh chỉnh tham số hoạt động.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={loadConfig}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Tải lại
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black shadow-sm transition-all disabled:opacity-50"
+          >
+            {saving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="w-4 h-4 text-emerald-950" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {saving ? 'Đang lưu...' : saveSuccess ? 'Đã lưu!' : 'Lưu Thay Đổi'}
+          </button>
         </div>
       </div>
 
-      {saveSuccess && (
-        <div className="p-4 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-2xl text-xs font-bold flex items-center gap-2">
-          <Check className="w-4 h-4 text-emerald-600" /> Da luu va cap nhat cau hinh AI thanh cong!
-        </div>
-      )}
-
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Wifi className="w-5 h-5 text-blue-600" />
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">Kiem Tra Ket Noi He Thong</h3>
-              <p className="text-[11px] text-slate-500">Ping thuc te toi Supabase, Render AI, Gemini API va cau hinh dang hoat dong.</p>
+      <form onSubmit={handleSave} className="space-y-6">
+        {/* Section 1: API Keys & Providers Management */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-2">
+              <Key className="w-5 h-5 text-amber-500" />
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Quản Lý Nhà Cung Cấp & API Keys</h2>
+                <p className="text-xs text-slate-500">
+                  Thêm hoặc thay đổi API Key trực tiếp trên giao diện mà không cần chỉnh sửa tệp .env hay khởi động lại máy chủ.
+                </p>
+              </div>
             </div>
+            <a
+              href="https://aistudio.google.com/app/apikey"
+              target="_blank"
+              rel="noreferrer"
+              className="hidden sm:flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-semibold"
+            >
+              Lấy Gemini API Key <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            {healthResult && (
-              <button onClick={() => setShowKeyPreviews(v => !v)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all">
-                {showKeyPreviews ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                {showKeyPreviews ? 'An API Key' : 'Xem API Key'}
-              </button>
-            )}
-            <button onClick={handleCheckHealth} disabled={healthStatus === 'checking'}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-bold transition-all shadow-xs">
-              {healthStatus === 'checking'
-                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Dang kiem tra...</>
-                : <><Activity className="w-3.5 h-3.5" /> Kiem Tra Ngay</>}
-            </button>
-          </div>
-        </div>
 
-        {healthStatus === 'idle' && (
-          <div className="flex flex-col items-center justify-center py-10 text-slate-400 gap-2">
-            <Wifi className="w-10 h-10 text-slate-200" />
-            <p className="text-xs font-medium">Nhan "Kiem Tra Ngay" de ping tat ca ket noi</p>
-          </div>
-        )}
-
-        {healthStatus === 'checking' && (
-          <div className="flex flex-col items-center justify-center py-10 gap-3">
-            <div className="flex gap-3">
-              {[{ name: 'Supabase', Icon: Database }, { name: 'Render AI', Icon: Server }, { name: 'Gemini', Icon: Zap }].map(({ name, Icon }, i) => (
-                <div key={name} className="flex flex-col items-center gap-1.5">
-                  <div className="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center animate-pulse" style={{ animationDelay: `${i * 150}ms` }}>
-                    <Icon className="w-5 h-5 text-slate-400" />
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-medium">{name}</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500 animate-pulse">Dang ping cac ket noi...</p>
-          </div>
-        )}
-
-        {healthStatus === 'done' && healthResult && (
-          <div className="p-5 space-y-4">
-            <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-              <span className="font-bold text-slate-700">Tong thoi gian:</span>
-              <span className="font-black text-blue-700">{healthResult.totalLatencyMs}ms</span>
-              <span className="text-slate-300">�</span>
-              <span className="text-slate-500">Kiem tra luc: {new Date(healthResult.checkedAt).toLocaleTimeString('vi-VN')}</span>
-              <span className="text-slate-300">�</span>
-              <span className={`font-bold ${healthResult.envVars.VERCEL ? 'text-blue-700' : 'text-emerald-700'}`}>
-                {healthResult.envVars.VERCEL ? '?? Vercel' : '?? Local Dev'}
-              </span>
-              <span className="text-slate-300">�</span>
-              <span className="text-slate-600">ENV: <strong>{healthResult.envVars.NODE_ENV}</strong></span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  label: 'Supabase', sub: 'PostgreSQL DB',
-                  icon: <Database className="w-4 h-4 text-emerald-600" />,
-                  data: healthResult.supabase,
-                  extra: healthResult.supabase.url ? <span className="text-[10px] text-slate-400 font-mono truncate">{healthResult.supabase.url}</span> : null
-                },
-                {
-                  label: 'Render AI', sub: 'Python / ResNet',
-                  icon: <Server className="w-4 h-4 text-purple-600" />,
-                  data: healthResult.render,
-                  extra: <span className="text-[10px] text-slate-400 font-mono">onrender.com</span>
-                },
-                {
-                  label: 'Gemini API', sub: 'Google GenAI',
-                  icon: <Zap className="w-4 h-4 text-blue-600" />,
-                  data: { ...healthResult.gemini, latencyMs: null as null },
-                  extra: (healthResult.gemini.keyPreview && showKeyPreviews)
-                    ? <span className="text-[10px] text-slate-500 font-mono bg-white border border-slate-200 px-2 py-0.5 rounded-lg">{healthResult.gemini.keyPreview}</span>
-                    : null
-                },
-              ].map(({ label, sub, icon, data, extra }) => (
-                <div key={label} className={`p-4 rounded-2xl border-2 space-y-3 ${
-                  data.status === 'ok' ? 'border-emerald-200 bg-emerald-50/40' :
-                  data.status === 'warn' ? 'border-amber-200 bg-amber-50/40' :
-                  'border-red-200 bg-red-50/40'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-xs">{icon}</div>
-                      <div>
-                        <p className="text-xs font-black text-slate-900">{label}</p>
-                        <p className="text-[10px] text-slate-500">{sub}</p>
-                      </div>
-                    </div>
-                    <StatusBadge status={data.status} />
-                  </div>
-                  <p className="text-[11px] text-slate-600 leading-relaxed">{data.message}</p>
-                  <div className="flex items-center justify-between gap-2">
-                    <LatencyBadge ms={data.latencyMs} />
-                    {extra}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 space-y-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Primary Gemini API Key */}
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-black text-amber-400 uppercase tracking-wider">Cau Hinh AI Dang Hoat Dong</span>
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  Google Gemini API Key (Khóa Chính)
+                </label>
+                <span className="text-[11px] text-slate-400">Ưu tiên sử dụng</span>
+              </div>
+              <div className="relative">
+                <input
+                  type={showGeminiKey ? 'text' : 'password'}
+                  value={config.geminiApiKey || ''}
+                  onChange={(e) => setConfig({ ...config, geminiApiKey: e.target.value })}
+                  placeholder="AIzaSy... (Nếu để trống sẽ dùng GEMINI_API_KEY trong .env)"
+                  className="w-full pl-3 pr-20 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowGeminiKey(!showGeminiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+                  title={showGeminiKey ? 'Ẩn key' : 'Hiện key'}
+                >
+                  {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-[11px] text-slate-400">
+                  Dùng để gọi mô hình Gemini 2.5 Flash / Pro và tạo Vector Embeddings RAG.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleTestKey}
+                  disabled={testingKey || !config.geminiApiKey}
+                  className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-[11px] font-bold transition-all disabled:opacity-40 flex items-center gap-1"
+                >
+                  <Zap className="w-3 h-3" />
+                  {testingKey ? 'Đang test...' : 'Kiểm tra Key'}
+                </button>
+              </div>
+
+              {testResult && (
+                <div
+                  className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                    testResult.ok
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-red-50 text-red-800 border border-red-200'
+                  }`}
+                >
+                  {testResult.ok ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  )}
+                  <span className="flex-1 font-medium">{testResult.message}</span>
+                  {testResult.latencyMs && (
+                    <span className="font-mono font-bold">{testResult.latencyMs}ms</span>
+                  )}
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                  healthResult.activeConfig.source.includes('Supabase')
-                    ? 'bg-emerald-900 text-emerald-300 border border-emerald-800'
-                    : 'bg-amber-900 text-amber-300 border border-amber-800'
-                }`}>
-                  {healthResult.activeConfig.source.includes('Supabase') ? '? Tu DB' : '?? Default'}
+              )}
+            </div>
+
+            {/* Backup Gemini API Key */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <ShieldAlert className="w-3.5 h-3.5 text-blue-500" />
+                  Gemini API Key Dự Phòng (Backup Key)
+                </label>
+                <span className="text-[11px] text-slate-400">Tùy chọn</span>
+              </div>
+              <div className="relative">
+                <input
+                  type={showBackupKey ? 'text' : 'password'}
+                  value={config.backupGeminiApiKey || ''}
+                  onChange={(e) => setConfig({ ...config, backupGeminiApiKey: e.target.value })}
+                  placeholder="AIzaSy... (Tự động chuyển khi key chính chạm quota limit 429)"
+                  className="w-full pl-3 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowBackupKey(!showBackupKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+                >
+                  {showBackupKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Khi Key chính hết hạn mức ngày (Free quota 15 RPM), hệ thống tự chuyển sang Backup Key.
+              </p>
+            </div>
+
+            {/* Render Python AI Service URL */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Server className="w-3.5 h-3.5 text-purple-600" />
+                  Render Python AI Service URL (ResNet)
+                </label>
+                <span className="text-[11px] text-emerald-600 font-bold">Image AI</span>
+              </div>
+              <input
+                type="text"
+                value={config.renderServiceUrl || ''}
+                onChange={(e) => setConfig({ ...config, renderServiceUrl: e.target.value })}
+                placeholder="https://pet-chatbot-ai.onrender.com"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
+              />
+              <p className="text-[11px] text-slate-400">
+                Địa chỉ dịch vụ FastAPI ResNet18 chẩn đoán hình ảnh giống và bệnh lý thú cưng trên Render.
+              </p>
+            </div>
+
+            {/* Provider Selector */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-slate-700" />
+                  Nhà Cung Cấp Mô Hình AI (AI Provider)
+                </label>
+                <span className="text-[11px] text-slate-400">Hiện tại: Google Gemini</span>
+              </div>
+              <select
+                value={config.apiProvider || 'gemini'}
+                onChange={(e) => setConfig({ ...config, apiProvider: e.target.value as any })}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
+              >
+                <option value="gemini">Google Gemini AI (Khuyên dùng — Đầy đủ Multimodal & Tốc độ cao)</option>
+                <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
+                <option value="custom">Custom / Groq / Ollama (OpenAI Compatible API)</option>
+              </select>
+              <p className="text-[11px] text-slate-400">
+                Chọn nhà cung cấp AI chính được hệ thống ưu tiên sử dụng trong phiên chat.
+              </p>
+            </div>
+          </div>
+
+          {/* Conditional: OpenAI / Custom API Key fields */}
+          {(config.apiProvider === 'openai' || config.apiProvider === 'custom') && (
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
+              <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                <Key className="w-3.5 h-3.5 text-emerald-600" />
+                Cấu hình bổ sung cho {config.apiProvider === 'openai' ? 'OpenAI' : 'Custom Provider'}
+              </h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">OpenAI / Provider API Key</label>
+                  <input
+                    type="password"
+                    value={config.openaiApiKey || ''}
+                    onChange={(e) => setConfig({ ...config, openaiApiKey: e.target.value })}
+                    placeholder="sk-..."
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-slate-700">Custom Base URL (Tùy chọn)</label>
+                  <input
+                    type="text"
+                    value={config.customApiBaseUrl || ''}
+                    onChange={(e) => setConfig({ ...config, customApiBaseUrl: e.target.value })}
+                    placeholder="https://api.groq.com/openai/v1 hoặc http://localhost:11434/v1"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-xs font-mono bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Section 2: AI Model & Hyperparameters */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-4">
+            <Cpu className="w-5 h-5 text-amber-500" />
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Mô Hình AI & Tham Số Siêu Cấp</h2>
+              <p className="text-xs text-slate-500">
+                Chọn phiên bản mô hình xử lý, điều chỉnh độ sáng tạo (Temperature) và độ dài câu trả lời.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Model Selection */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700">Mô hình AI Đang Dùng</label>
+              <select
+                value={config.aiModel}
+                onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
+              >
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Mặc định — Nhanh & Mới nhất)</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Tốc độ phản hồi cao)</option>
+                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite (Tiết kiệm Token)</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Ổn định)</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Phân tích chuyên sâu)</option>
+              </select>
+              <p className="text-[11px] text-slate-400">
+                Gemini 2.5 Flash mang lại tốc độ stream câu trả lời nhanh nhất và độ chính xác phân loại Triage cao.
+              </p>
+            </div>
+
+            {/* Temperature Slider */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700">Temperature (Độ sáng tạo)</label>
+                <span className="font-mono text-xs font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded">
+                  {config.temperature}
                 </span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                {[
-                  { label: 'Mo Hinh', value: healthResult.activeConfig.aiModel },
-                  { label: 'Temperature', value: String(healthResult.activeConfig.temperature) },
-                  { label: 'Nguon Config', value: healthResult.activeConfig.source },
-                  { label: 'Cap nhat cuoi', value: healthResult.activeConfig.lastUpdated ? new Date(healthResult.activeConfig.lastUpdated).toLocaleDateString('vi-VN') : 'Chua co' },
-                ].map(({ label, value }) => (
-                  <div key={label} className="p-2.5 bg-slate-800 rounded-xl">
-                    <p className="text-slate-400 text-[10px]">{label}</p>
-                    <p className="font-bold text-white mt-0.5 text-[11px] truncate" title={value}>{value}</p>
-                  </div>
-                ))}
+              <input
+                type="range"
+                min="0.0"
+                max="1.0"
+                step="0.05"
+                value={config.temperature}
+                onChange={(e) => setConfig({ ...config, temperature: parseFloat(e.target.value) })}
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400">
+                <span>0.0 (Chính xác y khoa)</span>
+                <span>0.5 (Cân bằng)</span>
+                <span>1.0 (Sáng tạo cao)</span>
               </div>
             </div>
 
+            {/* Max Output Tokens */}
             <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <ShieldAlert className="w-3.5 h-3.5 text-slate-500" /> Bien Moi Truong (Environment Variables)
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {[
-                  { key: 'SUPABASE_URL', present: healthResult.envVars.SUPABASE_URL, desc: 'Dia chi Supabase project' },
-                  { key: 'SUPABASE_ANON_KEY', present: healthResult.envVars.SUPABASE_ANON_KEY, desc: 'Public anon key' },
-                  { key: 'GEMINI_API_KEY', present: healthResult.envVars.GEMINI_API_KEY, desc: 'Google AI Studio key' },
-                ].map(item => (
-                  <div key={item.key} className={`flex items-center justify-between p-3 rounded-xl border text-xs ${
-                    item.present ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'
-                  }`}>
-                    <div>
-                      <p className="font-mono font-bold text-slate-800 text-[11px]">{item.key}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{item.desc}</p>
-                    </div>
-                    {item.present
-                      ? <span className="flex items-center gap-1 text-emerald-700 font-bold"><CheckCircle2 className="w-4 h-4" /> Co</span>
-                      : <span className="flex items-center gap-1 text-red-700 font-bold"><XCircle className="w-4 h-4" /> Thieu!</span>}
-                  </div>
-                ))}
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-700">Max Output Tokens</label>
+                <span className="font-mono text-xs font-black text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                  {config.maxTokens}
+                </span>
               </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-6">
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
-            <Sliders className="w-4 h-4 text-emerald-600" /> Cau Hinh Mo Hinh Google Gemini
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Mo Hinh AI (Model Alias)</label>
-              <select value={config.aiModel} onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-semibold">
-                <option value="gemini-2.5-flash">gemini-2.5-flash (Nhanh & Toi uu)</option>
-                <option value="gemini-2.5-pro">gemini-2.5-pro (Chan doan sau)</option>
+              <select
+                value={config.maxTokens}
+                onChange={(e) => setConfig({ ...config, maxTokens: parseInt(e.target.value, 10) })}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
+              >
+                <option value={1024}>1024 Tokens (~750 từ)</option>
+                <option value={2048}>2048 Tokens (~1500 từ - Khuyên dùng)</option>
+                <option value={4096}>4096 Tokens (~3000 từ)</option>
+                <option value={8192}>8192 Tokens (~6000 từ)</option>
               </select>
+              <p className="text-[11px] text-slate-400">
+                Giới hạn độ dài tối đa của phản hồi chẩn đoán y khoa thú cưng.
+              </p>
             </div>
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Do Sang Tao (Temperature: {config.temperature})</label>
-              <input type="range" min="0" max="1" step="0.05" value={config.temperature}
-                onChange={(e) => setConfig({ ...config, temperature: Number(e.target.value) })}
-                className="w-full accent-emerald-600 mt-2" />
-            </div>
+          </div>
+
+          {/* Emergency Keywords */}
+          <div className="space-y-2 pt-2 border-t border-slate-100">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-red-500" />
+              Từ Khóa Kích Hoạt Triage Khẩn Cấp (Emergency Keywords)
+            </label>
+            <input
+              type="text"
+              value={config.emergencyKeywords.join(', ')}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  emergencyKeywords: e.target.value.split(',').map((k) => k.trim()).filter(Boolean)
+                })
+              }
+              className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 bg-slate-50/50"
+              placeholder="máu, co giật, khó thở, bất tỉnh, không thở, liệt..."
+            />
+            <p className="text-[11px] text-slate-400">
+              Nhập các từ khóa phân cách bằng dấu phẩy. Khi người dùng đề cập đến các từ này, hệ thống sẽ tự động nâng mức cảnh báo cấp cứu RED ngay lập tức.
+            </p>
           </div>
         </div>
 
-        <div className="space-y-3 pt-4 border-t border-slate-100 text-xs">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
-            ?? System Prompt Huan Luyen AI Bac Si Thu Y
-          </h3>
-          <p className="text-slate-500">Chi thi cot loi dieu khien hanh vi cua AI, ep dinh dang khung canh bao [[TRIAGE_ALERT]].</p>
-          <textarea rows={8} value={config.systemPrompt}
+        {/* Section 3: System Prompt */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Lời Nhắc Hệ Thống (System Prompt)</h2>
+              <p className="text-xs text-slate-500">
+                Định hình nhân cách, phong cách trả lời và quy tắc chuẩn y khoa thú y của PetCare AI.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleResetPrompt}
+              className="text-xs text-amber-600 hover:text-amber-700 font-semibold underline"
+            >
+              Khôi phục mẫu chuẩn
+            </button>
+          </div>
+
+          <textarea
+            rows={8}
+            value={config.systemPrompt}
             onChange={(e) => setConfig({ ...config, systemPrompt: e.target.value })}
-            className="w-full p-4 rounded-xl border border-slate-200 font-mono text-xs bg-slate-50 focus:ring-2 focus:ring-emerald-500 leading-relaxed text-slate-800" />
+            placeholder="Nhập System Prompt..."
+            className="w-full p-4 rounded-xl border border-slate-200 text-xs text-slate-900 leading-relaxed font-mono focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 bg-slate-50/50"
+          />
+          <p className="text-[11px] text-slate-400">
+            System Prompt sẽ được gắn vào đầu mỗi phiên tư vấn của AI cùng với ngữ cảnh thú cưng và tri thức RAG.
+          </p>
         </div>
 
-        <div className="space-y-3 pt-4 border-t border-slate-100 text-xs">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
-            <ShieldAlert className="w-4 h-4 text-red-600" /> Tu Khoa Kich Hoat Canh Bao Khan Cap (Canh Bao Do)
-          </h3>
-          <p className="text-slate-500">Khi phat hien cac tu khoa nay, he thong se uu tien Khung Canh Bao Do ngay lap tuc.</p>
-          <input type="text" value={config.emergencyKeywords.join(', ')}
-            onChange={(e) => setConfig({ ...config, emergencyKeywords: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-red-500" />
-        </div>
-
-        <div className="pt-4 border-t border-slate-100 flex justify-end">
-          <button type="submit" disabled={saving}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-xs">
-            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Luu Cau Hinh AI
+        {/* Save Bar */}
+        <div className="flex items-center justify-end gap-3 pt-2">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-sm font-black shadow-md shadow-amber-500/20 transition-all disabled:opacity-50"
+          >
+            {saving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : saveSuccess ? (
+              <Check className="w-4 h-4 text-emerald-950" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {saving ? 'Đang lưu cấu hình...' : saveSuccess ? 'Đã lưu thành công!' : 'Lưu Tất Cả Cấu Hình'}
           </button>
         </div>
       </form>

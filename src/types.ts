@@ -105,6 +105,14 @@ export interface SystemConfig {
   systemPrompt: string;
   maxTokens: number;
   emergencyKeywords: string[];
+  geminiApiKey?: string;
+  backupGeminiApiKey?: string;
+  renderServiceUrl?: string;
+  openaiApiKey?: string;
+  customApiBaseUrl?: string;
+  customModelName?: string;
+  apiProvider?: 'gemini' | 'openai' | 'custom';
+  autoKeepAliveIntervalMinutes?: number;
 }
 
 export interface SystemStats {

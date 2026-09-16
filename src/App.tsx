@@ -28,6 +28,7 @@ const AdminPetsRecordsView = lazy(() => import('./components/admin/AdminPetsReco
 const AdminClinicsView = lazy(() => import('./components/admin/AdminClinicsView').then(m => ({ default: m.AdminClinicsView })));
 const AdminKnowledgeRAGView = lazy(() => import('./components/admin/AdminKnowledgeRAGView').then(m => ({ default: m.AdminKnowledgeRAGView })));
 const AdminSystemConfigView = lazy(() => import('./components/admin/AdminSystemConfigView').then(m => ({ default: m.AdminSystemConfigView })));
+const AdminHealthCheckView = lazy(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
 
 // Loading spinner fallback for lazy-loaded components
 function PageLoader() {
@@ -52,7 +53,7 @@ const guestUser: UserProfile = {
 };
 
 export function App() {
-  const validTabs = ['chat', 'records', 'record_detail', 'news', 'emergency', 'clinics', 'pets', 'account', 'admin_dashboard', 'admin_users', 'admin_records', 'admin_clinics', 'admin_rag', 'admin_config', 'not_found'];
+  const validTabs = ['chat', 'records', 'record_detail', 'news', 'emergency', 'clinics', 'pets', 'account', 'admin_dashboard', 'admin_users', 'admin_records', 'admin_clinics', 'admin_rag', 'admin_config', 'admin_health', 'not_found'];
   
   const getInitialTab = () => {
     const path = window.location.pathname.substring(1);
@@ -353,6 +354,7 @@ export function App() {
                 {currentTab === 'admin_clinics' && <AdminClinicsView />}
                 {currentTab === 'admin_rag' && <AdminKnowledgeRAGView />}
                 {currentTab === 'admin_config' && <AdminSystemConfigView />}
+                {currentTab === 'admin_health' && <AdminHealthCheckView />}
               </>
             )}
 

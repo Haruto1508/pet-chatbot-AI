@@ -23,13 +23,48 @@ export const api = {
   checkHealth: async (): Promise<{
     supabase: { status: string; latencyMs: number | null; message: string; url?: string };
     render: { status: string; latencyMs: number | null; message: string; url: string };
-    gemini: { status: string; message: string; keyPreview: string | null };
-    activeConfig: { status: string; aiModel: string; temperature: number; lastUpdated?: string; source: string };
+    gemini: { status: string; message: string; keyPreview: string | null; source?: string };
+    activeConfig: { status: string; aiModel: string; temperature: number; lastUpdated?: string; source: string; apiProvider?: string; autoKeepAliveInterval?: number };
     envVars: { SUPABASE_URL: boolean; SUPABASE_ANON_KEY: boolean; GEMINI_API_KEY: boolean; NODE_ENV: string; VERCEL: boolean };
     totalLatencyMs: number;
     checkedAt: string;
   }> => {
     const res = await fetch('/api/health-check');
+    return res.json();
+  },
+
+  // Keep-Alive & Wake-Up Ping
+  pingKeepAlive: async (service: string = 'all'): Promise<{
+    status: string;
+    totalLatencyMs: number;
+    timestamp: string;
+    services: Record<string, {
+      name: string;
+      target: string;
+      status: string;
+      latencyMs: number;
+      message: string;
+      statusCode?: number;
+    }>;
+  }> => {
+    const res = await fetch(`/api/keep-alive?service=${encodeURIComponent(service)}`);
+    return res.json();
+  },
+
+  // Test API Key validity
+  testApiKey: async (data: { apiKey: string; model?: string; provider?: string; customBaseUrl?: string }): Promise<{
+    ok: boolean;
+    latencyMs?: number;
+    model?: string;
+    responsePreview?: string;
+    message?: string;
+    error?: string;
+  }> => {
+    const res = await fetch('/api/test-api-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
     return res.json();
   },
 
