@@ -77,15 +77,18 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white text-xs py-1 px-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0"></span>
             <span className="font-medium text-[11px] sm:text-xs">
-              PetCare AI — Hệ Thống Tư Vấn Bệnh Lý & Sơ Cứu Khẩn Cấp Thú Cưng 24/7
+              <span className="hidden sm:inline">PetCare AI — Hệ Thống Tư Vấn Bệnh Lý & Sơ Cứu Khẩn Cấp Thú Cưng 24/7</span>
+              <span className="sm:hidden">PetCare AI — Tư Vấn Thú Cưng 24/7</span>
             </span>
           </div>
 
-          <div className="hidden md:flex items-center gap-4 text-[11px] font-medium text-emerald-100">
+          <div className="flex items-center gap-2 text-[11px] font-medium text-emerald-100">
             <span className="flex items-center gap-1">
-              <PhoneCall className="w-3 h-3 text-amber-300" /> Hotline: <strong className="text-amber-300">0903 123 456</strong>
+              <PhoneCall className="w-3 h-3 text-amber-300" />
+              <span className="hidden md:inline">Hotline: </span>
+              <strong className="text-amber-300">0903 123 456</strong>
             </span>
           </div>
         </div>
@@ -104,12 +107,12 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Active Tab Title Indicator */}
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight truncate max-w-[130px] xs:max-w-[180px] sm:max-w-none">
               {currentTabMeta.title}
             </h1>
             <span
-              className={`hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
+              className={`hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
                 currentTab.startsWith('admin')
                   ? 'bg-amber-100 text-amber-800 border border-amber-200'
                   : 'bg-emerald-100 text-emerald-800 border border-emerald-200'

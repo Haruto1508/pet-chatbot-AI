@@ -86,11 +86,11 @@ export const EmergencyFirstAidView: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Banner */}
-      <div className="bg-red-600 text-white p-6 rounded-2xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-red-600 text-white p-5 sm:p-6 rounded-2xl shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-8 h-8 text-amber-300 animate-pulse" />
-            <h2 className="text-xl font-black">CẨM NANG SƠ CỨU KHẨN CẤP THÚ CƯNG (24/7)</h2>
+            <ShieldAlert className="w-7 h-7 sm:w-8 sm:h-8 text-amber-300 animate-pulse flex-shrink-0" />
+            <h2 className="text-lg sm:text-xl font-black">CẨM NANG SƠ CỨU KHẨN CẤP THÚ CƯNG (24/7)</h2>
           </div>
           <p className="text-xs text-red-100">
             Hướng dẫn thao tác tức thì trong 15 phút vàng giúp bảo vệ tính mạng chó mèo trước khi di chuyển tới phòng khám.
@@ -99,7 +99,7 @@ export const EmergencyFirstAidView: React.FC = () => {
 
         <a
           href="tel:0903123456"
-          className="flex items-center gap-2 bg-amber-400 hover:bg-amber-300 text-red-950 px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all whitespace-nowrap"
+          className="flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 text-red-950 px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all w-full md:w-auto"
         >
           <PhoneCall className="w-4 h-4 animate-bounce" />
           GỌI HOTLINE CẤP CỨU: 0903 123 456

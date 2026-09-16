@@ -685,12 +685,12 @@ export const PetChatView: React.FC<Props> = ({
       {/* Main Chat Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
         {/* Compact Header Toolbar */}
-        <div className="shrink-0 px-3 sm:px-4 py-2 sm:py-2.5 border-b border-slate-200 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 bg-slate-50/50 z-10">
-          <div className="flex items-center gap-2 sm:gap-3">
+        <div className="shrink-0 px-3 sm:px-4 py-2 border-b border-slate-200 flex items-center justify-between gap-2 bg-slate-50/50 z-10">
+          <div className="flex items-center gap-2 min-w-0">
             {/* Sidebar toggle (desktop) */}
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors hidden md:block"
+              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors hidden md:flex flex-shrink-0"
               title={isSidebarOpen ? "Đóng lịch sử" : "Mở lịch sử"}
             >
               {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
@@ -699,7 +699,7 @@ export const PetChatView: React.FC<Props> = ({
             {/* Mobile History toggle */}
             <button
               onClick={() => setIsMobileHistoryOpen(true)}
-              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors md:hidden relative"
+              className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors md:hidden relative flex-shrink-0"
               title="Lịch sử chat"
             >
               <History className="w-4 h-4" />
@@ -714,26 +714,26 @@ export const PetChatView: React.FC<Props> = ({
               <img
                 src={selectedPet.avatarUrl}
                 alt={selectedPet.name}
-                className="w-8 h-8 rounded-xl object-cover border border-emerald-500 shadow-2xs"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl object-cover border border-emerald-500 shadow-2xs flex-shrink-0"
               />
             ) : (
-              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold flex-shrink-0">
                 <PawPrint className="w-4 h-4" />
               </div>
             )}
 
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-slate-900 leading-tight">
-                  {selectedPet ? `Tư Vấn: ${selectedPet.name}` : 'Tư Vấn Chung'}
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight truncate">
+                  {selectedPet ? `${selectedPet.name}` : 'Tư Vấn Chung'}
                 </h2>
                 {selectedPet && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold hidden sm:inline-block">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold hidden sm:inline-block flex-shrink-0">
                     {selectedPet.species}
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-slate-500 leading-tight hidden sm:block">
+              <p className="text-[10px] text-slate-500 leading-tight hidden sm:block truncate">
                 {selectedPet
                   ? `${selectedPet.breed} | ${selectedPet.age} tháng | ${selectedPet.weight}kg`
                   : 'Chọn thú cưng để tư vấn chính xác hơn.'}
@@ -741,14 +741,14 @@ export const PetChatView: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <select
               value={selectedPet?.id || ''}
               onChange={(e) => {
                 const pet = pets.find(p => p.id === e.target.value) || null;
                 setSelectedPet(pet);
               }}
-              className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 flex-1 sm:flex-initial"
+              className="text-xs font-semibold px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 max-w-[110px] sm:max-w-[160px]"
             >
               <option value="">-- Chọn Thú Cưng --</option>
               {pets.map(p => (
@@ -761,7 +761,7 @@ export const PetChatView: React.FC<Props> = ({
             <button
               onClick={handleCreateMedicalRecord}
               disabled={isSummarizing || messages.length <= 1}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold shadow-2xs whitespace-nowrap transition-all"
+              className="flex items-center gap-1 text-xs px-2 sm:px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold shadow-2xs whitespace-nowrap transition-all"
             >
               {isSummarizing ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -952,7 +952,7 @@ export const PetChatView: React.FC<Props> = ({
             </div>
           )}
 
-          <div className="shrink-0 p-2.5 sm:p-3 bg-white border-t border-slate-200 flex items-center gap-2">
+          <div className="shrink-0 p-2.5 sm:p-3 pb-safe bg-white border-t border-slate-200 flex items-center gap-2">
             <input
               type="file"
               ref={fileInputRef}

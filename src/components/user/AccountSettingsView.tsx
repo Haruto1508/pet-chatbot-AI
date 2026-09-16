@@ -254,7 +254,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
           </div>
         </div>
 
-        <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-3">
+        <div className="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
           {currentUser.id !== 'guest' ? (
             <button
               type="button"
@@ -269,7 +269,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
 
           <button
             type="submit"
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs ml-auto"
           >
             <Save className="w-4 h-4" /> Lưu Thay Đổi
           </button>

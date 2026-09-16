@@ -337,7 +337,7 @@ export const NearestClinicsView: React.FC = () => {
       {/* Content Layout: Map Embed + Clinic Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Side: Clinic Cards List */}
-        <div className="lg:col-span-5 space-y-3 max-h-[620px] overflow-y-auto pr-1">
+        <div className="lg:col-span-5 space-y-3 lg:max-h-[620px] overflow-y-auto pr-1">
           {loading ? (
             <div className="text-center py-12 text-slate-500 text-xs">Đang tải danh sách phòng khám...</div>
           ) : processedClinics.length === 0 ? (
@@ -411,7 +411,7 @@ export const NearestClinicsView: React.FC = () => {
         {/* Right Side: Map & Selected Clinic Details */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-4 flex flex-col">
           {/* Leaflet Map Frame */}
-          <div className="relative w-full h-[350px] lg:h-[450px] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-inner z-0">
+          <div className="relative w-full h-[260px] sm:h-[350px] lg:h-[450px] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-inner z-0">
             <MapContainer 
               center={[mapTarget.lat, mapTarget.lng]} 
               zoom={mapTarget.zoom} 
