@@ -8,39 +8,98 @@ import { TriageLevel } from './src/types.js';
 
 let appInstance: express.Express | null = null;
 
+// ─────────────────────────────────────────
+// 📋 STRUCTURED SERVER LOG UTILITY
+// ─────────────────────────────────────────
+const COLORS = {
+  reset:   '\x1b[0m',
+  bold:    '\x1b[1m',
+  green:   '\x1b[32m',
+  yellow:  '\x1b[33m',
+  red:     '\x1b[31m',
+  cyan:    '\x1b[36m',
+  magenta: '\x1b[35m',
+  blue:    '\x1b[34m',
+  gray:    '\x1b[90m',
+  white:   '\x1b[97m',
+};
+
+type LogLevel = 'OK' | 'WARN' | 'ERROR' | 'INFO';
+type LogCategory = 'SUPABASE' | 'RENDER_AI' | 'GEMINI' | 'SYSTEM';
+
+function serverLog(
+  category: LogCategory,
+  level: LogLevel,
+  action: string,
+  detail?: string,
+  latencyMs?: number | null
+) {
+  const ts = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+
+  const catColors: Record<LogCategory, string> = {
+    SUPABASE:  COLORS.cyan,
+    RENDER_AI: COLORS.magenta,
+    GEMINI:    COLORS.blue,
+    SYSTEM:    COLORS.gray,
+  };
+  const levelColors: Record<LogLevel, string> = {
+    OK:    COLORS.green,
+    WARN:  COLORS.yellow,
+    ERROR: COLORS.red,
+    INFO:  COLORS.white,
+  };
+  const levelIcons: Record<LogLevel, string> = {
+    OK:    '✅',
+    WARN:  '⚠️ ',
+    ERROR: '❌',
+    INFO:  'ℹ️ ',
+  };
+
+  const catStr   = `${catColors[category]}${COLORS.bold}[${category}]${COLORS.reset}`;
+  const lvlStr   = `${levelColors[level]}${levelIcons[level]} ${level}${COLORS.reset}`;
+  const latStr   = latencyMs != null ? `${COLORS.gray}+${latencyMs}ms${COLORS.reset}` : '';
+  const detStr   = detail ? ` ${COLORS.gray}→ ${detail}${COLORS.reset}` : '';
+
+  console.log(`${COLORS.gray}[${ts}]${COLORS.reset} ${catStr} ${lvlStr} ${action}${detStr} ${latStr}`);
+}
+// ─────────────────────────────────────────
+
+
 async function startServer(isVercel = false) {
   const app = express();
   const PORT = 3000;
 
-  // Always register JSON body parser (was missing for Vercel, causing req.body = undefined on POST)
+  // Always register JSON body parser
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-  // Metric counters are fetched dynamically
 
   // Gemini AI Client Helper (Lazy initialization)
   function getGeminiClient(customApiKey?: string): GoogleGenAI {
     const apiKey = customApiKey || process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.warn('GEMINI_API_KEY is missing. Using default fallback mode.');
+      serverLog('GEMINI', 'ERROR', 'getGeminiClient()', 'GEMINI_API_KEY bị thiếu — sẽ dùng dummy-key');
     }
     return new GoogleGenAI({
       apiKey: apiKey || 'dummy-key-for-dev',
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+
     });
   }
 
   // Vector Embedding Helper
   async function generateEmbedding(text: string, customApiKey?: string): Promise<number[] | null> {
+    const t0 = Date.now();
     try {
       const ai = getGeminiClient(customApiKey);
       const response = await ai.models.embedContent({
         model: 'text-embedding-004',
         contents: text,
       });
+      const dims = response.embeddings?.[0]?.values?.length ?? 0;
+      serverLog('GEMINI', 'OK', 'Embedding generated', `text-embedding-004 → ${dims} dims`, Date.now() - t0);
       return response.embeddings?.[0]?.values || null;
-    } catch (e) {
-      console.error('Error generating embedding:', e);
+    } catch (e: any) {
+      serverLog('GEMINI', 'ERROR', 'Embedding FAILED', e?.message?.substring(0, 80), Date.now() - t0);
       return null;
     }
   }
@@ -54,13 +113,15 @@ async function startServer(isVercel = false) {
     
     if (queryEmbedding) {
       // 2. Perform Vector Search using Supabase RPC (pgvector)
+      const t0 = Date.now();
       const { data: matched, error } = await supabase.rpc('match_articles', {
         query_embedding: queryEmbedding,
-        match_threshold: 0.6, // threshold for similarity
-        match_count: 3 // get top 3 articles
+        match_threshold: 0.6,
+        match_count: 3
       });
 
       if (!error && matched && matched.length > 0) {
+        serverLog('SUPABASE', 'OK', 'RAG vector search', `${matched.length} bài khớp → "${queryText.substring(0, 40)}"`, Date.now() - t0);
         return matched.map((art: any) => `
 [KIẾN THỨC RAG THAM KHẢO]:
 - Tiêu đề: ${art.title} (Độ khớp: ${Math.round(art.similarity * 100)}%)
@@ -70,13 +131,19 @@ async function startServer(isVercel = false) {
 - Lời khuyên bác sĩ: ${art.doctor_advice}
 - Nội dung chuyên môn: ${art.content}
 `).join('\n\n');
+      } else {
+        serverLog('SUPABASE', 'WARN', 'RAG vector search', error ? `Lỗi RPC: ${error.message}` : 'Không có kết quả — chuyển sang fallback keyword', Date.now() - t0);
       }
     }
 
-    // Fallback: In-memory filter if vector search fails or isn't set up yet
+    // Fallback: In-memory keyword filter
     const queryLower = queryText.toLowerCase();
+    const ft0 = Date.now();
     const { data: articles, error: fetchErr } = await supabase.from('articles').select('*');
-    if (fetchErr || !articles) return '';
+    if (fetchErr || !articles) {
+      serverLog('SUPABASE', 'ERROR', 'RAG fallback fetch articles', fetchErr?.message, Date.now() - ft0);
+      return '';
+    }
 
     const matched = articles.filter((art: any) => {
       const titleMatch = art.title.toLowerCase().includes(queryLower);
@@ -84,7 +151,11 @@ async function startServer(isVercel = false) {
       return titleMatch || summaryMatch;
     });
 
-    if (matched.length === 0) return '';
+    if (matched.length === 0) {
+      serverLog('SUPABASE', 'INFO', 'RAG fallback keyword', `Không tìm thấy bài nào cho "${queryText.substring(0, 40)}"`, Date.now() - ft0);
+      return '';
+    }
+    serverLog('SUPABASE', 'OK', 'RAG fallback keyword', `${matched.length} bài khớp`, Date.now() - ft0);
     
     return matched.slice(0, 3).map((art: any) => `
 [KIẾN THỨC RAG THAM KHẢO (Cơ bản)]:
@@ -123,13 +194,16 @@ async function startServer(isVercel = false) {
     try {
       const t0 = Date.now();
       const { error } = await supabase.from('users').select('id').limit(1);
+      const latMs = Date.now() - t0;
+      serverLog('SUPABASE', error ? 'ERROR' : 'OK', '/api/health-check ping', error ? error.message : 'users table OK', latMs);
       results.supabase = {
         status: error ? 'error' : 'ok',
-        latencyMs: Date.now() - t0,
+        latencyMs: latMs,
         message: error ? error.message : 'Kết nối Supabase thành công',
         url: (process.env.SUPABASE_URL || '').substring(0, 30) + '...'
       };
     } catch (e: any) {
+      serverLog('SUPABASE', 'ERROR', '/api/health-check ping', e.message);
       results.supabase = { status: 'error', latencyMs: null, message: e.message };
     }
 
@@ -139,17 +213,21 @@ async function startServer(isVercel = false) {
       const renderRes = await fetch(`${customRenderUrl}/docs`, {
         signal: AbortSignal.timeout(8000)
       });
+      const latMs = Date.now() - t0;
+      serverLog('RENDER_AI', renderRes.ok ? 'OK' : 'WARN', '/api/health-check ping', `HTTP ${renderRes.status} ${customRenderUrl}`, latMs);
       results.render = {
         status: renderRes.ok ? 'ok' : 'warn',
-        latencyMs: Date.now() - t0,
+        latencyMs: latMs,
         message: renderRes.ok ? 'Python AI (ResNet) đang hoạt động' : `HTTP ${renderRes.status}`,
         url: customRenderUrl
       };
     } catch (e: any) {
+      const msg = e.name === 'TimeoutError' ? 'Timeout — Render đang cold start (bình thường)' : e.message;
+      serverLog('RENDER_AI', e.name === 'TimeoutError' ? 'WARN' : 'ERROR', '/api/health-check ping', msg);
       results.render = {
         status: 'error',
         latencyMs: null,
-        message: e.name === 'TimeoutError' ? 'Timeout — Render đang cold start (bình thường)' : e.message,
+        message: msg,
         url: customRenderUrl
       };
     }
@@ -187,6 +265,7 @@ async function startServer(isVercel = false) {
 
     results.totalLatencyMs = Date.now() - startTime;
     results.checkedAt = new Date().toISOString();
+    serverLog('SYSTEM', 'INFO', '/api/health-check complete', `total ${results.totalLatencyMs}ms`);
 
     res.json(results);
   });
@@ -216,6 +295,7 @@ async function startServer(isVercel = false) {
         try {
           const { error } = await supabase.from('users').select('id').limit(1);
           const latencyMs = Date.now() - t0;
+          serverLog('SUPABASE', error ? 'ERROR' : 'OK', 'keep-alive ping', error ? error.message : 'DB sống', latencyMs);
           return {
             name: 'Supabase PostgreSQL DB',
             target: (process.env.SUPABASE_URL || '').replace(/https?:\/\//, '').split('.')[0] + '.supabase.co',
@@ -224,11 +304,13 @@ async function startServer(isVercel = false) {
             message: error ? error.message : 'Database phản hồi sẵn sàng (Connection pool active)'
           };
         } catch (err: any) {
+          const latencyMs = Date.now() - t0;
+          serverLog('SUPABASE', 'ERROR', 'keep-alive ping', err.message, latencyMs);
           return {
             name: 'Supabase PostgreSQL DB',
             target: 'Supabase',
             status: 'error',
-            latencyMs: Date.now() - t0,
+            latencyMs,
             message: err.message || 'Lỗi kết nối Supabase'
           };
         }
@@ -242,6 +324,7 @@ async function startServer(isVercel = false) {
         try {
           const resp = await fetch(`${renderUrl}/docs`, { signal: AbortSignal.timeout(12000) });
           const latencyMs = Date.now() - t0;
+          serverLog('RENDER_AI', resp.ok ? 'OK' : 'WARN', 'keep-alive ping', `HTTP ${resp.status} ${renderUrl}`, latencyMs);
           return {
             name: 'Render Python AI (ResNet)',
             target: renderUrl,
@@ -254,6 +337,8 @@ async function startServer(isVercel = false) {
           };
         } catch (err: any) {
           const latencyMs = Date.now() - t0;
+          const msg = err.name === 'TimeoutError' ? 'Cold start — Đã gửi tín hiệu đánh thức' : err.message;
+          serverLog('RENDER_AI', 'WARN', 'keep-alive ping', msg, latencyMs);
           return {
             name: 'Render Python AI (ResNet)',
             target: renderUrl,
@@ -273,6 +358,7 @@ async function startServer(isVercel = false) {
         const t0 = Date.now();
         try {
           if (!geminiKey) {
+            serverLog('GEMINI', 'WARN', 'keep-alive ping', 'GEMINI_API_KEY chưa cấu hình');
             return {
               name: 'Google Gemini AI Studio',
               target: 'generativelanguage.googleapis.com',
@@ -282,11 +368,10 @@ async function startServer(isVercel = false) {
             };
           }
           const ai = getGeminiClient(geminiKey);
-          await ai.models.embedContent({
-            model: 'text-embedding-004',
-            contents: 'ping',
-          });
+          await ai.models.embedContent({ model: 'text-embedding-004', contents: 'ping' });
           const latencyMs = Date.now() - t0;
+          const keyPreview = geminiKey.substring(0, 8) + '...' + geminiKey.slice(-4);
+          serverLog('GEMINI', 'OK', 'keep-alive ping', `Token hợp lệ [${keyPreview}]`, latencyMs);
           return {
             name: 'Google Gemini AI Studio',
             target: 'text-embedding-004',
@@ -295,12 +380,19 @@ async function startServer(isVercel = false) {
             message: 'API Key hoạt động tốt & quota sẵn sàng'
           };
         } catch (err: any) {
+          const latencyMs = Date.now() - t0;
+          const errMsg = err.message?.substring(0, 120) || 'Lỗi không xác định';
+          // Detect quota/auth errors specifically
+          const isQuotaErr = /quota|rate.?limit|429/i.test(errMsg);
+          const isAuthErr = /api.?key|invalid|401|403/i.test(errMsg);
+          serverLog('GEMINI', isQuotaErr || isAuthErr ? 'ERROR' : 'WARN', 'keep-alive ping',
+            isQuotaErr ? `🔴 HẾT QUOTA: ${errMsg}` : isAuthErr ? `🔴 KEY KHÔNG HỢP LỆ: ${errMsg}` : errMsg, latencyMs);
           return {
             name: 'Google Gemini AI Studio',
             target: 'generativelanguage.googleapis.com',
             status: 'warn',
-            latencyMs: Date.now() - t0,
-            message: `API phản hồi: ${err.message?.substring(0, 120) || 'Lỗi không xác định'}`
+            latencyMs,
+            message: `API phản hồi: ${errMsg}`
           };
         }
       })();
@@ -1145,7 +1237,10 @@ async function startServer(isVercel = false) {
 
     try {
       // Retrieve System Config
-      const { data: configData } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      const cfgT0 = Date.now();
+      const { data: configData, error: cfgErr } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      serverLog('SUPABASE', cfgErr ? 'WARN' : 'OK', '/api/chat → load system_config',
+        cfgErr ? cfgErr.message : `model=${configData?.ai_model || 'gemini-2.5-flash'}`, Date.now() - cfgT0);
       const ai = getGeminiClient(configData?.gemini_api_key);
       const renderServiceUrl = configData?.render_service_url || 'https://pet-chatbot-ai.onrender.com';
 
@@ -1188,7 +1283,9 @@ async function startServer(isVercel = false) {
       let imageForGemini: string | null = imageBase64 || null; // ảnh sẽ gửi vào Gemini
 
       if (imageBase64) {
+        const rnT0 = Date.now();
         try {
+          serverLog('RENDER_AI', 'INFO', '/predict → gọi ResNet AI', renderServiceUrl);
           const resnetRes = await fetch(`${renderServiceUrl}/predict`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1213,6 +1310,8 @@ async function startServer(isVercel = false) {
               if (!isMock && confidence >= 70) {
                 // ✅ HIGH CONFIDENCE: KHÔNG gửi ảnh vào Gemini → tiết kiệm token
                 imageForGemini = null;
+                serverLog('RENDER_AI', 'OK', '/predict ResNet HIGH confidence',
+                  `${pred.class_name_vi} (${confidence}%) — text-only cho Gemini`, Date.now() - rnT0);
                 resnetPrediction = `
 [CHẨN ĐOÁN HÌNH ẢNH TỪ AI CHUYÊN BIỆT (ResNet18 — Độ tin cậy CAO)]:
 - Chẩn đoán chính: ${pred.class_name_vi} (${pred.class_name}) — ${confidence}%
@@ -1220,10 +1319,11 @@ async function startServer(isVercel = false) {
 ${top3Text}
 - Hướng dẫn: Model đã phân tích ảnh với độ tin cậy cao. Hãy xác nhận chẩn đoán, giải thích triệu chứng điển hình và đưa ra phác đồ điều trị cụ thể.
 `;
-                console.log(`[ResNet] High confidence (${confidence}%) → Gemini nhận TEXT only, tiết kiệm ảnh tokens.`);
               } else {
                 // ⚠️ LOW CONFIDENCE hoặc MOCK: giữ ảnh, thêm gợi ý
                 const label = isMock ? '[Chế độ thử nghiệm]' : `[Độ tin cậy thấp: ${confidence}%]`;
+                serverLog('RENDER_AI', 'WARN', '/predict ResNet LOW confidence',
+                  `${pred.class_name_vi} (${confidence}%, mock=${isMock}) — gửi cả ảnh cho Gemini`, Date.now() - rnT0);
                 resnetPrediction = `
 [GỢI Ý NHẬN DIỆN HÌNH ẢNH ${label}]:
 - Dự đoán ban đầu: ${pred.class_name_vi} (${pred.class_name}) — ${confidence}%
@@ -1231,13 +1331,11 @@ ${top3Text}
 ${top3Text}
 - Hướng dẫn: Hãy phân tích ảnh trực tiếp để xác nhận chẩn đoán chính xác hơn.
 `;
-                // imageForGemini giữ nguyên = imageBase64 (Gemini phân tích ảnh)
-                console.log(`[ResNet] Low confidence/mock (${confidence}%, mock=${isMock}) → Gemini nhận cả ảnh.`);
               }
             }
           }
-        } catch (e) {
-          console.error("Lỗi khi kết nối đến Python ResNet AI:", e);
+        } catch (e: any) {
+          serverLog('RENDER_AI', 'ERROR', '/predict ResNet FAILED', e?.message?.substring(0, 80), Date.now() - rnT0);
           // Giữ imageForGemini = imageBase64, Gemini tự phân tích ảnh
           resnetPrediction = '\n(Hệ thống nhận diện ảnh chuyên biệt đang không phản hồi — Gemini sẽ phân tích ảnh trực tiếp.)\n';
         }
@@ -1336,8 +1434,9 @@ LƯU Ý QUAN TRỌNG VỀ ĐỊNH DẠNG VÀ ĐỘ DÀI:
       };
 
       for (const targetModel of fallbackModels) {
+        const gemT0 = Date.now();
         try {
-          console.log(`[Gemini] Gọi model: ${targetModel}...`);
+          serverLog('GEMINI', 'INFO', `generateContentStream → ${targetModel}`, `temp=${sysConfig.temperature}`);
           const stream = await ai.models.generateContentStream({
             model: targetModel,
             contents: { parts: contents },
@@ -1434,12 +1533,18 @@ LƯU Ý QUAN TRỌNG VỀ ĐỊNH DẠNG VÀ ĐỘ DÀI:
 
           sendEvent('done', { rawText: fullText });
           res.end();
+          serverLog('GEMINI', 'OK', `stream done ← ${targetModel}`,
+            `${fullText.length} chars`, Date.now() - gemT0);
           streamSucceeded = true;
           break; // Hoàn tất thành công!
 
         } catch (err: any) {
           lastError = err;
-          console.warn(`[Gemini] Model ${targetModel} gặp lỗi (${err?.status || err?.message}). Chuyển sang model dự phòng tiếp theo...`);
+          const errMsg = err?.message || String(err);
+          const isQuota = /quota|rate.?limit|429/i.test(errMsg);
+          serverLog('GEMINI', isQuota ? 'ERROR' : 'WARN', `stream FAILED ← ${targetModel}`,
+            isQuota ? `🔴 HẾT QUOTA: ${errMsg.substring(0, 80)}` : errMsg.substring(0, 80),
+            Date.now() - gemT0);
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
@@ -1609,13 +1714,16 @@ YÊU CẦU:
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`PetCare AI Server running on http://0.0.0.0:${PORT}`);
-    
+    serverLog('SYSTEM', 'OK', `Server khởi động`, `http://0.0.0.0:${PORT} | NODE_ENV=${process.env.NODE_ENV || 'development'}`);
+    serverLog('SYSTEM', 'INFO', 'Supabase', `URL=${process.env.SUPABASE_URL ? '✅ Set' : '❌ MISSING'} | KEY=${process.env.SUPABASE_ANON_KEY ? '✅ Set' : '❌ MISSING'}`);
+    serverLog('SYSTEM', 'INFO', 'Gemini', `API_KEY=${process.env.GEMINI_API_KEY ? '✅ Set' : '❌ MISSING'}`);
+
     // Tự động "đánh thức" Python AI Server trên Render ngay khi khởi động Dev Server
-    console.log('Sending wake up call to Render AI Service...');
-    fetch('https://pet-chatbot-ai.onrender.com/docs')
-      .then(() => console.log('✅ Render AI Service is awake!'))
-      .catch((e) => console.log('⚠️ Failed to ping Render AI Service (it might be sleeping heavily):', e.message));
+    const renderUrl = 'https://pet-chatbot-ai.onrender.com';
+    serverLog('RENDER_AI', 'INFO', 'Startup wake-up call', renderUrl);
+    fetch(`${renderUrl}/docs`)
+      .then(r => serverLog('RENDER_AI', r.ok ? 'OK' : 'WARN', 'Startup wake-up call', `HTTP ${r.status} — Render AI đang sống`))
+      .catch(e => serverLog('RENDER_AI', 'WARN', 'Startup wake-up call', `Render đang ngủ/cold start: ${e.message}`));
   });
 }
 
