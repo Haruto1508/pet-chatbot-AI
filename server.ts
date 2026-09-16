@@ -101,6 +101,89 @@ async function startServer(isVercel = false) {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Comprehensive connection health check for Admin panel
+  app.get('/api/health-check', async (_req: Request, res: Response) => {
+    const results: Record<string, any> = {};
+    const startTime = Date.now();
+
+    // 1. Check Supabase connection
+    try {
+      const t0 = Date.now();
+      const { error } = await supabase.from('users').select('id').limit(1);
+      results.supabase = {
+        status: error ? 'error' : 'ok',
+        latencyMs: Date.now() - t0,
+        message: error ? error.message : 'Kết nối Supabase thành công',
+        url: (process.env.SUPABASE_URL || '').substring(0, 30) + '...'
+      };
+    } catch (e: any) {
+      results.supabase = { status: 'error', latencyMs: null, message: e.message };
+    }
+
+    // 2. Check Render Python AI connection
+    try {
+      const t0 = Date.now();
+      const renderRes = await fetch('https://pet-chatbot-ai.onrender.com/docs', {
+        signal: AbortSignal.timeout(8000)
+      });
+      results.render = {
+        status: renderRes.ok ? 'ok' : 'warn',
+        latencyMs: Date.now() - t0,
+        message: renderRes.ok ? 'Python AI (ResNet) đang hoạt động' : `HTTP ${renderRes.status}`,
+        url: 'https://pet-chatbot-ai.onrender.com'
+      };
+    } catch (e: any) {
+      results.render = {
+        status: 'error',
+        latencyMs: null,
+        message: e.name === 'TimeoutError' ? 'Timeout — Render đang cold start (bình thường)' : e.message,
+        url: 'https://pet-chatbot-ai.onrender.com'
+      };
+    }
+
+    // 3. Check Gemini API Key
+    const geminiKey = process.env.GEMINI_API_KEY;
+    results.gemini = {
+      status: geminiKey ? 'ok' : 'error',
+      message: geminiKey ? 'GEMINI_API_KEY đã được cấu hình' : 'GEMINI_API_KEY bị thiếu!',
+      keyPreview: geminiKey ? geminiKey.substring(0, 8) + '...' + geminiKey.slice(-4) : null
+    };
+
+    // 4. Check active system config (AI model being used)
+    try {
+      const { data: configData } = await supabase.from('system_config').select('ai_model, temperature, updated_at').eq('id', 1).single();
+      results.activeConfig = {
+        status: 'ok',
+        aiModel: configData?.ai_model || 'gemini-2.5-flash (default)',
+        temperature: configData?.temperature ?? 0.4,
+        lastUpdated: configData?.updated_at || null,
+        source: configData ? 'Supabase system_config' : 'Default (hardcoded)'
+      };
+    } catch {
+      results.activeConfig = {
+        status: 'warn',
+        aiModel: 'gemini-2.5-flash (default)',
+        temperature: 0.4,
+        source: 'Default (system_config table not found)'
+      };
+    }
+
+    // 5. Environment variables presence check
+    results.envVars = {
+      SUPABASE_URL: !!process.env.SUPABASE_URL,
+      SUPABASE_ANON_KEY: !!process.env.SUPABASE_ANON_KEY,
+      GEMINI_API_KEY: !!process.env.GEMINI_API_KEY,
+      NODE_ENV: process.env.NODE_ENV || 'development',
+      VERCEL: process.env.VERCEL === '1'
+    };
+
+    results.totalLatencyMs = Date.now() - startTime;
+    results.checkedAt = new Date().toISOString();
+
+    res.json(results);
+  });
+
+
   // Debug: Check environment variables (safe - shows only presence, not values)
   app.get('/api/debug', (_req: Request, res: Response) => {
     const supabaseUrl = process.env.SUPABASE_URL;

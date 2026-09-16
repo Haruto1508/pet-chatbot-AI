@@ -19,6 +19,20 @@ export const api = {
     return res.json();
   },
 
+  // Health / Connection Check
+  checkHealth: async (): Promise<{
+    supabase: { status: string; latencyMs: number | null; message: string; url?: string };
+    render: { status: string; latencyMs: number | null; message: string; url: string };
+    gemini: { status: string; message: string; keyPreview: string | null };
+    activeConfig: { status: string; aiModel: string; temperature: number; lastUpdated?: string; source: string };
+    envVars: { SUPABASE_URL: boolean; SUPABASE_ANON_KEY: boolean; GEMINI_API_KEY: boolean; NODE_ENV: string; VERCEL: boolean };
+    totalLatencyMs: number;
+    checkedAt: string;
+  }> => {
+    const res = await fetch('/api/health-check');
+    return res.json();
+  },
+
   // Users
   syncGoogleUser: async (payload: { id: string; email: string; name: string; avatar: string }): Promise<UserProfile> => {
     const res = await fetch('/api/auth/sync', {
