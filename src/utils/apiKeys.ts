@@ -11,11 +11,20 @@ export function parseApiKeys(input?: any): string[] {
 
   let rawList: any[] = [];
   if (Array.isArray(input)) {
-    // Flatten nested arrays and filter out nullish values
-    rawList = input.flat(Infinity).filter((item) => item != null && item !== '');
+    // Flatten nested arrays and extract keys from each string
+    const flattened = input.flat(Infinity).filter((item) => item != null && item !== '');
+    rawList = flattened.flatMap(item => {
+      if (typeof item === 'string') {
+        // Extract Gemini keys (AIza... or AQ....) even if they are glued together without spaces
+        const matches = item.match(/(?:AIza|AQ\.)[A-Za-z0-9_\-]{30,}/g);
+        return matches || [];
+      }
+      return [item];
+    });
   } else if (typeof input === 'string') {
-    // Split by newline, comma, semicolon, or carriage return
-    rawList = input.split(/[\r\n,;]+/);
+    // Extract Gemini keys even if they are glued together
+    const matches = input.match(/(?:AIza|AQ\.)[A-Za-z0-9_\-]{30,}/g);
+    rawList = matches || [];
   } else {
     return [];
   }
