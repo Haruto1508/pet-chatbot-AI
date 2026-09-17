@@ -1,94 +1,102 @@
 # 🐾 PetCare AI — Hệ Thống Y Tế & Chẩn Đoán Sơ Cứu Thú Cưng 24/7
 
-> **PetCare AI** là ứng dụng full-stack hiện đại hỗ trợ tư vấn sức khỏe, phân loại mức độ nguy cấp (Triage) và sơ cứu khẩn cấp cho thú cưng bằng trí tuệ nhân tạo **Google Gemini 3.6 Flash**. Hệ thống tích hợp cơ sở tri thức **RAG (Retrieval-Augmented Generation)**, quản lý hồ sơ bệnh án, tìm kiếm phòng khám thú y qua **Google Maps**, cùng giao diện quản trị **Admin Console** phân quyền theo tài khoản Google.
+> **PetCare AI** là nền tảng y tế thú y số toàn diện (Full-stack Web App) tích hợp trí tuệ nhân tạo đa phương thức **Google Gemini 2.5 Flash**, dịch vụ thị giác máy tính **PyTorch ResNet**, và cơ sở tri thức chuyên sâu **RAG (pgvector 768 dimensions)**. Ứng dụng cung cấp khả năng phân loại khẩn cấp (Triage 3 cấp độ), tư vấn điều trị sơ cứu thời gian thực, quản lý bệnh án điện tử, bản đồ phòng khám 24/7 và giao diện quản trị phân quyền nâng cao.
 
 ---
 
 ## 💻 1. CÔNG NGHỆ SỬ DỤNG (TECH STACK)
 
 ### 🎨 Frontend (Giao diện người dùng)
-- **Framework**: React 19 + TypeScript (sử dụng Vite 6 làm công cụ build siêu nhanh).
-- **Styling**: Tailwind CSS v4 (`@tailwindcss/vite`) thiết kế chuẩn UI/UX, hỗ trợ Responsive Desktop & Mobile.
-- **Biểu tượng (Icons)**: Lucide React (`lucide-react`).
-- **Hiệu ứng (Animations)**: Motion (`motion`).
-- **Bản đồ Google Maps**: `@vis.gl/react-google-maps` tích hợp định vị phòng khám thú y gần nhất.
-- **Trình đọc Markdown**: `react-markdown` hiển thị phản hồi tư vấn y tế chuẩn format.
+- **Framework**: [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) chạy trên nền [Vite 6](https://vitejs.dev/).
+- **CSS & Styling**: [Tailwind CSS v4](https://tailwindcss.com/) với thiết kế chuẩn SPA (Single Page App), hỗ trợ đầy đủ Desktop & Mobile.
+- **Biểu tượng (Icons)**: [Lucide React](https://lucide.dev/).
+- **Bản đồ trực quan**: `@vis.gl/react-google-maps` tích hợp định vị, tìm kiếm và tính khoảng cách đến phòng khám thú y gần nhất.
+- **Trình đọc Markdown**: `react-markdown` kết hợp hệ thống CSS Markdown Body chuẩn y khoa, bảng biểu, danh sách hành động và nút xuất file `.md`.
+- **Tự động phục hồi phiên bản (Stale Chunk Handler)**: Tự động phát hiện phiên bản mới và reload thông minh (`lazyWithRetry` & `vite:preloadError`) tránh lỗi 404 sau khi deploy lên Vercel.
 
-### ⚙️ Backend (Máy chủ xử lý & AI)
-- **Runtime**: Node.js v22 (kết hợp `tsx` cho môi trường Dev và `esbuild` cho Production CommonJS bundle).
-- **Framework Web**: Express.js RESTful Server (`server.ts`).
-- **Trí tuệ nhân tạo AI**: `@google/genai` SDK tích hợp mô hình **Gemini 3.6 Flash**.
-- **Chế độ Đa phương thức (Multimodal)**: Phân tích đồng thời câu hỏi văn bản + hình ảnh vết thương / triệu chứng lâm sàng của thú cưng.
-- **Chế độ Đầu ra Cấu trúc (JSON Mode)**: Tự động tổng hợp đoạn hội thoại tư vấn thành Hồ sơ Bệnh án chuẩn y khoa thú y.
+### ⚙️ Backend & Trí Tuệ Nhân Tạo (AI & Server)
+- **Runtime**: Node.js v22 (kết hợp `tsx` cho môi trường Dev và `esbuild` biên dịch bundle server production).
+- **Web Framework**: Express.js RESTful API Server (`server.ts`).
+- **Mô hình ngôn ngữ lớn (LLM)**: `@google/genai` với **Gemini 2.5 Flash / Pro** (hỗ trợ phân tích văn bản + hình ảnh lâm sàng Multimodal).
+- **Mô hình Vector Embedding**: `gemini-embedding-001` xuất ra vector 768 chiều cho hệ thống truy xuất thông tin ngữ cảnh RAG.
+- **Dịch vụ thị giác máy tính (Image AI)**: FastAPI + PyTorch ResNet18 (được container hóa và triển khai độc lập trên Render Cloud).
 
----
-
-## 🗄️ 2. CƠ SỞ DỮ LIỆU & LƯU TRỮ (DATABASE ARCHITECTURE)
-
-### 📊 Mô hình dữ liệu hiện tại
-Hệ thống sử dụng **Server-Side In-Memory State Engine** được thiết lập trong `server.ts` và khởi tạo dữ liệu mẫu phong phú bằng Tiếng Việt tại `/src/data/initialData.ts`:
-
-1. **Users (`users`)**: Lưu trữ tài khoản người dùng, email Google, avatar, trạng thái tài khoản và phân quyền (`admin` / `user`).
-2. **Pets (`pets`)**: Danh sách hồ sơ thú cưng (tên, loài, giống, tuổi tháng, cân nặng, lịch sử tiêm vắc-xin, tiền sử dị ứng).
-3. **Medical Records (`medicalRecords`)**: Lưu trữ lịch sử khám bệnh, mức độ phân loại nguy cấp (`RED` - Cấp cứu, `YELLOW` - Cần theo dõi, `GREEN` - An toàn), phác đồ điều trị và chế độ dinh dưỡng.
-4. **Knowledge Base RAG Articles (`articles`)**: Dữ liệu tri thức chuyên môn thú y (triệu chứng, quy trình sơ cứu từng bước, lời khuyên bác sĩ) dùng để bơm ngữ cảnh (Context Injection) cho Gemini AI.
-5. **Vet Clinics (`clinics`)**: Cơ sở dữ liệu danh sách trạm/bệnh viện thú y 24/7 với tọa độ `lat/lng` hiển thị trên bản đồ.
-6. **System Config (`systemConfig`)**: Cấu hình tham số AI (Model, Temperature, System Prompt, Từ khóa cấp cứu).
-
-### 🔄 Khả năng mở rộng Database Cloud
-Tất cả thao tác trên ứng dụng đều thông qua REST API (`/api/pets`, `/api/medical-records`, `/api/articles`, `/api/clinics`, `/api/users`). Nhờ kiến trúc chuẩn RESTful này, bạn có thể dễ dàng chuyển đổi bộ lưu trữ Memory sang **Firebase Firestore** hoặc **Cloud SQL (PostgreSQL / Drizzle ORM)** chỉ bằng cách cập nhật các hàm xử lý dữ liệu trong `server.ts`.
+### 🗄️ Cơ sở dữ liệu & Lưu trữ (Database & Security)
+- **Cơ sở dữ liệu chính**: [Supabase](https://supabase.com/) (PostgreSQL 15+ tích hợp extension `pgvector`).
+- **Bảo mật**: Hỗ trợ đầy đủ **Row Level Security (RLS)** với bộ chính sách truy cập chi tiết (`setup_rls_policies.sql`) cùng cơ chế bypass an toàn qua `SUPABASE_SERVICE_ROLE_KEY` ở backend.
+- **Bộ nhớ đệm kép**: Lưu trữ đồng thời cấu hình trên Supabase, file cục bộ `system_config.json` và `localStorage` phía client để hệ thống luôn sẵn sàng 100%.
 
 ---
 
-## ✨ 3. TÍNH NĂNG NỔI BẬT
+## ✨ 2. TÍNH NĂNG NỔI BẬT
 
-### 🐶 Dành cho Khách Hàng (User Portal)
-1. **Chat AI Tư Vấn Bệnh Lý & Phân Loại Cấp Cứu (Triage Alert)**:
-   - Tự động nhận diện mức độ nguy cấp (`RED`, `YELLOW`, `GREEN`) và hiển thị bảng cảnh báo màu nổi bật đầu tin nhắn.
-   - Hỗ trợ tải ảnh vết thương/triệu chứng để AI chẩn đoán đa phương thức.
-2. **Tự Động Tạo Hồ Sơ Bệnh Án Từ Đoạn Chat**:
-   - Nhấn **"Lưu Hồ Sơ Bệnh Án"**, Gemini sẽ quét toàn bộ đoạn chat và trích xuất thành hồ sơ chuẩn JSON.
-3. **Quản Lý Danh Sách Thú Cưng**:
-   - Cập nhật thông tin chi tiết (tuổi, cân nặng, dị ứng, vắc-xin) để AI tư vấn cá nhân hóa theo từng bé.
-4. **Cẩm Nang Bệnh Lý & Sơ Cứu Khẩn Cấp 24/7**:
-   - Quy trình xử lý nhanh khi thú cưng bị hóc xương, sốc nhiệt, ngộ độc, tai nạn.
-5. **Tìm Bệnh Viện Thú Y Gần Nhất**:
-   - Tích hợp Google Maps hiển thị phòng khám 24/7, hotline cấp cứu và chỉ đường.
+### 🐶 Cổng Người Dùng (User Portal)
+1. **Chat AI Tư Vấn Bệnh Lý & Phân Loại Cấp Cứu (Clinical Triage System)**:
+   - Tự động nhận diện và gắn nhãn phân loại ngay đầu phản hồi:
+     - 🔴 **RED**: Cấp cứu khẩn cấp (khó thở, ngộ độc, co giật, xuất huyết nặng).
+     - 🟡 **YELLOW**: Cần khám sớm (nấm ngứa, tiêu chảy, viêm da, bỏ ăn).
+     - 🟢 **GREEN**: Tư vấn chăm sóc, dinh dưỡng, sinh hoạt thường ngày.
+   - Gửi kèm hình ảnh vết thương hoặc biểu hiện của thú cưng để AI chẩn đoán đa phương thức.
+   - Hỗ trợ nút **Sao chép (Copy)** cho cả câu hỏi của người dùng và câu trả lời của AI với phản hồi xanh tức thì.
+   - Nút **Tải về file `.md`** giúp lưu lại phác đồ điều trị và hướng dẫn sơ cứu nhanh chóng.
 
-### 🛡️ Dành cho Quản Trị Viên (Admin Console)
-1. **Sidebar Tách Biệt Hoàn Toàn**:
-   - Chế độ xem Admin sở hữu thanh Sidebar giao diện tối (Dark Mode High-Contrast) riêng biệt với 6 công cụ quản trị.
-2. **Bảng Điều Khiển Thống Kê (Admin Dashboard)**:
-   - Theo dõi tổng số người dùng, số ca cấp cứu `RED`/`YELLOW`/`GREEN` theo thời gian thực.
-3. **Quản Lý Cơ Sở Tri Thức RAG (RAG Knowledge Engine)**:
-   - Thêm, sửa, xóa các bài viết chuyên môn thú y để làm nguồn dữ liệu củng cố câu trả lời cho Gemini.
-4. **Cấu Hình AI & Hệ Thống**:
-   - Tùy chỉnh trực tiếp Prompt hệ thống, chỉ số Temperature, mô hình AI (`gemini-3.6-flash`) và bổ sung các Từ khóa Cấp cứu.
+2. **Tự Động Tạo Hồ Sơ Bệnh Án Chuẩn Y Khoa**:
+   - AI tự động trích xuất toàn bộ đoạn chat thành hồ sơ bệnh án JSON gồm: Tóm tắt triệu chứng, Chẩn đoán, Mức độ Triage, Phác đồ xử lý, Chế độ ăn uống và Lịch tái khám.
 
----
+3. **Quản Lý Hồ Sơ Thú Cưng Cá Nhân Hóa**:
+   - Lưu trữ chi tiết tên, giống loài, độ tuổi, cân nặng, lịch tiêm phòng vắc-xin và tiền sử dị ứng để AI tự động cá nhân hóa phác đồ.
 
-## 🔐 4. PHÂN QUYỀN TỰ ĐỘNG BẰNG TÀI KHOẢN GOOGLE
+4. **Bản Đồ Phòng Khám Thú Y 24/7**:
+   - Tích hợp Google Maps hiển thị phòng khám xung quanh, hotline liên hệ khẩn cấp, giờ mở cửa và dẫn đường tức thì.
 
-Hệ thống phân định quyền truy cập tự động dựa trên Email Google:
-- **Tài khoản Google Admin** (Ví dụ: `admin@petcare.ai` hoặc email có chứa chữ `admin`): Tự động cấp quyền **Admin Quản Trị**, mở khóa toàn bộ thanh Menu Admin.
-- **Tài khoản Google Thường** (Ví dụ: `thaivinh2344@gmail.com`): Cấp quyền **User**, chuyển tới trang Chat AI & Quản lý thú cưng.
+5. **Cẩm Nang Sơ Cứu & Tri Thức Thú Y**:
+   - Thư viện bài viết chuyên sâu về các tai nạn thường gặp (sốc nhiệt, hóc dị vật, ngộ độc thức ăn...) được chuẩn hóa từ bác sĩ thú y.
 
 ---
 
-## 📱 5. THIẾT KẾ GIAO DIỆN KHÔNG TRỐI CUỘN TRANG (FIXED APP SHELL)
+### 🛡️ Cổng Quản Trị Hệ Thống (Admin Console)
+1. **Quản Lý Multi-Key Fallback Pool (Xoay vòng API Key)**:
+   - Cho phép nhập danh sách **nhiều Gemini API Key** qua giao diện trực quan với nút **[+ Thêm Key]**.
+   - Cơ chế tự động chuyển đổi key (Sequential Failover): Khi Key #1 chạm hạn mức Quota (HTTP 429), hệ thống tự động đổi sang Key #2 $\rightarrow$ Key #3 mà không làm gián đoạn người dùng.
+   - Nút **"Kiểm tra Pool"** đo trực tiếp độ trễ (latency) và kiểm tra sức khỏe từng key theo thời gian thực.
 
-- Giao diện được thiết kế theo dạng **Single-Page Fixed App Shell** (`h-screen overflow-hidden`).
-- Thanh Header và Sidebar luôn cố định trên màn hình.
-- Trong giao diện Chat AI, duy nhất vùng danh sách tin nhắn có thanh cuộn riêng (`overflow-y-auto`), giúp trải nghiệm tư vấn mượt mà chuẩn ứng dụng Web hiện đại.
+2. **Cơ Chế Dự Phòng 3 Tầng Siêu Bền (3-Tier High Availability)**:
+   - **Tầng 1**: Máy chủ AI Backend xử lý chính.
+   - **Tầng 2**: Tự động kết nối lại lần 2 nếu phát sinh lỗi mạng hoặc timeout.
+   - **Tầng 3**: Gọi trực tiếp **Gemini Direct Client API** từ trình duyệt bằng Key Pool dự phòng.
+
+3. **Bảng Điều Khiển Thống Kê (Dashboard)**:
+   - Thống kê thời gian thực tổng số người dùng, số ca bệnh theo cấp độ màu, tỷ lệ cấp cứu và xu hướng chat.
+
+4. **Quản Trị Cơ Sở Tri Thức RAG (Knowledge Management)**:
+   - Thêm, sửa, xóa các bài viết y khoa; tự động tạo vector embedding 768 chiều lưu vào Supabase pgvector.
+
+5. **Nhật Ký Hệ Thống (System & API Logs)**:
+   - Ghi lại chi tiết mọi yêu cầu chat, độ trễ xử lý, chuyển đổi key fallback và trạng thái Supabase.
 
 ---
 
-## 🛠️ 6. HƯỚNG DẪN SETUP & CHẠY DỰ ÁN (LOCAL DEVELOPMENT)
+## 🗄️ 3. CẤU TRÚC CƠ SỞ DỮ LIỆU (SUPABASE SCHEMA)
 
-Thực hiện tuần tự các bước dưới đây để chạy đầy đủ cả Frontend, Backend Node.js, Database Supabase và Service AI nhận diện hình ảnh Python.
+Hệ thống sử dụng các bảng PostgreSQL chính sau:
 
-### 📥 Bước 1: Clone dự án và cài đặt Node.js dependencies
-Mở Terminal và chạy các lệnh sau:
+| Tên Bảng | Mục Đích Lưu Trữ |
+|---|---|
+| `users` | Tài khoản, email Google, vai trò (`admin`/`user`), trạng thái (`active`/`suspended`) |
+| `pets` | Hồ sơ thú cưng (tên, giống, tuổi, cân nặng, vắc-xin, dị ứng) |
+| `medical_records` | Lịch sử bệnh án, mức độ Triage, phác đồ điều trị, lời khuyên dinh dưỡng |
+| `articles` | Bài viết chuyên môn thú y RAG kèm trường `embedding vector(768)` |
+| `clinics` | Danh sách phòng khám thú y, tọa độ `lat`/`lng`, số hotline, dịch vụ 24/7 |
+| `chat_sessions` | Lịch sử các phiên hội thoại tư vấn theo từng người dùng |
+| `system_config` | Cấu hình AI Model, Key Pool, Temperature, System Prompt, Service URL |
+| `api_logs` | Nhật ký hệ thống, mã lỗi HTTP, thời gian phản hồi (latency ms) |
+| `unlock_requests` | Yêu cầu xem xét mở khóa của các tài khoản bị tạm ngưng |
+
+---
+
+## 🛠️ 4. HƯỚNG DẪN CÀI ĐẶT & CHẠY DỰ ÁN (GETTING STARTED)
+
+### 📥 Bước 1: Clone kho mã nguồn và cài đặt thư viện
 ```bash
 # Clone repository
 git clone https://github.com/Haruto1508/pet-chatbot-AI.git
@@ -96,42 +104,65 @@ git clone https://github.com/Haruto1508/pet-chatbot-AI.git
 # Di chuyển vào thư mục dự án
 cd pet-chatbot-AI
 
-# Cài đặt các thư viện Node.js
+# Cài đặt các gói phụ thuộc
 npm install
 ```
 
-### 🔑 Bước 2: Thiết lập biến môi trường (`.env`)
-Tạo một file tên là `.env` ở thư mục gốc của dự án (dựa trên file `.env.example`) và điền đầy đủ các thông tin:
+### 🔑 Bước 2: Thiết lập file môi trường (`.env`)
+Tạo file `.env` tại thư mục gốc với các thông số sau:
+
 ```env
-GEMINI_API_KEY="your_google_gemini_api_key_here"
-APP_URL="http://localhost:3000"
-GOOGLE_MAPS_PLATFORM_KEY="your_google_maps_api_key"
-SUPABASE_URL="https://your_project_reference.supabase.co"
-SUPABASE_ANON_KEY="your_supabase_anon_public_key"
+# Google Gemini AI Key (Tạo miễn phí tại https://aistudio.google.com/)
+GEMINI_API_KEY="AIzaSyYourGeminiApiKeyHere"
+
+# Danh sách nhiều key dự phòng phân cách bằng dấu phẩy (tùy chọn)
+GEMINI_API_KEYS="AIzaSyKey1...,AIzaSyKey2..."
+
+# Google Maps API Key (Dùng cho bản đồ tìm kiếm phòng khám)
+GOOGLE_MAPS_PLATFORM_KEY="AIzaSyYourGoogleMapsKeyHere"
+
+# Cấu hình Supabase (Lấy từ Supabase Dashboard -> Project Settings -> API)
+SUPABASE_URL="https://your-project-id.supabase.co"
+SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# Secret Key Backend (Tùy chọn - Dùng để bypass RLS ở phía server)
+SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+# Cổng khởi chạy máy chủ (Mặc định 3000)
+PORT=3000
 ```
 
-### 🗄️ Bước 3: Thiết lập Cơ sở dữ liệu Supabase (Vector DB & RAG)
-Dự án sử dụng cơ sở dữ liệu Vector để tìm kiếm ngữ cảnh RAG nâng cao.
-1. Truy cập vào trang quản trị Supabase SQL Editor của bạn.
-2. Sao chép và chạy nội dung trong file [scripts/setup_vector_db.sql](file:///d:/Study%20Materials/Semester%208/EXE201/petcare-ai/scripts/setup_vector_db.sql) để tạo bảng, kích hoạt phần mở rộng `pgvector` và hàm RPC tìm kiếm tương đồng vector (`match_articles`).
-3. Chạy câu lệnh Node.js sau để nạp dữ liệu mẫu (Seed Data) và các bài viết tri thức thú y ban đầu vào Supabase:
+### 🗄️ Bước 3: Thiết lập CSDL Supabase & Phân Quyền RLS
+1. Mở **Supabase Dashboard** $\rightarrow$ **SQL Editor**.
+2. Chạy nội dung trong file [`scripts/schema.sql`](file:///c:/Projects/pet-chatbot-AI/scripts/schema.sql) để tạo toàn bộ bảng và kích hoạt extension vector.
+3. Chạy nội dung trong file [`scripts/setup_rls_policies.sql`](file:///c:/Projects/pet-chatbot-AI/scripts/setup_rls_policies.sql) để thiết lập chính sách Row Level Security an toàn.
+4. Nạp dữ liệu mẫu ban đầu:
    ```bash
    npx tsx scripts/seedSupabase.ts
    ```
 
-### ☁️ Bước 4: Kết nối Service AI Nhận Diện Bệnh (Đã được Cloud hóa)
-Toàn bộ mô hình AI nhận diện hình ảnh (PyTorch ResNet) đã được nhóm triển khai độc lập thành công trên nền tảng đám mây (Render Cloud).
-Do đó, người tải code **không cần** phải cài đặt Python hay tải các file Model nặng nề về máy tính cá nhân nữa. Mã nguồn Node.js/React sẽ tự động gọi qua API Cloud.
-*(Tuy nhiên, nếu bạn là Developer muốn huấn luyện lại model, mã nguồn gốc vẫn được lưu giữ tại thư mục `python_ai_service`).*
-
-### 🚀 Bước 5: Chạy ứng dụng Web chính (React + Node.js)
-Mở một terminal mới (vẫn ở thư mục gốc của dự án `pet-chatbot-AI`) và chạy:
+### 🚀 Bước 4: Khởi chạy ứng dụng
 ```bash
+# Khởi động môi trường phát triển (Full-stack dev server)
 npm run dev
 ```
-*Hệ thống Web chính sẽ hoạt động tại địa chỉ: `http://localhost:3000`.*
+Ứng dụng sẽ hoạt động tại địa chỉ: **`http://localhost:3000`**
+
+### 📦 Bước 5: Biên dịch cho môi trường Production (Build)
+```bash
+npm run build
+```
+Lệnh này sẽ biên dịch đồng thời cả mã nguồn Vite Frontend (tối ưu hóa chunking) và Express Server qua `esbuild`.
 
 ---
 
-© 2026 PetCare AI System. Được phát triển dựa trên **Google Gemini AI** & **React 19**.
+## 🔒 5. PHÂN QUYỀN TỰ ĐỘNG BẰNG GOOGLE AUTH
 
+- **Quyền Admin**: Đăng nhập bằng tài khoản email chứa từ khóa `admin` (hoặc email cấu hình trong cơ sở dữ liệu) $\rightarrow$ Hệ thống tự động mở khóa toàn bộ thanh công cụ Quản trị viên (`/admin_dashboard`, `/admin_users`, `/admin_config`, `/admin_rag`, `/admin_logs`, `/admin_health`).
+- **Quyền User**: Đăng nhập bằng tài khoản Google bất kỳ hoặc trải nghiệm nhanh dưới vai trò Khách (`Guest`).
+
+---
+
+## 📄 6. GIẤY PHÉP & BẢN QUYỀN
+Dự án được xây dựng và phát triển cho mục đích giáo dục, chăm sóc y tế cộng đồng và nghiên cứu ứng dụng AI.  
+© 2026 **PetCare AI Team**. All Rights Reserved.
