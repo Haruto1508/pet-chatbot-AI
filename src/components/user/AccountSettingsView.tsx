@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut } from 'lucide-react';
+import { Settings, User, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut, Smartphone } from 'lucide-react';
 import { UserProfile, ChatSession } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -251,6 +251,40 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* PWA App Install Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
+            <Smartphone className="w-4 h-4 text-emerald-600" /> Cài Đặt Ứng Dụng
+          </h3>
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-xs text-slate-600">
+              <p className="font-bold text-slate-800 mb-1">Ứng dụng PetCare AI</p>
+              <p>Cài đặt ứng dụng vào màn hình chính để truy cập nhanh chóng như một ứng dụng độc lập.</p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const promptEvent = (window as any).deferredPrompt;
+                if (promptEvent) {
+                  promptEvent.prompt();
+                  const { outcome } = await promptEvent.userChoice;
+                  if (outcome === 'accepted') {
+                    showSuccess('Cảm ơn bạn đã cài đặt ứng dụng!');
+                    (window as any).deferredPrompt = null;
+                  }
+                } else if (window.matchMedia('(display-mode: standalone)').matches) {
+                  showSuccess('Ứng dụng đã được cài đặt trên thiết bị của bạn!');
+                } else {
+                  showError('Trình duyệt của bạn không hỗ trợ cài đặt hoặc bạn đã cài đặt rồi.');
+                }
+              }}
+              className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
+            >
+              Cài Đặt Ngay
+            </button>
           </div>
         </div>
 

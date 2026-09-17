@@ -114,6 +114,44 @@ export function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // PWA Install Prompt Logic
+  const [showPwaBanner, setShowPwaBanner] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      (window as any).deferredPrompt = e; // make it accessible globally for AccountSettingsView
+      
+      const hasDismissed = localStorage.getItem('petcare_pwa_dismissed');
+      // If not dismissed and not already installed (standalone mode)
+      if (!hasDismissed && !window.matchMedia('(display-mode: standalone)').matches) {
+        setShowPwaBanner(true);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallPwa = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowPwaBanner(false);
+      localStorage.setItem('petcare_pwa_dismissed', 'true');
+    }
+    setDeferredPrompt(null);
+    (window as any).deferredPrompt = null;
+  };
+
+  const handleDismissPwa = () => {
+    setShowPwaBanner(false);
+    localStorage.setItem('petcare_pwa_dismissed', 'true');
+  };
+
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
   const [isOpenMobileSidebar, setIsOpenMobileSidebar] = useState<boolean>(false);
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState<boolean>(true);
@@ -377,6 +415,33 @@ export function App() {
             setIsLoginModalOpen(true);
           }}
         />
+      )}
+
+      {/* PWA Install Banner */}
+      {showPwaBanner && (
+        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 flex flex-col gap-3 animate-in slide-in-from-bottom-5">
+          <div className="flex items-start gap-3">
+            <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-xl" />
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-slate-800">Cài đặt PetCare AI</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Thêm ứng dụng vào màn hình chính để trải nghiệm mượt mà hơn và truy cập nhanh.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <button
+              onClick={handleDismissPwa}
+              className="flex-1 px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+            >
+              Để sau
+            </button>
+            <button
+              onClick={handleInstallPwa}
+              className="flex-1 px-3 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-sm"
+            >
+              Cài đặt ngay
+            </button>
+          </div>
+        </div>
       )}
     </NotificationProvider>
   );

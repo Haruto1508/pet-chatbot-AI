@@ -1,0 +1,21 @@
+{
+  "name": "PetCare AI",
+  "short_name": "PetCare",
+  "description": "Bác sĩ thú y AI hỗ trợ 24/7",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
