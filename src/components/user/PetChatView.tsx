@@ -688,8 +688,16 @@ export const PetChatView: React.FC<Props> = ({
       {/* Main Chat Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white overflow-hidden relative">
 
-        {/* Floating Header Toolbar */}
-
+        {/* Floating sidebar toggle — only when sidebar is closed */}
+        {!isSidebarOpen && (
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            title="Mở lịch sử chat"
+            className="absolute top-3 left-3 z-30 hidden md:flex p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 bg-white shadow-sm transition-all"
+          >
+            <PanelLeftOpen className="w-4 h-4" />
+          </button>
+        )}
 
         {/* Scrollable Messages — full height */}
         <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
@@ -834,7 +842,8 @@ export const PetChatView: React.FC<Props> = ({
         </div>
 
         {/* Floating Bottom Bar */}
-        <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-transparent pt-6 px-3 sm:px-4 pb-3">
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-transparent pt-6 pb-3">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6">
           {/* Prompt suggestions */}
           <div className="flex gap-1.5 overflow-x-auto scrollbar-none mb-2">
             {promptSuggestions.map((prompt, idx) => (
@@ -929,6 +938,7 @@ export const PetChatView: React.FC<Props> = ({
                 <Send className="w-4 h-4" />
               </button>
             )}
+          </div>
           </div>
         </div>
       </div>
