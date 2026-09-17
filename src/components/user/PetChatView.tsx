@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Send,
   Square,
@@ -49,25 +49,25 @@ function groupSessionsByDate(sessions: ChatSession[]): { label: string; sessions
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
   const groups: Record<string, ChatSession[]> = {
-    'HĂ´m nay': [],
-    'HĂ´m qua': [],
-    'Tuáº§n nĂ y': [],
-    'ThĂ¡ng nĂ y': [],
-    'TrÆ°á»›c Ä‘Ă³': [],
+    'Hôm nay': [],
+    'Hôm qua': [],
+    'Tuần này': [],
+    'Tháng này': [],
+    'Trước đó': [],
   };
 
   for (const session of sessions) {
     const sessionDate = new Date(session.updatedAt || session.createdAt);
     if (sessionDate >= today) {
-      groups['HĂ´m nay'].push(session);
+      groups['Hôm nay'].push(session);
     } else if (sessionDate >= yesterday) {
-      groups['HĂ´m qua'].push(session);
+      groups['Hôm qua'].push(session);
     } else if (sessionDate >= thisWeekStart) {
-      groups['Tuáº§n nĂ y'].push(session);
+      groups['Tuần này'].push(session);
     } else if (sessionDate >= thisMonthStart) {
-      groups['ThĂ¡ng nĂ y'].push(session);
+      groups['Tháng này'].push(session);
     } else {
-      groups['TrÆ°á»›c Ä‘Ă³'].push(session);
+      groups['Trước đó'].push(session);
     }
   }
 
@@ -85,10 +85,10 @@ function formatRelativeTime(dateStr: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'Vá»«a xong';
-  if (diffMins < 60) return `${diffMins} phĂºt trÆ°á»›c`;
-  if (diffHours < 24) return `${diffHours} giá» trÆ°á»›c`;
-  if (diffDays < 7) return `${diffDays} ngĂ y trÆ°á»›c`;
+  if (diffMins < 1) return 'Vừa xong';
+  if (diffMins < 60) return `${diffMins} phút trước`;
+  if (diffHours < 24) return `${diffHours} giờ trước`;
+  if (diffDays < 7) return `${diffDays} ngày trước`;
   return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
 }
 
@@ -139,7 +139,7 @@ export const PetChatView: React.FC<Props> = ({
   const getWelcomeMsg = (): ChatMessage => ({
     id: 'msg_welcome',
     sender: 'ai',
-    text: `Xin chĂ o! TĂ´i lĂ  **PetCare AI Assistant** - BĂ¡c sÄ© ThĂº y Trá»±c tuyáº¿n há»— trá»£ 24/7. đŸ¾\n\nHĂ£y mĂ´ táº£ chi tiáº¿t cĂ¡c triá»‡u chá»©ng hoáº·c cĂ¢u há»i vá» sá»©c khá»e, dinh dÆ°á»¡ng thĂº cÆ°ng cá»§a báº¡n. TĂ´i sáº½ cháº©n Ä‘oĂ¡n ban Ä‘áº§u, Ä‘Æ°a ra hÆ°á»›ng dáº«n sÆ¡ cá»©u vĂ  phĂ¢n loáº¡i má»©c Ä‘á»™ nguy hiá»ƒm theo **Khung Cáº£nh BĂ¡o đŸ”´ Äá» / đŸŸ¡ VĂ ng / đŸŸ¢ Xanh**.`,
+    text: `Xin chào! Tôi là **PetCare AI Assistant** - Bác sĩ Thú y Trực tuyến hỗ trợ 24/7. 🐾\n\nHãy mô tả chi tiết các triệu chứng hoặc câu hỏi về sức khỏe, dinh dưỡng thú cưng của bạn. Tôi sẽ chẩn đoán ban đầu, đưa ra hướng dẫn sơ cứu và phân loại mức độ nguy hiểm theo **Khung Cảnh Báo 🔴 Đỏ / 🟡 Vàng / 🟢 Xanh**.`,
     timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     triageLevel: 'GREEN'
   });
@@ -186,11 +186,11 @@ export const PetChatView: React.FC<Props> = ({
   const groupedSessions = useMemo(() => groupSessionsByDate(filteredSessions), [filteredSessions]);
 
   const promptSuggestions = [
-    'đŸ± MĂ¨o bá»‹ nĂ´n bá»t tráº¯ng 2 láº§n sĂ¡ng nay',
-    'đŸ¶ ChĂ³ bá» Äƒn, lá» Ä‘á» vĂ  Ä‘i tiĂªu phĂ¢n lá»ng',
-    'đŸ¨ SÆ¡ cá»©u kháº©n cáº¥p chĂ³ Äƒn nháº§m socola',
-    'đŸ¥— Cháº¿ Ä‘á»™ dinh dÆ°á»¡ng cho mĂ¨o bá»‹ bá»‡nh tháº­n',
-    'đŸ©¸ ChĂ³ bá»‹ cháº£y mĂ¡u nÆ°á»›u rÄƒng vĂ  hĂ´i miá»‡ng'
+    '🐱 Mèo bị nôn bọt trắng 2 lần sáng nay',
+    '🐶 Chó bỏ ăn, lờ đờ và đi tiêu phân lỏng',
+    '🚨 Sơ cứu khẩn cấp chó ăn nhầm socola',
+    '🥗 Chế độ dinh dưỡng cho mèo bị bệnh thận',
+    '🩸 Chó bị chảy máu nướu răng và hôi miệng'
   ];
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,7 +229,7 @@ export const PetChatView: React.FC<Props> = ({
         startNewChat();
       }
     } catch (e) {
-      showError('XĂ³a tháº¥t báº¡i');
+      showError('Xóa thất bại');
     } finally {
       setSessionToDelete(null);
     }
@@ -241,7 +241,7 @@ export const PetChatView: React.FC<Props> = ({
       setSessions([]);
       startNewChat();
     } catch (e) {
-      showError('XĂ³a táº¥t cáº£ tháº¥t báº¡i');
+      showError('Xóa tất cả thất bại');
     } finally {
       setIsDeletingAll(false);
     }
@@ -414,7 +414,7 @@ export const PetChatView: React.FC<Props> = ({
         const errMsg: ChatMessage = {
           id: `err_${Date.now()}`,
           sender: 'ai',
-          text: `â ï¸ **Lá»—i káº¿t ná»‘i**: ${err.message || 'KhĂ´ng thá»ƒ káº¿t ná»‘i tá»›i há»‡ thá»‘ng AI. Vui lĂ²ng kiá»ƒm tra láº¡i máº¡ng hoáº·c thá»­ láº¡i.'}`,
+          text: `⚠️ **Lỗi kết nối**: ${err.message || 'Không thể kết nối tới hệ thống AI. Vui lòng kiểm tra lại mạng hoặc thử lại.'}`,
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           triageLevel: 'YELLOW'
         };
@@ -430,7 +430,7 @@ export const PetChatView: React.FC<Props> = ({
 
   const handleCreateMedicalRecord = async () => {
     if (messages.length <= 1) {
-      showError('Vui lĂ²ng trĂ² chuyá»‡n vá»›i AI Ä‘á»ƒ cung cáº¥p triá»‡u chá»©ng trÆ°á»›c khi táº¡o há»“ sÆ¡ bá»‡nh Ă¡n.');
+      showError('Vui lòng trò chuyện với AI để cung cấp triệu chứng trước khi tạo hồ sơ bệnh án.');
       return;
     }
 
@@ -441,7 +441,7 @@ export const PetChatView: React.FC<Props> = ({
         setEditRecordDraft(res.record);
       }
     } catch (e) {
-      showError('KhĂ´ng thá»ƒ tá»•ng há»£p triá»‡u chá»©ng lĂºc nĂ y. Vui lĂ²ng thá»­ láº¡i.');
+      showError('Không thể tổng hợp triệu chứng lúc này. Vui lòng thử lại.');
     } finally {
       setIsSummarizing(false);
     }
@@ -452,10 +452,10 @@ export const PetChatView: React.FC<Props> = ({
     setIsSavingRecord(true);
     try {
       const savedRecord = await api.createMedicalRecord(editRecordDraft);
-      showSuccess(`ÄĂ£ lÆ°u há»“ sÆ¡ bá»‡nh Ă¡n thĂ nh cĂ´ng cho thĂº cÆ°ng ${savedRecord.petName}!`);
+      showSuccess(`Đã lưu hồ sơ bệnh án thành công cho thú cưng ${savedRecord.petName}!`);
       setEditRecordDraft(null);
     } catch (e) {
-      showError('LÆ°u há»“ sÆ¡ bá»‡nh Ă¡n tháº¥t báº¡i. Vui lĂ²ng thá»­ láº¡i.');
+      showError('Lưu hồ sơ bệnh án thất bại. Vui lòng thử lại.');
     } finally {
       setIsSavingRecord(false);
     }
@@ -477,7 +477,7 @@ export const PetChatView: React.FC<Props> = ({
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="TĂ¬m kiáº¿m cuá»™c trĂ² chuyá»‡n..."
+            placeholder="Tìm kiếm cuộc trò chuyện..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full text-xs pl-8 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent placeholder:text-slate-400 transition-all"
@@ -498,21 +498,21 @@ export const PetChatView: React.FC<Props> = ({
         {isLoadingSessions ? (
           <div className="flex flex-col items-center justify-center py-12 text-slate-400">
             <Loader2 className="w-6 h-6 animate-spin mb-2 text-emerald-500" />
-            <p className="text-xs">Äang táº£i lá»‹ch sá»­...</p>
+            <p className="text-xs">Đang tải lịch sử...</p>
           </div>
         ) : groupedSessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-slate-400">
             {searchQuery ? (
               <>
                 <Search className="w-8 h-8 mb-2 opacity-20" />
-                <p className="text-xs">KhĂ´ng tĂ¬m tháº¥y káº¿t quáº£</p>
-                <p className="text-[10px] mt-1 text-slate-300">Thá»­ tá»« khĂ³a khĂ¡c</p>
+                <p className="text-xs">Không tìm thấy kết quả</p>
+                <p className="text-[10px] mt-1 text-slate-300">Thử từ khóa khác</p>
               </>
             ) : (
               <>
                 <MessageSquare className="w-8 h-8 mb-2 opacity-20" />
-                <p className="text-xs">ChÆ°a cĂ³ lá»‹ch sá»­ trĂ² chuyá»‡n</p>
-                <p className="text-[10px] mt-1 text-slate-300">Báº¯t Ä‘áº§u cuá»™c trĂ² chuyá»‡n má»›i</p>
+                <p className="text-xs">Chưa có lịch sử trò chuyện</p>
+                <p className="text-[10px] mt-1 text-slate-300">Bắt đầu cuộc trò chuyện mới</p>
               </>
             )}
           </div>
@@ -559,7 +559,7 @@ export const PetChatView: React.FC<Props> = ({
                       <button
                         onClick={(e) => handleDeleteSessionClick(session.id, e)}
                         className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 -mr-0.5 -mt-0.5"
-                        title="XĂ³a Ä‘oáº¡n chat"
+                        title="Xóa đoạn chat"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -585,7 +585,7 @@ export const PetChatView: React.FC<Props> = ({
                       </span>
                       {msgCount > 0 && (
                         <span className={`text-[10px] ${isActive ? 'text-emerald-500' : 'text-slate-400'}`}>
-                          â€¢ {msgCount} tin nháº¯n
+                          • {msgCount} tin nhắn
                         </span>
                       )}
                     </div>
@@ -611,11 +611,11 @@ export const PetChatView: React.FC<Props> = ({
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-all text-xs shadow-sm active:scale-[0.98]"
             >
               <Plus className="w-3.5 h-3.5" />
-              Chat Má»›i
+              Chat Mới
             </button>
             <button
               onClick={() => setIsSidebarOpen(false)}
-              title="ÄĂ³ng lá»‹ch sá»­"
+              title="Đóng lịch sử"
               className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all flex-shrink-0"
             >
               <PanelLeftClose className="w-4 h-4" />
@@ -627,10 +627,10 @@ export const PetChatView: React.FC<Props> = ({
           {/* Footer */}
           {sessions.length > 0 && (
             <div className="px-3 py-2 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[10px] text-slate-400">{sessions.length} cuá»™c trĂ² chuyá»‡n</span>
+              <span className="text-[10px] text-slate-400">{sessions.length} cuộc trò chuyện</span>
               <button
                 onClick={() => setIsDeletingAll(true)}
-                title="XĂ³a táº¥t cáº£"
+                title="Xóa tất cả"
                 className="p-1 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
               >
                 <Trash2 className="w-3 h-3" />
@@ -661,7 +661,7 @@ export const PetChatView: React.FC<Props> = ({
             <div className="flex items-center justify-between px-4 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <History className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-base font-bold text-slate-900">Lá»‹ch sá»­ trĂ² chuyá»‡n</h3>
+                <h3 className="text-base font-bold text-slate-900">Lịch sử trò chuyện</h3>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -669,7 +669,7 @@ export const PetChatView: React.FC<Props> = ({
                   className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs shadow-sm"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  Má»›i
+                  Mới
                 </button>
                 <button
                   onClick={() => setIsMobileHistoryOpen(false)}
@@ -688,24 +688,24 @@ export const PetChatView: React.FC<Props> = ({
       {/* Main Chat Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white overflow-hidden relative">
 
-        {/* Floating sidebar toggle â€” only when sidebar is closed */}
+        {/* Floating sidebar toggle — only when sidebar is closed */}
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
-            title="Má»Ÿ lá»‹ch sá»­ chat"
+            title="Mở lịch sử chat"
             className="absolute top-3 left-3 z-30 hidden md:flex p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 bg-white shadow-sm transition-all"
           >
             <PanelLeftOpen className="w-4 h-4" />
           </button>
         )}
 
-        {/* â”€â”€ Shared: hidden file input â”€â”€ */}
+        {/* ── Shared: hidden file input ── */}
         <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
 
         {messages.filter(m => m.sender === 'user').length === 0 && !isLoading ? (
-          /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-             EMPTY STATE â€” input + greeting centered on screen
-             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+          /* ══════════════════════════════════════════════════════════════════════
+             EMPTY STATE — input + greeting centered on screen
+             ══════════════════════════════════════════════════════════════════════ */
           <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 gap-6">
             {/* Greeting */}
             <div className="text-center space-y-2">
@@ -713,8 +713,8 @@ export const PetChatView: React.FC<Props> = ({
                 <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-1"
                   onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
               </div>
-              <h2 className="text-2xl font-bold text-slate-800">ChĂºng ta nĂªn báº¯t Ä‘áº§u tá»« Ä‘Ă¢u?</h2>
-              <p className="text-sm text-slate-400">MĂ´ táº£ triá»‡u chá»©ng hoáº·c cĂ¢u há»i vá» sá»©c khá»e thĂº cÆ°ng cá»§a báº¡n.</p>
+              <h2 className="text-2xl font-bold text-slate-800">Chúng ta nên bắt đầu từ đâu?</h2>
+              <p className="text-sm text-slate-400">Mô tả triệu chứng hoặc câu hỏi về sức khỏe thú cưng của bạn.</p>
             </div>
 
             {/* Centered input bar */}
@@ -723,7 +723,7 @@ export const PetChatView: React.FC<Props> = ({
                 <div className="mb-2 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2 font-semibold text-emerald-800">
                     <ImageIcon className="w-3.5 h-3.5" />
-                    <span>ÄĂ£ Ä‘Ă­nh kĂ¨m áº£nh</span>
+                    <span>Đã đính kèm ảnh</span>
                   </div>
                   <button onClick={() => setSelectedImage(null)} className="text-slate-400 hover:text-red-600 p-0.5 rounded">
                     <X className="w-3.5 h-3.5" />
@@ -731,7 +731,7 @@ export const PetChatView: React.FC<Props> = ({
                 </div>
               )}
               <div className="flex items-center gap-2 bg-white rounded-2xl border border-slate-200 shadow-lg px-2 py-1.5">
-                <button onClick={() => fileInputRef.current?.click()} title="ÄĂ­nh kĂ¨m áº£nh"
+                <button onClick={() => fileInputRef.current?.click()} title="Đính kèm ảnh"
                   className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors flex-shrink-0">
                   <ImageIcon className="w-4 h-4" />
                 </button>
@@ -741,7 +741,7 @@ export const PetChatView: React.FC<Props> = ({
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
-                  placeholder={selectedPet ? `MĂ´ táº£ triá»‡u chá»©ng cá»§a ${selectedPet.name}...` : 'MĂ´ táº£ triá»‡u chá»©ng, tĂ¬nh tráº¡ng bá» Äƒn, nĂ´n má»­a...'}
+                  placeholder={selectedPet ? `Mô tả triệu chứng của ${selectedPet.name}...` : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'}
                   className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 py-1.5 px-2"
                 />
                 <button type="button" onClick={() => handleSend()}
@@ -765,132 +765,151 @@ export const PetChatView: React.FC<Props> = ({
           </div>
 
         ) : (
-          /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-             CHAT MODE â€” scrollable messages + floating input bar
-             â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+          /* ══════════════════════════════════════════════════════════════════════
+             CHAT MODE — scrollable messages + floating input bar
+             ══════════════════════════════════════════════════════════════════════ */
           <>
-            {/* Scrollable Messages */}
-            <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
-              <div className="max-w-3xl mx-auto px-4 sm:px-6">
-                {messages.filter(m => m.id !== 'msg_welcome').map((msg, idx) => {
-                  const isUser = msg.sender === 'user';
+        {/* Scrollable Messages — full height */}
+        <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6">
+            {messages.filter(m => m.id !== 'msg_welcome').map((msg, idx) => {
+              const isUser = msg.sender === 'user';
 
-                  if (isUser) {
-                    return (
-                      <div key={msg.id} className="py-4 flex justify-end">
-                        <div className="max-w-[80%] flex flex-col items-end gap-2">
-                          {msg.imageUrl && (
-                            <img src={msg.imageUrl} alt="Triá»‡u chá»©ng thĂº cÆ°ng"
-                              className="max-w-[280px] rounded-2xl border border-slate-200 object-cover shadow-sm" />
-                          )}
-                          {msg.text && (
-                            <div className="bg-slate-100 text-slate-900 rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
-                              {msg.text}
-                            </div>
-                          )}
-                          <span className="text-[10px] text-slate-400 pr-1">{msg.timestamp}</span>
+              if (isUser) {
+                return (
+                  <div key={msg.id} className="py-4 flex justify-end">
+                    <div className="max-w-[80%] flex flex-col items-end gap-2">
+                      {msg.imageUrl && (
+                        <img
+                          src={msg.imageUrl}
+                          alt="Triệu chứng thú cưng"
+                          className="max-w-[280px] rounded-2xl border border-slate-200 object-cover shadow-sm"
+                        />
+                      )}
+                      {msg.text && (
+                        <div className="bg-slate-100 text-slate-900 rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
+                          {msg.text}
                         </div>
-                      </div>
-                    );
-                  }
-
-                  // AI message
-                  const triageTooltip = msg.triageDetails
-                    ? `${msg.triageDetails.riskTitle}\n${msg.triageDetails.urgency}${
-                        msg.triageDetails.immediateActions?.length
-                          ? '\nâ€¢ ' + msg.triageDetails.immediateActions.join('\nâ€¢ ')
-                          : ''
-                      }`
-                    : '';
-
-                  return (
-                    <div key={msg.id} className="group py-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
-                          <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-0.5"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                        </div>
-                        <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
-
-                        {msg.triageLevel && (
-                          <span title={triageTooltip}
-                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full cursor-help select-none ${
-                              msg.triageLevel === 'RED' ? 'bg-red-100 text-red-700'
-                              : msg.triageLevel === 'YELLOW' ? 'bg-amber-100 text-amber-700'
-                              : 'bg-emerald-100 text-emerald-700'
-                            }`}>
-                            {msg.triageLevel === 'RED' ? 'đŸ”´' : msg.triageLevel === 'YELLOW' ? 'đŸŸ¡' : 'đŸŸ¢'}
-                            <span className="hidden sm:inline">
-                              {msg.triageDetails?.riskTitle || (msg.triageLevel === 'GREEN' ? 'BĂ¬nh thÆ°á»ng' : msg.triageLevel)}
-                            </span>
-                          </span>
-                        )}
-
-                        <span className="text-[10px] text-slate-400 ml-auto">{msg.timestamp}</span>
-                      </div>
-
-                      <div className="pl-8 markdown-body prose prose-sm max-w-none text-slate-800
-                        prose-headings:text-slate-900 prose-headings:font-bold
-                        prose-strong:text-slate-900 prose-strong:font-semibold
-                        prose-li:marker:text-slate-400
-                        prose-a:text-emerald-600 prose-a:no-underline hover:prose-a:underline
-                        prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-emerald-700
-                        prose-blockquote:border-emerald-400 prose-blockquote:text-slate-600">
-                        {msg.imageUrl && (
-                          <img src={msg.imageUrl} alt="Triá»‡u chá»©ng thĂº cÆ°ng"
-                            className="max-w-[280px] rounded-xl border border-slate-200 mb-4 object-cover shadow-sm" />
-                        )}
-                        <Markdown>{msg.text}</Markdown>
-                        {isLoading && idx === messages.length - 1 && (
-                          <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />
-                        )}
-                      </div>
-
-                      <div className="pl-8 mt-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(msg.text);
-                            setCopiedMsgId(msg.id);
-                            setTimeout(() => setCopiedMsgId(null), 2000);
-                          }}
-                          title="Sao chĂ©p"
-                          className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                          {copiedMsgId === msg.id
-                            ? <><CheckCircle className="w-3.5 h-3.5 text-emerald-600" /><span className="text-[11px] text-emerald-600 font-medium">ÄĂ£ sao chĂ©p</span></>
-                            : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                        <button title="Há»¯u Ă­ch" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                          <ThumbsUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button title="KhĂ´ng há»¯u Ă­ch" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
-                          <ThumbsDown className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Typing dots */}
-                {isLoading && !hasReceivedFirstChunk && (
-                  <div className="py-6">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
-                        <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-0.5" />
-                      </div>
-                      <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
-                    </div>
-                    <div className="pl-8 flex items-center gap-1.5">
-                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }} />
-                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1s' }} />
-                      <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1s' }} />
+                      )}
+                      <span className="text-[10px] text-slate-400 pr-1">{msg.timestamp}</span>
                     </div>
                   </div>
-                )}
+                );
+              }
 
-                <div ref={messagesEndRef} className="h-36" />
+              // AI message — full width, clean, ChatGPT style
+              const triageTooltip = msg.triageDetails
+                ? `${msg.triageDetails.riskTitle}\n${msg.triageDetails.urgency}${
+                    msg.triageDetails.immediateActions?.length
+                      ? '\n• ' + msg.triageDetails.immediateActions.join('\n• ')
+                      : ''
+                  }`
+                : '';
+
+              return (
+                <div key={msg.id} className="group py-6">
+                  {/* AI Header: logo + name + triage badge */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                      <img
+                        src="/logo.png"
+                        alt="PetCare AI"
+                        className="w-full h-full object-contain p-0.5"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
+
+                    {msg.triageLevel && (
+                      <span
+                        title={triageTooltip}
+                        className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full cursor-help select-none ${
+                          msg.triageLevel === 'RED'
+                            ? 'bg-red-100 text-red-700'
+                            : msg.triageLevel === 'YELLOW'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-emerald-100 text-emerald-700'
+                        }`}
+                      >
+                        {msg.triageLevel === 'RED' ? '🔴' : msg.triageLevel === 'YELLOW' ? '🟡' : '🟢'}
+                        <span className="hidden sm:inline">
+                          {msg.triageDetails?.riskTitle || (msg.triageLevel === 'GREEN' ? 'Bình thường' : msg.triageLevel)}
+                        </span>
+                      </span>
+                    )}
+
+                    <span className="text-[10px] text-slate-400 ml-auto">{msg.timestamp}</span>
+                  </div>
+
+                  {/* AI Content */}
+                  <div className="pl-8 markdown-body prose prose-sm max-w-none text-slate-800
+                    prose-headings:text-slate-900 prose-headings:font-bold
+                    prose-strong:text-slate-900 prose-strong:font-semibold
+                    prose-li:marker:text-slate-400
+                    prose-a:text-emerald-600 prose-a:no-underline hover:prose-a:underline
+                    prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-emerald-700
+                    prose-blockquote:border-emerald-400 prose-blockquote:text-slate-600">
+                    {msg.imageUrl && (
+                      <img
+                        src={msg.imageUrl}
+                        alt="Triệu chứng thú cưng"
+                        className="max-w-[280px] rounded-xl border border-slate-200 mb-4 object-cover shadow-sm"
+                      />
+                    )}
+                    <Markdown>{msg.text}</Markdown>
+                    {isLoading && idx === messages.length - 1 && (
+                      <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />
+                    )}
+                  </div>
+
+                  {/* Action buttons — appear on hover */}
+                  <div className="pl-8 mt-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(msg.text);
+                        setCopiedMsgId(msg.id);
+                        setTimeout(() => setCopiedMsgId(null), 2000);
+                      }}
+                      title="Sao chép"
+                      className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      {copiedMsgId === msg.id ? (
+                        <><CheckCircle className="w-3.5 h-3.5 text-emerald-600" /><span className="text-[11px] text-emerald-600 font-medium">Đã sao chép</span></>
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button title="Hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                      <ThumbsUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button title="Không hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                      <ThumbsDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Typing dots loading indicator */}
+            {isLoading && !hasReceivedFirstChunk && (
+              <div className="py-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                    <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-0.5" />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
+                </div>
+                <div className="pl-8 flex items-center gap-1.5">
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }} />
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1s' }} />
+                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1s' }} />
+                </div>
               </div>
-            </div>
+            )}
 
+            <div ref={messagesEndRef} className="h-36" />
+          </div>
+        </div>
             {/* Floating Bottom Bar */}
             <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-transparent pt-6 pb-3">
               <div className="max-w-3xl mx-auto px-4 sm:px-6">
@@ -898,7 +917,7 @@ export const PetChatView: React.FC<Props> = ({
                   <div className="mb-2 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 font-semibold text-emerald-800">
                       <ImageIcon className="w-3.5 h-3.5" />
-                      <span>ÄĂ£ Ä‘Ă­nh kĂ¨m áº£nh</span>
+                      <span>Đã đính kèm ảnh</span>
                     </div>
                     <button onClick={() => setSelectedImage(null)} className="text-slate-400 hover:text-red-600 p-0.5 rounded">
                       <X className="w-3.5 h-3.5" />
@@ -907,7 +926,7 @@ export const PetChatView: React.FC<Props> = ({
                 )}
 
                 <div className="flex items-center gap-2 bg-white rounded-2xl border border-slate-200 shadow-md px-2 py-1.5">
-                  <button onClick={() => fileInputRef.current?.click()} disabled={isLoading} title="ÄĂ­nh kĂ¨m áº£nh"
+                  <button onClick={() => fileInputRef.current?.click()} disabled={isLoading} title="Đính kèm ảnh"
                     className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0">
                     <ImageIcon className="w-4 h-4" />
                   </button>
@@ -920,22 +939,22 @@ export const PetChatView: React.FC<Props> = ({
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !isLoading) handleSend(); }}
                     placeholder={
-                      isLoading ? 'AI Ä‘ang pháº£n há»“i, vui lĂ²ng chá» hoáº·c báº¥m Dá»«ng...'
-                      : selectedPet ? `MĂ´ táº£ triá»‡u chá»©ng bá»‡nh cá»§a ${selectedPet.name}...`
-                      : 'MĂ´ táº£ triá»‡u chá»©ng, tĂ¬nh tráº¡ng bá» Äƒn, nĂ´n má»­a...'
+                      isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
+                      : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}...`
+                      : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'
                     }
                     className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 disabled:text-slate-400 py-1.5 px-2"
                   />
 
                   {isLoading ? (
-                    <button type="button" onClick={handleStop} title="Dá»«ng"
+                    <button type="button" onClick={handleStop} title="Dừng"
                       className="p-2 rounded-xl bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold transition-all flex items-center gap-1 flex-shrink-0">
                       <Square className="w-3.5 h-3.5 fill-current" />
-                      <span className="text-xs">Dá»«ng</span>
+                      <span className="text-xs">Dừng</span>
                     </button>
                   ) : (
                     <button type="button" onClick={() => handleSend()}
-                      disabled={!input.trim() && !selectedImage} title="Gá»­i"
+                      disabled={!input.trim() && !selectedImage} title="Gửi"
                       className="p-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer disabled:cursor-not-allowed flex-shrink-0">
                       <Send className="w-4 h-4" />
                     </button>
@@ -952,12 +971,12 @@ export const PetChatView: React.FC<Props> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-slate-900 mb-2">
-              {isDeletingAll ? 'XĂ³a táº¥t cáº£ lá»‹ch sá»­' : 'XĂ³a Ä‘oáº¡n chat'}
+              {isDeletingAll ? 'Xóa tất cả lịch sử' : 'Xóa đoạn chat'}
             </h3>
             <p className="text-slate-600 text-sm mb-6">
               {isDeletingAll 
-                ? 'Báº¡n cĂ³ cháº¯c cháº¯n muá»‘n xĂ³a toĂ n bá»™ lá»‹ch sá»­ trĂ² chuyá»‡n khĂ´ng? HĂ nh Ä‘á»™ng nĂ y khĂ´ng thá»ƒ hoĂ n tĂ¡c.'
-                : 'Báº¡n cĂ³ cháº¯c cháº¯n muá»‘n xĂ³a Ä‘oáº¡n chat nĂ y khĂ´ng? HĂ nh Ä‘á»™ng nĂ y khĂ´ng thá»ƒ hoĂ n tĂ¡c.'}
+                ? 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện không? Hành động này không thể hoàn tác.'
+                : 'Bạn có chắc chắn muốn xóa đoạn chat này không? Hành động này không thể hoàn tác.'}
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -967,13 +986,13 @@ export const PetChatView: React.FC<Props> = ({
                 }}
                 className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
               >
-                Há»§y bá»
+                Hủy bỏ
               </button>
               <button
                 onClick={isDeletingAll ? confirmDeleteAll : confirmDeleteSession}
                 className="px-4 py-2 font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-xs"
               >
-                XĂ¡c nháº­n XĂ³a
+                Xác nhận Xóa
               </button>
             </div>
           </div>
@@ -987,7 +1006,7 @@ export const PetChatView: React.FC<Props> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-emerald-600" />
-                <h3 className="text-lg font-black text-slate-950">Xem & XĂ¡c Nháº­n Há»“ SÆ¡ Bá»‡nh Ăn AI</h3>
+                <h3 className="text-lg font-black text-slate-950">Xem & Xác Nhận Hồ Sơ Bệnh Án AI</h3>
               </div>
               <button
                 onClick={() => setEditRecordDraft(null)}
@@ -999,13 +1018,13 @@ export const PetChatView: React.FC<Props> = ({
 
             <div className="space-y-4 flex-1 text-xs sm:text-sm overflow-y-auto pr-1">
               <p className="text-slate-500 font-semibold mb-3">
-                DÆ°á»›i Ä‘Ă¢y lĂ  thĂ´ng tin bá»‡nh Ă¡n Ä‘Æ°á»£c AI tá»± Ä‘á»™ng tá»•ng há»£p tá»« Ä‘oáº¡n chat. Báº¡n cĂ³ thá»ƒ kiá»ƒm tra vĂ  tĂ¹y Ă½ chá»‰nh sá»­a láº¡i trÆ°á»›c khi lÆ°u trá»¯ chĂ­nh thá»©c.
+                Dưới đây là thông tin bệnh án được AI tự động tổng hợp từ đoạn chat. Bạn có thể kiểm tra và tùy ý chỉnh sửa lại trước khi lưu trữ chính thức.
               </p>
 
               {/* Grid 2 Columns for Basic Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">TĂªn thĂº cÆ°ng</label>
+                  <label className="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Tên thú cưng</label>
                   <input
                     type="text"
                     value={editRecordDraft.petName || ''}
@@ -1015,7 +1034,7 @@ export const PetChatView: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">LoĂ i váº­t</label>
+                  <label className="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Loài vật</label>
                   <input
                     type="text"
                     value={editRecordDraft.petSpecies || ''}
@@ -1025,15 +1044,15 @@ export const PetChatView: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Má»©c cáº£nh bĂ¡o</label>
+                  <label className="block text-[11px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Mức cảnh báo</label>
                   <select
                     value={editRecordDraft.triageLevel || 'GREEN'}
                     onChange={(e) => setEditRecordDraft(prev => prev ? { ...prev, triageLevel: e.target.value as any } : null)}
                     className="w-full text-xs font-bold px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
                   >
-                    <option value="GREEN">đŸŸ¢ Xanh (An toĂ n / Nháº¹)</option>
-                    <option value="YELLOW">đŸŸ¡ VĂ ng (Theo dĂµi thĂªm)</option>
-                    <option value="RED">đŸ”´ Äá» (Kháº©n cáº¥p / Nguy hiá»ƒm)</option>
+                    <option value="GREEN">🟢 Xanh (An toàn / Nhẹ)</option>
+                    <option value="YELLOW">🟡 Vàng (Theo dõi thêm)</option>
+                    <option value="RED">🔴 Đỏ (Khẩn cấp / Nguy hiểm)</option>
                   </select>
                 </div>
               </div>
@@ -1041,7 +1060,7 @@ export const PetChatView: React.FC<Props> = ({
               {/* Textareas */}
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">đŸ©º TĂ³m táº¯t triá»‡u chá»©ng</label>
+                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">🩺 Tóm tắt triệu chứng</label>
                   <textarea
                     rows={2}
                     value={editRecordDraft.symptomSummary || ''}
@@ -1051,7 +1070,7 @@ export const PetChatView: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-extrabold text-blue-600 uppercase tracking-wider mb-1">đŸ”¬ Cháº©n Ä‘oĂ¡n ban Ä‘áº§u</label>
+                  <label className="block text-[11px] font-extrabold text-blue-600 uppercase tracking-wider mb-1">🔬 Chẩn đoán ban đầu</label>
                   <textarea
                     rows={2}
                     value={editRecordDraft.diagnosis || ''}
@@ -1061,7 +1080,7 @@ export const PetChatView: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-extrabold text-emerald-600 uppercase tracking-wider mb-1">đŸ’ PhĂ¡c Ä‘á»“ Ä‘iá»u trá»‹ & SÆ¡ cá»©u</label>
+                  <label className="block text-[11px] font-extrabold text-emerald-600 uppercase tracking-wider mb-1">💊 Phác đồ điều trị & Sơ cứu</label>
                   <textarea
                     rows={3}
                     value={editRecordDraft.treatmentPlan || ''}
@@ -1071,7 +1090,7 @@ export const PetChatView: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-extrabold text-amber-700 uppercase tracking-wider mb-1">đŸ¥— Cháº¿ Ä‘á»™ dinh dÆ°á»¡ng & ChÄƒm sĂ³c</label>
+                  <label className="block text-[11px] font-extrabold text-amber-700 uppercase tracking-wider mb-1">🥗 Chế độ dinh dưỡng & Chăm sóc</label>
                   <textarea
                     rows={2}
                     value={editRecordDraft.dietaryAdvice || ''}
@@ -1081,7 +1100,7 @@ export const PetChatView: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-extrabold text-purple-600 uppercase tracking-wider mb-1">đŸ“Œ LÆ°u Ă½ tĂ¡i khĂ¡m & Theo dĂµi</label>
+                  <label className="block text-[11px] font-extrabold text-purple-600 uppercase tracking-wider mb-1">📌 Lưu ý tái khám & Theo dõi</label>
                   <textarea
                     rows={2}
                     value={editRecordDraft.followUpNotes || ''}
@@ -1098,7 +1117,7 @@ export const PetChatView: React.FC<Props> = ({
                 disabled={isSavingRecord}
                 className="px-5 py-2.5 font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-colors text-xs"
               >
-                Há»§y bá»
+                Hủy bỏ
               </button>
               <button
                 onClick={handleSaveMedicalRecord}
@@ -1108,10 +1127,10 @@ export const PetChatView: React.FC<Props> = ({
                 {isSavingRecord ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    Äang lÆ°u trá»¯...
+                    Đang lưu trữ...
                   </>
                 ) : (
-                  'XĂ¡c nháº­n & LÆ°u Há»“ SÆ¡'
+                  'Xác nhận & Lưu Hồ Sơ'
                 )}
               </button>
             </div>
