@@ -118,11 +118,14 @@ async function startServer(isVercel = false) {
     try {
       const ai = getGeminiClient(customApiKey);
       const response = await ai.models.embedContent({
-        model: 'text-embedding-004',
+        model: 'gemini-embedding-001',
         contents: text,
+        config: {
+          outputDimensionality: 768
+        }
       });
       const dims = response.embeddings?.[0]?.values?.length ?? 0;
-      serverLog('GEMINI', 'OK', 'Embedding generated', `text-embedding-004 → ${dims} dims`, Date.now() - t0);
+      serverLog('GEMINI', 'OK', 'Embedding generated', `gemini-embedding-001 → ${dims} dims`, Date.now() - t0);
       return response.embeddings?.[0]?.values || null;
     } catch (e: any) {
       serverLog('GEMINI', 'ERROR', 'Embedding FAILED', e?.message?.substring(0, 80), Date.now() - t0);
@@ -394,13 +397,17 @@ async function startServer(isVercel = false) {
             };
           }
           const ai = getGeminiClient(geminiKey);
-          await ai.models.embedContent({ model: 'text-embedding-004', contents: 'ping' });
+          await ai.models.embedContent({
+            model: 'gemini-embedding-001',
+            contents: 'ping',
+            config: { outputDimensionality: 768 }
+          });
           const latencyMs = Date.now() - t0;
           const keyPreview = geminiKey.substring(0, 8) + '...' + geminiKey.slice(-4);
           serverLog('GEMINI', 'OK', 'keep-alive ping', `Token hợp lệ [${keyPreview}]`, latencyMs);
           return {
             name: 'Google Gemini AI Studio',
-            target: 'text-embedding-004',
+            target: 'gemini-embedding-001',
             status: 'ok',
             latencyMs,
             message: 'API Key hoạt động tốt & quota sẵn sàng'
