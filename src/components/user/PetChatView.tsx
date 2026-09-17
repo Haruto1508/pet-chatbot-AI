@@ -600,10 +600,10 @@ export const PetChatView: React.FC<Props> = ({
   );
 
   return (
-    <div className="flex h-full w-full gap-3 relative">
+    <div className="flex h-full w-full">
       {/* Desktop Sidebar for Chat History */}
       {isSidebarOpen && (
-        <div className="w-64 flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm hidden md:flex flex-col overflow-hidden">
+        <div className="w-64 flex-shrink-0 bg-white border-r border-slate-200 hidden md:flex flex-col overflow-hidden">
           {/* Sidebar Header */}
           <div className="px-3 pt-3 pb-2 border-b border-slate-100 flex items-center gap-2">
             <button
@@ -686,7 +686,7 @@ export const PetChatView: React.FC<Props> = ({
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden relative">
+      <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white overflow-hidden relative">
 
         {/* Floating Header Toolbar */}
 
