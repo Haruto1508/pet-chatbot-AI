@@ -596,7 +596,7 @@ export const api = {
     keyCandidates.push((process.env as any).GEMINI_API_KEYS);
     keyCandidates.push(process.env.GEMINI_API_KEY);
 
-    const fallbackApiKeys = parseApiKeys(keyCandidates.flat());
+    const fallbackApiKeys = parseApiKeys(keyCandidates);
 
     const callPrimary = async (attemptNum: number): Promise<void> => {
       const controller = new AbortController();
@@ -799,7 +799,8 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
                 const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
                 if (alertMatch && alertMatch[1]) {
                   try {
-                    const parsed = JSON.parse(alertMatch[1].trim());
+                    const cleanJsonStr = (alertMatch[1] || '').trim();
+                    const parsed = JSON.parse(cleanJsonStr);
                     const level: TriageLevel = (parsed.level === 'RED' || parsed.level === 'YELLOW' || parsed.level === 'GREEN')
                       ? parsed.level
                       : 'YELLOW';

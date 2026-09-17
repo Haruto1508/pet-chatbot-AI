@@ -6,19 +6,22 @@
  * Extracts and cleans a list of unique API keys from a comma-separated,
  * newline-separated, or array source.
  */
-export function parseApiKeys(input?: string | string[] | null): string[] {
+export function parseApiKeys(input?: any): string[] {
   if (!input) return [];
 
-  let rawList: string[] = [];
+  let rawList: any[] = [];
   if (Array.isArray(input)) {
-    rawList = input;
+    // Flatten nested arrays and filter out nullish values
+    rawList = input.flat(Infinity).filter((item) => item != null && item !== '');
   } else if (typeof input === 'string') {
     // Split by newline, comma, semicolon, or carriage return
     rawList = input.split(/[\r\n,;]+/);
+  } else {
+    return [];
   }
 
   const cleaned = rawList
-    .map(k => k.trim())
+    .map(k => (k != null ? String(k).trim() : ''))
     // Ignore comments or empty tokens
     .filter(k => k.length > 5 && !k.startsWith('#') && !k.startsWith('//'));
 
