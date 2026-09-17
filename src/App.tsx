@@ -315,6 +315,7 @@ export function App() {
                 setSelectedPet={setSelectedPet}
                 onNavigateToRecords={() => setCurrentTab('records')}
                 onNavigateToPets={() => setCurrentTab('pets')}
+                onNavigateToClinics={() => setCurrentTab('clinics')}
                 currentUser={currentUser}
                 onOpenLogin={() => setIsLoginModalOpen(true)}
               />

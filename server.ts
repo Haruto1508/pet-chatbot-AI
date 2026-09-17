@@ -281,6 +281,29 @@ async function startServer(isVercel = false) {
 `).join('\n\n');
   }
 
+  let cachedClinicsSummary = '';
+  let lastClinicsFetchTime = 0;
+
+  async function getClinicsPromptContext(): Promise<string> {
+    const now = Date.now();
+    if (cachedClinicsSummary && (now - lastClinicsFetchTime < 10 * 60 * 1000)) {
+      return cachedClinicsSummary;
+    }
+    try {
+      const { data } = await supabase.from('clinics').select('name, phone, address, is_emergency_247').limit(6);
+      if (data && data.length > 0) {
+        cachedClinicsSummary = `\n[DANH SÁCH BỆNH VIỆN & PHÒNG KHÁM THÚ Y HỆ THỐNG LIÊN KẾT (HỖ TRỢ CẤP CỨU & KHÁM CHỮA)]:\n` +
+          data.map((c: any) => `- ${c.name} ${c.is_emergency_247 ? '(Trực Cấp Cứu 24/7)' : ''} | Hotline: ${c.phone} | Đ/c: ${c.address}`).join('\n') +
+          `\n(Khi chẩn đoán tình trạng cấp cứu RED/nguy kịch hoặc khi người dùng hỏi cơ sở thú y, hãy gợi ý các phòng khám cấp cứu này kèm số hotline và nhắc người dùng có thể mở tab "Tìm Phòng Khám" trên ứng dụng để xem bản đồ chỉ đường.)\n`;
+        lastClinicsFetchTime = now;
+        return cachedClinicsSummary;
+      }
+    } catch (e) {
+      // fallback
+    }
+    return cachedClinicsSummary;
+  }
+
   // --- API ENDPOINTS ---
 
   // Health check
@@ -1607,6 +1630,8 @@ ${petContextPrompt}
 ${resnetPrediction}
 
 ${ragContext}
+
+${await getClinicsPromptContext()}
 
 [LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:
 ${history ? JSON.stringify(history.slice(-4)) : 'Chưa có'}

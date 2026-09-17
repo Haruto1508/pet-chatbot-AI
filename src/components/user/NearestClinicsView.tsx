@@ -228,13 +228,9 @@ export const NearestClinicsView: React.FC = () => {
 
   const getGoogleMapsDirectionsUrl = (clinic: VetClinic) => {
     if (userLocation) {
-      return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${clinic.lat},${clinic.lng}&destination_place_id=${encodeURIComponent(
-        clinic.name
-      )}`;
+      return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${clinic.lat},${clinic.lng}`;
     }
-    return `https://www.google.com/maps/dir/?api=1&destination=${clinic.lat},${clinic.lng}&destination_place_id=${encodeURIComponent(
-      clinic.name
-    )}`;
+    return `https://www.google.com/maps/dir/?api=1&destination=${clinic.lat},${clinic.lng}`;
   };
 
   return (
@@ -387,20 +383,32 @@ export const NearestClinicsView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-slate-600 pt-1 border-t border-slate-100">
+                  <div className="flex items-center justify-between text-xs text-slate-600 pt-2 border-t border-slate-100 flex-wrap gap-2">
                     <div className="flex items-center gap-1 text-amber-500 font-bold">
                       <Star className="w-3.5 h-3.5 fill-amber-400" />
                       <span>{clinic.rating}</span>
-                      <span className="text-slate-400 font-normal">({clinic.reviewsCount} đánh giá)</span>
+                      <span className="text-slate-400 font-normal">({clinic.reviewsCount})</span>
                     </div>
 
-                    <a
-                      href={`tel:${clinic.phone}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors"
-                    >
-                      <Phone className="w-3.5 h-3.5" /> {clinic.phone}
-                    </a>
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={getGoogleMapsDirectionsUrl(clinic)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                        title="Mở Google Maps chỉ đường"
+                      >
+                        <Navigation className="w-3 h-3 text-purple-600" /> Chỉ đường
+                      </a>
+                      <a
+                        href={`tel:${clinic.phone}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Phone className="w-3 h-3" /> Gọi
+                      </a>
+                    </div>
                   </div>
                 </div>
               );

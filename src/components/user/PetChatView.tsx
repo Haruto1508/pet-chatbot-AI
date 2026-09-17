@@ -28,10 +28,14 @@ import {
   Lock,
   Brain,
   Stethoscope,
-  Check
+  Check,
+  MapPin,
+  Phone,
+  Navigation,
+  ShieldAlert
 } from 'lucide-react';
 import Markdown from 'react-markdown';
-import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord } from '../../types';
+import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord, VetClinic } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -42,6 +46,7 @@ interface Props {
   setSelectedPet: (pet: PetProfile | null) => void;
   onNavigateToRecords: () => void;
   onNavigateToPets: () => void;
+  onNavigateToClinics?: () => void;
   currentUser: UserProfile;
   onOpenLogin?: () => void;
 }
@@ -129,6 +134,7 @@ export const PetChatView: React.FC<Props> = ({
   setSelectedPet,
   onNavigateToRecords,
   onNavigateToPets,
+  onNavigateToClinics,
   currentUser,
   onOpenLogin
 }) => {
@@ -162,6 +168,75 @@ export const PetChatView: React.FC<Props> = ({
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [hasReceivedFirstChunk, setHasReceivedFirstChunk] = useState(false);
   const [thinkingStep, setThinkingStep] = useState<number>(0);
+
+  // Emergency Clinics Suggestion States
+  const [clinics, setClinics] = useState<VetClinic[]>([]);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    // Pre-fetch clinics for quick emergency recommendations
+    api.getClinics().then((data) => {
+      if (data && Array.isArray(data)) {
+        setClinics(data);
+      }
+    }).catch((e) => console.warn('Lỗi tải danh sách phòng khám cho chat:', e));
+
+    // Detect user position for distance ranking
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        () => {
+          fetch('https://ipapi.co/json/')
+            .then(res => res.json())
+            .then(data => {
+              if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+                setUserLocation({ lat: data.latitude, lng: data.longitude });
+              }
+            })
+            .catch(() => {});
+        },
+        { timeout: 8000, maximumAge: 300000 }
+      );
+    }
+  }, []);
+
+  const getDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const emergencyClinics = useMemo(() => {
+    if (!clinics || clinics.length === 0) return [];
+    return clinics
+      .map((c) => ({
+        ...c,
+        distanceKm: userLocation ? getDistanceKm(userLocation.lat, userLocation.lng, c.lat, c.lng) : undefined
+      }))
+      .sort((a, b) => {
+        if (a.isEmergency247 && !b.isEmergency247) return -1;
+        if (!a.isEmergency247 && b.isEmergency247) return 1;
+        if (a.distanceKm !== undefined && b.distanceKm !== undefined) {
+          return a.distanceKm - b.distanceKm;
+        }
+        return 0;
+      });
+  }, [clinics, userLocation]);
+
+  const getClinicDirectionsUrl = (clinic: VetClinic) => {
+    if (userLocation) {
+      return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${clinic.lat},${clinic.lng}`;
+    }
+    return `https://www.google.com/maps/dir/?api=1&destination=${clinic.lat},${clinic.lng}`;
+  };
 
   // Progressive reasoning step timer
   useEffect(() => {
@@ -1107,6 +1182,94 @@ export const PetChatView: React.FC<Props> = ({
                     </Markdown>
                     {isLoading && idx === messages.length - 1 && (
                       <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />
+                    )}
+
+                    {/* 🚨 Khuyến nghị phòng khám cấp cứu nếu AI phát hiện nguy kịch (RED) */}
+                    {(msg.triageLevel === 'RED' ||
+                      msg.triageDetails?.urgency?.toLowerCase().includes('khẩn cấp') ||
+                      msg.triageDetails?.riskTitle?.toLowerCase().includes('cấp cứu') ||
+                      (msg.text.includes('🚨 Dấu hiệu cần đi thú y gấp') && msg.triageLevel !== 'GREEN')) && (
+                      <div className="mt-4 p-4 rounded-2xl bg-gradient-to-br from-red-50 via-rose-50/50 to-amber-50/40 border-2 border-red-200/90 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-red-200">
+                            <ShieldAlert className="w-5 h-5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-black px-2 py-0.5 rounded-md bg-red-600 text-white uppercase tracking-wider">
+                                🚨 TÌNH TRẠNG CẤP CỨU
+                              </span>
+                              <span className="text-xs font-bold text-red-950">
+                                Cần đưa thú cưng đến bệnh viện thú y gần nhất!
+                              </span>
+                            </div>
+                            <p className="text-xs text-red-800 mt-1 leading-relaxed">
+                              AI nhận định bé cưng có dấu hiệu nguy hiểm cần can thiệp y tế ngay. Hãy giữ ấm, tránh di chuyển mạnh và liên hệ cơ sở thú y trực cấp cứu:
+                            </p>
+
+                            {/* Danh sách phòng khám gợi ý */}
+                            <div className="mt-3 space-y-2">
+                              {emergencyClinics.slice(0, 2).map((clinic) => (
+                                <div
+                                  key={clinic.id}
+                                  className="bg-white rounded-xl p-3 border border-red-100 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <strong className="text-xs text-slate-900 font-bold">{clinic.name}</strong>
+                                      {clinic.isEmergency247 && (
+                                        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+                                          24/7 CẤP CỨU
+                                        </span>
+                                      )}
+                                      {clinic.distanceKm !== undefined && (
+                                        <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                          📍 Cách {clinic.distanceKm.toFixed(1)} km
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{clinic.address}</p>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <a
+                                      href={`tel:${clinic.phone}`}
+                                      className="flex items-center gap-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg shadow-2xs transition-colors"
+                                    >
+                                      <Phone className="w-3 h-3" /> Gọi Cấp Cứu
+                                    </a>
+                                    <a
+                                      href={getClinicDirectionsUrl(clinic)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 text-[11px] font-bold bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg shadow-2xs transition-colors"
+                                    >
+                                      <Navigation className="w-3 h-3" /> Dẫn Đường
+                                    </a>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Button mở tab Tìm Phòng Khám */}
+                            {onNavigateToClinics && (
+                              <div className="mt-3 pt-2.5 border-t border-red-200/60 flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-[11px] text-red-700 font-medium">
+                                  Xem danh sách đầy đủ và định vị bản đồ GPS
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={onNavigateToClinics}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-red-700 hover:text-red-800 bg-white hover:bg-red-50/80 px-3.5 py-1.5 rounded-xl border border-red-300 shadow-2xs transition-all cursor-pointer"
+                                >
+                                  <MapPin className="w-3.5 h-3.5 text-red-600" />
+                                  Mở Bản Đồ Tìm Phòng Khám →
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
 
