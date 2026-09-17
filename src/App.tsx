@@ -240,18 +240,8 @@ export function App() {
             onToggleDesktop={() => setIsDesktopSidebarOpen(prev => !prev)}
           />
 
-          {/* Collapsed sidebar toggle button (desktop only) */}
-          {!isDesktopSidebarOpen && (
-            <button
-              onClick={() => setIsDesktopSidebarOpen(true)}
-              className="hidden lg:flex items-center justify-center w-8 h-full border-r border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all flex-shrink-0"
-              title="Mở Sidebar"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          )}
+
+
 
           {/* Mobile open sidebar button */}
           <button
