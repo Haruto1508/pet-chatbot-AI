@@ -11,25 +11,27 @@ import { SuspendedAccountModal } from './components/common/SuspendedAccountModal
 import { NotificationProvider } from './contexts/NotificationContext';
 import { NotFoundView } from './components/common/NotFoundView';
 
-// Lazy-loaded User Views (only loaded when user navigates to the tab)
-const PetChatView = lazy(() => import('./components/user/PetChatView').then(m => ({ default: m.PetChatView })));
-const MedicalHistoryView = lazy(() => import('./components/user/MedicalHistoryView').then(m => ({ default: m.MedicalHistoryView })));
-const MedicalRecordDetailView = lazy(() => import('./components/user/MedicalRecordDetailView').then(m => ({ default: m.MedicalRecordDetailView })));
-const ArticlesNewsView = lazy(() => import('./components/user/ArticlesNewsView').then(m => ({ default: m.ArticlesNewsView })));
-const EmergencyFirstAidView = lazy(() => import('./components/user/EmergencyFirstAidView').then(m => ({ default: m.EmergencyFirstAidView })));
-const NearestClinicsView = lazy(() => import('./components/user/NearestClinicsView').then(m => ({ default: m.NearestClinicsView })));
-const PetManagementView = lazy(() => import('./components/user/PetManagementView').then(m => ({ default: m.PetManagementView })));
-const AccountSettingsView = lazy(() => import('./components/user/AccountSettingsView').then(m => ({ default: m.AccountSettingsView })));
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
-// Lazy-loaded Admin Views
-const AdminDashboardView = lazy(() => import('./components/admin/AdminDashboardView').then(m => ({ default: m.AdminDashboardView })));
-const AdminUsersView = lazy(() => import('./components/admin/AdminUsersView').then(m => ({ default: m.AdminUsersView })));
-const AdminPetsRecordsView = lazy(() => import('./components/admin/AdminPetsRecordsView').then(m => ({ default: m.AdminPetsRecordsView })));
-const AdminClinicsView = lazy(() => import('./components/admin/AdminClinicsView').then(m => ({ default: m.AdminClinicsView })));
-const AdminKnowledgeRAGView = lazy(() => import('./components/admin/AdminKnowledgeRAGView').then(m => ({ default: m.AdminKnowledgeRAGView })));
-const AdminSystemConfigView = lazy(() => import('./components/admin/AdminSystemConfigView').then(m => ({ default: m.AdminSystemConfigView })));
-const AdminHealthCheckView  = lazy(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
-const AdminLogView          = lazy(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
+// Lazy-loaded User Views with auto-retry on new deployments
+const PetChatView = lazyWithRetry(() => import('./components/user/PetChatView').then(m => ({ default: m.PetChatView })));
+const MedicalHistoryView = lazyWithRetry(() => import('./components/user/MedicalHistoryView').then(m => ({ default: m.MedicalHistoryView })));
+const MedicalRecordDetailView = lazyWithRetry(() => import('./components/user/MedicalRecordDetailView').then(m => ({ default: m.MedicalRecordDetailView })));
+const ArticlesNewsView = lazyWithRetry(() => import('./components/user/ArticlesNewsView').then(m => ({ default: m.ArticlesNewsView })));
+const EmergencyFirstAidView = lazyWithRetry(() => import('./components/user/EmergencyFirstAidView').then(m => ({ default: m.EmergencyFirstAidView })));
+const NearestClinicsView = lazyWithRetry(() => import('./components/user/NearestClinicsView').then(m => ({ default: m.NearestClinicsView })));
+const PetManagementView = lazyWithRetry(() => import('./components/user/PetManagementView').then(m => ({ default: m.PetManagementView })));
+const AccountSettingsView = lazyWithRetry(() => import('./components/user/AccountSettingsView').then(m => ({ default: m.AccountSettingsView })));
+
+// Lazy-loaded Admin Views with auto-retry on new deployments
+const AdminDashboardView = lazyWithRetry(() => import('./components/admin/AdminDashboardView').then(m => ({ default: m.AdminDashboardView })));
+const AdminUsersView = lazyWithRetry(() => import('./components/admin/AdminUsersView').then(m => ({ default: m.AdminUsersView })));
+const AdminPetsRecordsView = lazyWithRetry(() => import('./components/admin/AdminPetsRecordsView').then(m => ({ default: m.AdminPetsRecordsView })));
+const AdminClinicsView = lazyWithRetry(() => import('./components/admin/AdminClinicsView').then(m => ({ default: m.AdminClinicsView })));
+const AdminKnowledgeRAGView = lazyWithRetry(() => import('./components/admin/AdminKnowledgeRAGView').then(m => ({ default: m.AdminKnowledgeRAGView })));
+const AdminSystemConfigView = lazyWithRetry(() => import('./components/admin/AdminSystemConfigView').then(m => ({ default: m.AdminSystemConfigView })));
+const AdminHealthCheckView  = lazyWithRetry(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
+const AdminLogView          = lazyWithRetry(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
 
 // Loading spinner fallback for lazy-loaded components
 function PageLoader() {
