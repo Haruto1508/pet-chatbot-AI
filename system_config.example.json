@@ -1,7 +1,7 @@
 {
   "aiModel": "gemini-3.6-flash",
   "temperature": 0.4,
-  "systemPrompt": "Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.",
+  "systemPrompt": "Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống Vethic AI. Hãy tư vấn ngắn gọn, chính xác.",
   "maxTokens": 2048,
   "emergencyKeywords": [
     "máu",

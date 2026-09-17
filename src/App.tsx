@@ -434,7 +434,7 @@ export function App() {
           <div className="flex items-start gap-3">
             <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-xl" />
             <div className="flex-1">
-              <h3 className="text-sm font-bold text-slate-800">Cài đặt PetCare AI</h3>
+              <h3 className="text-sm font-bold text-slate-800">Cài đặt Vethic AI</h3>
               <p className="text-xs text-slate-500 mt-0.5">Thêm ứng dụng vào màn hình chính để trải nghiệm mượt mà hơn và truy cập nhanh.</p>
             </div>
           </div>

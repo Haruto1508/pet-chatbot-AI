@@ -9,7 +9,7 @@ import torch
 from torchvision import models, transforms
 import torch.nn as nn
 
-app = FastAPI(title="PetCare AI - ResNet Image Classification API")
+app = FastAPI(title="Vethic AI - ResNet Image Classification API")
 
 # --- CẤU HÌNH ---
 MODEL_PATH       = os.getenv('MODEL_PATH', 'disease_model.pth')
@@ -105,7 +105,7 @@ class ImageRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"message": "PetCare ResNet API is running."}
+    return {"message": "Vethic ResNet API is running."}
 
 
 @app.get("/health")

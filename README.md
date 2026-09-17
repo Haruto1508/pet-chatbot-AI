@@ -1,6 +1,6 @@
-# 🐾 PetCare AI — Hệ Thống Y Tế & Chẩn Đoán Sơ Cứu Thú Cưng 24/7
+# 🐾 Vethic AI — Hệ Thống Y Tế & Chẩn Đoán Sơ Cứu Thú Cưng 24/7
 
-> **PetCare AI** là nền tảng y tế thú y số toàn diện (Full-stack Web App) tích hợp trí tuệ nhân tạo đa phương thức **Google Gemini 2.5 Flash**, dịch vụ thị giác máy tính **PyTorch ResNet**, và cơ sở tri thức chuyên sâu **RAG (pgvector 768 dimensions)**. Ứng dụng cung cấp khả năng phân loại khẩn cấp (Triage 3 cấp độ), tư vấn điều trị sơ cứu thời gian thực, quản lý bệnh án điện tử, bản đồ phòng khám 24/7 và giao diện quản trị phân quyền nâng cao.
+> **Vethic AI** là nền tảng y tế thú y số toàn diện (Full-stack Web App) tích hợp trí tuệ nhân tạo đa phương thức **Google Gemini 2.5 Flash**, dịch vụ thị giác máy tính **PyTorch ResNet**, và cơ sở tri thức chuyên sâu **RAG (pgvector 768 dimensions)**. Ứng dụng cung cấp khả năng phân loại khẩn cấp (Triage 3 cấp độ), tư vấn điều trị sơ cứu thời gian thực, quản lý bệnh án điện tử, bản đồ phòng khám 24/7 và giao diện quản trị phân quyền nâng cao.
 
 ---
 
@@ -165,4 +165,4 @@ Lệnh này sẽ biên dịch đồng thời cả mã nguồn Vite Frontend (t�
 
 ## 📄 6. GIẤY PHÉP & BẢN QUYỀN
 Dự án được xây dựng và phát triển cho mục đích giáo dục, chăm sóc y tế cộng đồng và nghiên cứu ứng dụng AI.  
-© 2026 **PetCare AI Team**. All Rights Reserved.
+© 2026 **Vethic AI Team**. All Rights Reserved.

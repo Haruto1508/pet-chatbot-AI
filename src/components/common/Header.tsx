@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
       case 'admin_config':
         return { title: 'Cấu Hình Mô Hình AI & Tham Số', badge: 'System Config' };
       default:
-        return { title: 'PetCare AI System', badge: 'Trực Tuyến' };
+        return { title: 'Vethic AI System', badge: 'Trực Tuyến' };
     }
   };
 
@@ -79,8 +79,8 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0"></span>
             <span className="font-medium text-[11px] sm:text-xs">
-              <span className="hidden sm:inline">PetCare AI — Hệ Thống Tư Vấn Bệnh Lý & Sơ Cứu Khẩn Cấp Thú Cưng 24/7</span>
-              <span className="sm:hidden">PetCare AI — Tư Vấn Thú Cưng 24/7</span>
+              <span className="hidden sm:inline">Vethic AI — Hệ Thống Tư Vấn Bệnh Lý & Sơ Cứu Khẩn Cấp Thú Cưng 24/7</span>
+              <span className="sm:hidden">Vethic AI — Tư Vấn Thú Cưng 24/7</span>
             </span>
           </div>
 

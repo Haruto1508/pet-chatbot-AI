@@ -1,13 +1,13 @@
-# 🤖 PETCARE AI - PROJECT LLM CONTEXT & COMPREHENSIVE ARCHITECTURE
+# 🤖 VETHIC AI - PROJECT LLM CONTEXT & COMPREHENSIVE ARCHITECTURE
 
 > **NOTE FOR AI / CHAT ASSISTANTS**:
-> Read this file to immediately understand the entire **PetCare AI System** codebase without needing to scan individual source files. It outlines the architecture, data schemas, backend endpoints, RAG workflow, Google Auth role evaluation, state management, and component breakdown.
+> Read this file to immediately understand the entire **Vethic AI System** codebase without needing to scan individual source files. It outlines the architecture, data schemas, backend endpoints, RAG workflow, Google Auth role evaluation, state management, and component breakdown.
 
 ---
 
 ## 🚀 1. SYSTEM OVERVIEW & ARCHITECTURE
 
-- **Application Name**: PetCare AI — Veterinary Triage & Medical Management System
+- **Application Name**: Vethic AI — Veterinary Triage & Medical Management System
 - **Core Purpose**: AI-powered pet medical triage, RAG knowledge consultation, medical record generation, pet management, emergency first aid, clinic map locator, and an admin management dashboard.
 - **Tech Stack**:
   - **Frontend**: React 19, TypeScript, Vite 6, Tailwind CSS v4, Lucide React icons, Motion animations, React Markdown, `@vis.gl/react-google-maps`.
@@ -156,7 +156,7 @@ export interface SystemConfig {
 ## 🔑 5. AUTHENTICATION & SEPARATE SIDEBAR NAVIGATION
 
 - **Role Evaluation**: `LoginModal.tsx` evaluates the user's Google Account email:
-  - Emails with `@petcare.ai`, containing `admin`, or matching registered admin emails (`admin@petcare.ai`) are assigned **`admin`** role.
+  - Emails with `@vethic.ai`, `@petcare.ai`, containing `admin`, or matching registered admin emails (`admin@vethic.ai`) are assigned **`admin`** role.
   - All other Google accounts (e.g. `thaivinh2344@gmail.com`) receive **`user`** role.
 - **Strict Sidebar Separation**:
   - `Sidebar.tsx` dynamically switches between two completely distinct sidebar layouts:

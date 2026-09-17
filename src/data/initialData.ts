@@ -13,7 +13,7 @@ export const initialUsers: UserProfile[] = [
   {
     id: 'user_admin',
     name: 'Dr. Bác Sĩ Thú Y (Admin)',
-    email: 'admin@petcare.ai',
+    email: 'admin@vethic.ai',
     avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=150',
     role: 'admin',
     status: 'active',
@@ -201,7 +201,7 @@ Cần nằm phòng cách ly ấm áp, truyền dịch đạm và dùng kháng si
 export const initialClinics: VetClinic[] = [
   {
     id: 'clinic_01',
-    name: 'Bệnh Viện Thú Y PetCare Central 24/7',
+    name: 'Bệnh Viện Thú Y Vethic Central 24/7',
     address: '124 Nguyễn Thị Minh Khai, Phường 6, Quận 3, TP. Hồ Chí Minh',
     phone: '0903 123 456',
     lat: 10.7782,
@@ -294,7 +294,7 @@ export const defaultSystemConfig: SystemConfig = {
   aiModel: 'gemini-3.6-flash',
   temperature: 0.4,
   maxTokens: 2048,
-  systemPrompt: `Bạn là Chuyên gia Bác sĩ Thú y AI cao cấp (PetCare AI Specialist) hàng đầu Việt Nam.
+  systemPrompt: `Bạn là Chuyên gia Bác sĩ Thú y AI cao cấp (Vethic AI Specialist) hàng đầu Việt Nam.
 Nhiệm vụ của bạn là tư vấn chẩn đoán ban đầu, sơ cứu khẩn cấp, đưa ra giải pháp chăm sóc và chế độ dinh dưỡng khoa học cho các loại thú cưng (chó, mèo, chim, thú nhỏ).
 
 QUY TẮC BẮT BUỘC TRONG MỖI CÂU TRẢ LỜI:

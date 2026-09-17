@@ -107,7 +107,7 @@ async function startServer(isVercel = false) {
   const defaultSystemConfig = {
     aiModel: 'gemini-3.6-flash',
     temperature: 0.4,
-    systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
+    systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống Vethic AI. Hãy tư vấn ngắn gọn, chính xác.',
     maxTokens: 2048,
     emergencyKeywords: ['máu', 'co giật', 'khó thở', 'bất tỉnh', 'ngộ độc'],
     geminiApiKey: process.env.GEMINI_API_KEY || '',
@@ -764,7 +764,7 @@ async function startServer(isVercel = false) {
       
       // Only exact emails get automatic admin rights. 
       // Other users default to 'user' and can be upgraded manually in Supabase.
-      if (trimmedEmail === 'thaivinh2344@gmail.com' || trimmedEmail.endsWith('@petcare.ai')) {
+      if (trimmedEmail === 'thaivinh2344@gmail.com' || trimmedEmail.endsWith('@vethic.ai') || trimmedEmail.endsWith('@petcare.ai')) {
         role = 'admin';
       }
 
@@ -1386,7 +1386,7 @@ async function startServer(isVercel = false) {
         await supabase.from('users').upsert({
           id: 'guest',
           name: 'Khách (Guest)',
-          email: 'guest@petcare.ai',
+          email: 'guest@vethic.ai',
           avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
           role: 'user',
           status: 'active'

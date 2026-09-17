@@ -16,7 +16,7 @@ if sys.platform == 'win32':
 
 def main():
     print("=" * 60)
-    print("    PETCARE AI - HUAN LUYEN MODEL RESNET50 (LOCAL GPU)")
+    print("    VETHIC AI - HUAN LUYEN MODEL RESNET50 (LOCAL GPU)")
     print("=" * 60)
 
     # 1. Kiem tra thiet bi (GPU)

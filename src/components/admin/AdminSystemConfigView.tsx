@@ -245,7 +245,7 @@ export const AdminSystemConfigView: React.FC = () => {
     if (window.confirm('Khôi phục Lời nhắc Hệ thống (System Prompt) về mẫu Bác sĩ Thú y chuẩn?')) {
       setConfig({
         ...config,
-        systemPrompt: `Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Nhiệm vụ của bạn là tư vấn sức khỏe thú cưng (chó, mèo) dựa trên triệu chứng mô tả từ chủ nuôi. Luôn ưu tiên an toàn của thú cưng, trả lời súc tích, đi thẳng vào hành động. Bắt buộc bắt đầu mỗi câu trả lời bằng khối TRIAGE_ALERT để phân loại mức độ nguy hiểm.`
+        systemPrompt: `Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống Vethic AI. Nhiệm vụ của bạn là tư vấn sức khỏe thú cưng (chó, mèo) dựa trên triệu chứng mô tả từ chủ nuôi. Luôn ưu tiên an toàn của thú cưng, trả lời súc tích, đi thẳng vào hành động. Bắt buộc bắt đầu mỗi câu trả lời bằng khối TRIAGE_ALERT để phân loại mức độ nguy hiểm.`
       });
     }
   };
@@ -731,7 +731,7 @@ export const AdminSystemConfigView: React.FC = () => {
             <div>
               <h2 className="text-base font-bold text-slate-900">Lời Nhắc Hệ Thống (System Prompt)</h2>
               <p className="text-xs text-slate-500">
-                Định hình nhân cách, phong cách trả lời và quy tắc chuẩn y khoa thú y của PetCare AI.
+                Định hình nhân cách, phong cách trả lời và quy tắc chuẩn y khoa thú y của Vethic AI.
               </p>
             </div>
             <button

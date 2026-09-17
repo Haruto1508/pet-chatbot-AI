@@ -273,7 +273,7 @@ export const PetChatView: React.FC<Props> = ({
   }, []);
 
   const handleDownloadMarkdown = (text: string, title?: string) => {
-    const cleanTitle = (title || 'tu-van-petcare')
+    const cleanTitle = (title || 'tu-van-vethic')
       .toLowerCase()
       .replace(/[^a-z0-9àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s-]/g, '')
       .replace(/\s+/g, '-');
@@ -293,7 +293,7 @@ export const PetChatView: React.FC<Props> = ({
   const getWelcomeMsg = (): ChatMessage => ({
     id: 'msg_welcome',
     sender: 'ai',
-    text: `Xin chào! Tôi là **PetCare AI Assistant** - Bác sĩ Thú y Trực tuyến hỗ trợ 24/7. 🐾\n\nHãy mô tả chi tiết các triệu chứng hoặc câu hỏi về sức khỏe, dinh dưỡng thú cưng của bạn. Tôi sẽ chẩn đoán ban đầu, đưa ra hướng dẫn sơ cứu và phân loại mức độ nguy hiểm theo **Khung Cảnh Báo 🔴 Đỏ / 🟡 Vàng / 🟢 Xanh**.`,
+    text: `Xin chào! Tôi là **Vethic AI Assistant** - Bác sĩ Thú y Trực tuyến hỗ trợ 24/7. 🐾\n\nHãy mô tả chi tiết các triệu chứng hoặc câu hỏi về sức khỏe, dinh dưỡng thú cưng của bạn. Tôi sẽ chẩn đoán ban đầu, đưa ra hướng dẫn sơ cứu và phân loại mức độ nguy hiểm theo **Khung Cảnh Báo 🔴 Đỏ / 🟡 Vàng / 🟢 Xanh**.`,
     timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
     triageLevel: 'GREEN'
   });
@@ -1039,7 +1039,7 @@ export const PetChatView: React.FC<Props> = ({
                 </button>
               </div>
               <p className="text-[10px] sm:text-[11px] text-slate-400 text-center mt-2 px-2 leading-relaxed select-none">
-                PetCare AI chỉ mang tính chất tham khảo &amp; hỗ trợ tư vấn sơ bộ, không thay thế chẩn đoán y khoa từ bác sĩ thú y. Vui lòng liên hệ cơ sở thú y gần nhất trong trường hợp khẩn cấp.
+                Vethic AI chỉ mang tính chất tham khảo &amp; hỗ trợ tư vấn sơ bộ, không thay thế chẩn đoán y khoa từ bác sĩ thú y. Vui lòng liên hệ cơ sở thú y gần nhất trong trường hợp khẩn cấp.
               </p>
             </div>
 
@@ -1132,12 +1132,12 @@ export const PetChatView: React.FC<Props> = ({
                     <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
                       <img
                         src="/logo.png"
-                        alt="PetCare AI"
+                        alt="Vethic AI"
                         className="w-full h-full object-contain p-0.5"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
                     </div>
-                    <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
+                    <span className="text-sm font-semibold text-slate-900">Vethic AI</span>
 
                     {msg.triageLevel && (
                       <span
@@ -1351,9 +1351,9 @@ export const PetChatView: React.FC<Props> = ({
               <div className="py-6 animate-in fade-in duration-300">
                 <div className="flex items-center gap-2.5 mb-3.5">
                   <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-xs">
-                    <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-0.5" />
+                    <img src="/logo.png" alt="Vethic AI" className="w-full h-full object-contain p-0.5" />
                   </div>
-                  <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
+                  <span className="text-sm font-semibold text-slate-900">Vethic AI</span>
                   
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
                     <span className="relative flex h-2 w-2">
@@ -1558,7 +1558,7 @@ export const PetChatView: React.FC<Props> = ({
                   )}
                 </div>
                 <p className="text-[10px] sm:text-[11px] text-slate-400 text-center mt-2 px-2 leading-relaxed select-none">
-                  PetCare AI chỉ mang tính chất tham khảo &amp; hỗ trợ tư vấn sơ bộ, không thay thế chẩn đoán y khoa từ bác sĩ thú y. Vui lòng liên hệ cơ sở thú y gần nhất trong trường hợp khẩn cấp.
+                  Vethic AI chỉ mang tính chất tham khảo &amp; hỗ trợ tư vấn sơ bộ, không thay thế chẩn đoán y khoa từ bác sĩ thú y. Vui lòng liên hệ cơ sở thú y gần nhất trong trường hợp khẩn cấp.
                 </p>
               </div>
             </div>

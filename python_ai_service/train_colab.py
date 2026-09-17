@@ -1,5 +1,5 @@
 # ============================================================
-# PetCare AI - ResNet50 Training Script
+# Vethic AI - ResNet50 Training Script
 # Kaggle: chạy trực tiếp trong Kaggle Notebook (T4 GPU miễn phí)
 # Colab:  upload dataset lên Drive rồi mount
 # ============================================================

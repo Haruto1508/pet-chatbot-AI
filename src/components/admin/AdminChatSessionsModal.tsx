@@ -533,7 +533,7 @@ export const AdminChatSessionsModal: React.FC<AdminChatSessionsModalProps> = ({
                             {/* Message Metadata Header */}
                             <div className="flex items-center gap-2 mb-1 px-1 text-[11px]">
                               <span className="font-bold text-slate-700">
-                                {isUser ? 'Người dùng' : 'PetCare AI'}
+                                {isUser ? 'Người dùng' : 'Vethic AI'}
                               </span>
                               <span className="text-slate-400">
                                 {msg.timestamp || 'N/A'}

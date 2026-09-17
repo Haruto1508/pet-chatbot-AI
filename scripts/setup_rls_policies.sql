@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🛡️ CHÍNH SÁCH ROW LEVEL SECURITY (RLS) CHO PETCARE AI TRÊN SUPABASE
+-- 🛡️ CHÍNH SÁCH ROW LEVEL SECURITY (RLS) CHO VETHIC AI TRÊN SUPABASE
 -- Chạy script này trong: Supabase Dashboard -> SQL Editor -> Run
 -- ==============================================================================
 

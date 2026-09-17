@@ -36,7 +36,7 @@ async function fetchClinics() {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'PetCareAI/1.0 (seed script)'
+      'User-Agent': 'VethicAI/1.0 (seed script)'
     },
     body: 'data=' + encodeURIComponent(OVERPASS_QUERY),
   });

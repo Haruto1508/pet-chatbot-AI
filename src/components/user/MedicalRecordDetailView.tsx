@@ -197,7 +197,7 @@ export const MedicalRecordDetailView: React.FC<Props> = ({ record, onBack, onDel
               <span className="font-extrabold text-slate-700 flex items-center gap-1.5 mb-1">
                 <AlertTriangle className="w-4 h-4 text-amber-500" /> Khuyến cáo Y tế quan trọng:
               </span>
-              Hệ thống PetCare AI chẩn đoán dựa trên mô tả triệu chứng và cơ sở dữ liệu chuyên môn. Đây chỉ là thông tin tham khảo, hướng dẫn sơ cứu khẩn cấp ban đầu. Không thể thay thế hoàn toàn việc chẩn đoán trực tiếp bằng xét nghiệm lâm sàng tại phòng khám thú y. Hãy đưa bé đến bác sĩ thú y ngay khi mức cảnh báo hiển thị Đỏ (RED).
+              Hệ thống Vethic AI chẩn đoán dựa trên mô tả triệu chứng và cơ sở dữ liệu chuyên môn. Đây chỉ là thông tin tham khảo, hướng dẫn sơ cứu khẩn cấp ban đầu. Không thể thay thế hoàn toàn việc chẩn đoán trực tiếp bằng xét nghiệm lâm sàng tại phòng khám thú y. Hãy đưa bé đến bác sĩ thú y ngay khi mức cảnh báo hiển thị Đỏ (RED).
             </div>
 
           </div>

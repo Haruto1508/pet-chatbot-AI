@@ -272,7 +272,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
                 <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white p-2 shadow-sm border border-slate-200 flex items-center justify-center overflow-hidden group-hover:scale-105 transition-transform">
                   <img
                     src="/logo.png"
-                    alt="PetCare AI Logo"
+                    alt="Vethic AI Logo"
                     className="w-full h-full object-contain"
                   />
                 </div>
@@ -283,7 +283,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
 
               <div className="text-xs text-slate-600">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <p className="font-extrabold text-slate-900 text-sm">PetCare AI Assistant</p>
+                  <p className="font-extrabold text-slate-900 text-sm">Vethic AI Assistant</p>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
                     Ứng Dụng Chính Thức
                   </span>

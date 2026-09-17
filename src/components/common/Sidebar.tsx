@@ -77,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-black text-white">PetCare</span>
+                    <span className="text-sm font-black text-white">Vethic</span>
                     <span className="bg-amber-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded uppercase">ADMIN</span>
                   </div>
                 </div>
@@ -221,9 +221,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center justify-between px-3 pt-4 pb-2">
             <div onClick={() => handleNav("chat")} className="flex items-center gap-2 cursor-pointer group">
               <div className="w-8 h-8 rounded-xl overflow-hidden flex-shrink-0 group-hover:scale-105 transition-transform">
-                <img src="/logo.png" alt="PetCare" className="w-full h-full object-contain" />
+                <img src="/logo.png" alt="Vethic" className="w-full h-full object-contain" />
               </div>
-              <span className="text-sm font-black text-slate-900 tracking-tight">PetCare AI</span>
+              <span className="text-sm font-black text-slate-900 tracking-tight">Vethic AI</span>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={onCloseMobile} title="Đóng sidebar"

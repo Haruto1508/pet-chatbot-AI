@@ -19,7 +19,7 @@ ADD COLUMN IF NOT EXISTS fallback_timeout_ms INTEGER DEFAULT 20000;
 
 -- Đảm bảo có hàng cấu hình id = 1
 INSERT INTO public.system_config (id, ai_model, temperature, system_prompt, max_tokens, updated_at)
-VALUES (1, 'gemini-2.5-flash', 0.4, 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI.', 2048, NOW())
+VALUES (1, 'gemini-2.5-flash', 0.4, 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống Vethic AI.', 2048, NOW())
 ON CONFLICT (id) DO NOTHING;
 
 SELECT * FROM public.system_config WHERE id = 1;
