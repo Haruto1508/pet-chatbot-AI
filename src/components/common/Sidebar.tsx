@@ -128,7 +128,82 @@ export const Sidebar: React.FC<SidebarProps> = ({
     );
   }
 
-  /* ---- USER SIDEBAR (ChatGPT style) ---- */
+  /* ---- USER SIDEBAR (icon-only when collapsed) ---- */
+
+  /* Collapsed icon-only sidebar */
+  if (!isOpenMobile && !isDesktopOpen) {
+    return (
+      <>
+        <aside className="hidden lg:flex flex-col items-center bg-[#f9f9f9] border-r border-slate-200 shrink-0 w-[60px] h-full py-3 gap-1">
+          {/* Toggle button */}
+          <button onClick={onToggleDesktop} title="Mở sidebar"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-all mb-1">
+            <Menu className="w-5 h-5" />
+          </button>
+
+          {/* New chat / edit button */}
+          <button onClick={() => handleNav("chat")} title="Chat mới"
+            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-all">
+            <FileText className="w-5 h-5" />
+          </button>
+
+          {/* Nav icons */}
+          <div className="flex flex-col gap-0.5 mt-1">
+            {userNavItems.map(({ id, label, icon: Icon }: any) => {
+              const isActive = currentTab === id || (id === "records" && currentTab === "record_detail");
+              return (
+                <button key={id} onClick={() => handleNav(id)} title={label}
+                  className={`p-2 rounded-lg transition-all ${
+                    isActive
+                      ? "bg-white text-emerald-600 shadow-xs border border-slate-200/80"
+                      : "text-slate-400 hover:text-slate-700 hover:bg-slate-200"
+                  }`}>
+                  <Icon className="w-5 h-5" />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Admin icon */}
+          {isAdminRole && (
+            <button onClick={() => handleNav("admin_dashboard")} title="Vào Trang Admin"
+              className="p-2 rounded-lg text-amber-500 hover:bg-amber-50 transition-all mt-1">
+              <ShieldCheck className="w-5 h-5" />
+            </button>
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Avatar at bottom */}
+          {currentUser.id === "guest" ? (
+            <button onClick={onOpenLoginModal} title="Đăng Nhập"
+              className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center hover:bg-slate-300 transition-all">
+              <LogIn className="w-4 h-4 text-slate-500" />
+            </button>
+          ) : (
+            <button onClick={() => setShowLogoutModal(true)} title={currentUser.name}
+              className="relative group">
+              {currentUser.avatar ? (
+                <img src={currentUser.avatar} alt={currentUser.name}
+                  className="w-9 h-9 rounded-full object-cover ring-2 ring-emerald-400/60" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-black ring-2 ring-violet-400/60">
+                  {avatarInitials}
+                </div>
+              )}
+            </button>
+          )}
+        </aside>
+
+        <LogoutConfirmModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}
+          userName={currentUser.name} userEmail={currentUser.email}
+          onConfirm={async () => { await supabase.auth.signOut(); }} />
+      </>
+    );
+  }
+
+  /* Expanded full sidebar */
   return (
     <>
       {/* Mobile Overlay */}
@@ -137,8 +212,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside className={`fixed top-0 bottom-0 left-0 z-50 flex flex-col bg-[#f9f9f9] border-r border-slate-200 transition-all duration-300 ease-in-out lg:static overflow-hidden shrink-0 ${
-        isOpenMobile ? "translate-x-0 shadow-2xl w-[260px]" : "-translate-x-full lg:translate-x-0 lg:shadow-none"
-      } ${isDesktopOpen ? "lg:w-[260px]" : "lg:w-0 lg:border-none"}`}>
+        isOpenMobile ? "translate-x-0 shadow-2xl w-[260px]" : "-translate-x-full lg:translate-x-0 lg:shadow-none lg:w-[260px]"
+      }`}>
         <div className="w-[260px] h-full flex flex-col">
 
           {/* Top: Logo + collapse button */}
@@ -154,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-all">
                 <X className="w-4 h-4" />
               </button>
-              <button onClick={onToggleDesktop} title="Đóng sidebar"
+              <button onClick={onToggleDesktop} title="Thu gọn sidebar"
                 className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-all">
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -200,8 +275,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Bottom User Profile Section */}
           <div className="border-t border-slate-200 p-2 space-y-1">
-            
-            {/* User Profile Row */}
             {currentUser.id === "guest" ? (
               <button onClick={onOpenLoginModal}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-700 hover:bg-white hover:shadow-xs border border-transparent hover:border-slate-200 transition-all">
@@ -212,8 +285,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             ) : (
               <div className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-white hover:shadow-xs border border-transparent hover:border-slate-200 transition-all cursor-default group">
-                <img src={currentUser.avatar} alt={currentUser.name}
-                  className="w-8 h-8 rounded-full object-cover ring-1 ring-emerald-400 flex-shrink-0" />
+                {currentUser.avatar ? (
+                  <img src={currentUser.avatar} alt={currentUser.name}
+                    className="w-8 h-8 rounded-full object-cover ring-1 ring-emerald-400 flex-shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-black ring-1 ring-violet-400 flex-shrink-0">
+                    {avatarInitials}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold text-slate-800 truncate leading-tight">{currentUser.name}</p>
                   <p className="text-[10px] text-slate-400 truncate">{currentUser.email}</p>
