@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Lock, Unlock, Trash2, Shield, UserCheck } from 'lucide-react';
+import { Users, Search, Lock, Unlock, Trash2, Shield, UserCheck, MessageSquare } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { AdminChatSessionsModal } from './AdminChatSessionsModal';
 
 interface AdminUsersViewProps {
   currentUser: UserProfile;
@@ -20,6 +21,9 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
   const [statusModalOpen, setStatusModalOpen] = useState(false);
   const [userToToggleStatus, setUserToToggleStatus] = useState<UserProfile | null>(null);
   const [unlockRequests, setUnlockRequests] = useState<any[]>([]);
+
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
+  const [chatModalUserId, setChatModalUserId] = useState<string | null>(null);
 
   const loadUsersAndRequests = async () => {
     setLoading(true);
@@ -112,15 +116,29 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
           </div>
         </div>
 
-        <div className="relative w-full md:w-64">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm theo tên hoặc email..."
-            className="w-full text-xs pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+          <button
+            type="button"
+            onClick={() => {
+              setChatModalUserId(null);
+              setIsChatModalOpen(true);
+            }}
+            className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Xem tin nhắn & Kiểm tra lỗi</span>
+          </button>
+
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm theo tên hoặc email..."
+              className="w-full text-xs pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
         </div>
       </div>
 
@@ -206,6 +224,18 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
+                          onClick={() => {
+                            setChatModalUserId(u.id);
+                            setIsChatModalOpen(true);
+                          }}
+                          title="Xem hội thoại & tin nhắn của người dùng"
+                          className="p-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 font-semibold text-[11px] flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span>Tin nhắn</span>
+                        </button>
+
+                        <button
                           onClick={() => handleToggleClick(u)}
                           title={u.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
                           className={`p-1.5 rounded-lg border font-semibold text-[11px] transition-all cursor-pointer ${
@@ -272,6 +302,14 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
         onConfirm={confirmDelete}
         title="Xác nhận xóa tài khoản"
         message="Bạn có chắc chắn muốn xóa tài khoản này khỏi hệ thống? Hành động này không thể hoàn tác."
+      />
+
+      {/* Admin User Live Chat Inspector Modal */}
+      <AdminChatSessionsModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+        initialUserId={chatModalUserId}
+        users={users}
       />
     </div>
   );

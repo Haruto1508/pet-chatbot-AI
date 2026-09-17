@@ -1202,13 +1202,37 @@ async function startServer(isVercel = false) {
       const { data, error } = await query;
       if (error) return res.status(500).json({ error: error.message });
       
-      const mapped = data.map(s => ({
-        ...s,
-        userId: s.user_id,
-        petId: s.pet_id,
-        createdAt: s.created_at,
-        updatedAt: s.updated_at
-      }));
+      // Fetch users to enrich session info for Admin inspection
+      let userMap = new Map<string, any>();
+      try {
+        const { data: usersData } = await supabase.from('users').select('id, name, email, avatar, role');
+        if (usersData) {
+          usersData.forEach(u => userMap.set(u.id, u));
+        }
+      } catch (userErr) {
+        console.warn('Could not load users for chat-sessions map:', userErr);
+      }
+
+      const mapped = (data || []).map(s => {
+        let user = userMap.get(s.user_id);
+        if (!user && (s.user_id === 'guest' || !s.user_id)) {
+          user = {
+            id: 'guest',
+            name: 'Khách (Guest)',
+            email: 'Khách vãng lai',
+            avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+            role: 'user'
+          };
+        }
+        return {
+          ...s,
+          userId: s.user_id,
+          petId: s.pet_id,
+          user: user || null,
+          createdAt: s.created_at,
+          updatedAt: s.updated_at
+        };
+      });
       res.json(mapped);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -1232,12 +1256,28 @@ async function startServer(isVercel = false) {
 
   app.post('/api/chat-sessions', async (req: Request, res: Response) => {
     const payload = {
-      user_id: req.body.userId || 'user_01',
+      user_id: req.body.userId || 'guest',
       pet_id: req.body.petId || null,
       title: req.body.title || 'Chat mới',
       messages: req.body.messages || []
     };
     
+    // If guest user, guarantee user row exists to prevent foreign key violation
+    if (payload.user_id === 'guest') {
+      try {
+        await supabase.from('users').upsert({
+          id: 'guest',
+          name: 'Khách (Guest)',
+          email: 'guest@petcare.ai',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+          role: 'user',
+          status: 'active'
+        }, { onConflict: 'id' });
+      } catch (guestErr) {
+        console.warn('Guest upsert non-critical warning:', guestErr);
+      }
+    }
+
     const { data, error } = await supabase.from('chat_sessions').insert([payload]).select().single();
     if (error) return res.status(500).json({ error: error.message });
     

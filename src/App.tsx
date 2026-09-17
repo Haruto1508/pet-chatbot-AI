@@ -278,6 +278,7 @@ export function App() {
                 onNavigateToRecords={() => setCurrentTab('records')}
                 onNavigateToPets={() => setCurrentTab('pets')}
                 currentUser={currentUser}
+                onOpenLogin={() => setIsLoginModalOpen(true)}
               />
             )}
 

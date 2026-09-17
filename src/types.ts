@@ -40,6 +40,9 @@ export interface ChatMessage {
     urgency: string;
     immediateActions: string[];
   };
+  status?: 'success' | 'error' | 'fallback';
+  errorMessage?: string;
+  latencyMs?: number;
 }
 
 export interface ChatSession {
@@ -50,6 +53,13 @@ export interface ChatSession {
   messages: ChatMessage[];
   createdAt: string;
   updatedAt: string;
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    avatar: string;
+    role?: string;
+  } | null;
 }
 
 export interface MedicalRecord {

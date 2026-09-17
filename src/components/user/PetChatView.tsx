@@ -24,7 +24,8 @@ import {
   ThumbsDown,
   RotateCcw,
   RefreshCw,
-  Download
+  Download,
+  Lock
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord } from '../../types';
@@ -39,6 +40,7 @@ interface Props {
   onNavigateToRecords: () => void;
   onNavigateToPets: () => void;
   currentUser: UserProfile;
+  onOpenLogin?: () => void;
 }
 
 // Helper to group sessions by date
@@ -101,9 +103,18 @@ export const PetChatView: React.FC<Props> = ({
   setSelectedPet,
   onNavigateToRecords,
   onNavigateToPets,
-  currentUser
+  currentUser,
+  onOpenLogin
 }) => {
   const { showSuccess, showError, showInfo } = useNotification();
+  const GUEST_MESSAGE_LIMIT = 8;
+  const isGuest = currentUser.id === 'guest' || !currentUser.email;
+
+  const [guestMsgCount, setGuestMsgCount] = useState<number>(() => {
+    const saved = localStorage.getItem('petcare_guest_msg_count');
+    return saved ? parseInt(saved, 10) || 0 : 0;
+  });
+
   const [isRetrying, setIsRetrying] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -167,6 +178,10 @@ export const PetChatView: React.FC<Props> = ({
   });
 
   const loadSessions = async () => {
+    if (currentUser.id === 'guest') {
+      startNewChat();
+      return;
+    }
     setIsLoadingSessions(true);
     try {
       const data = await api.getChatSessions(currentUser.id, selectedPet?.id);
@@ -284,6 +299,13 @@ export const PetChatView: React.FC<Props> = ({
     const queryText = textToSend || input;
     if (!queryText.trim() && !selectedImage) return;
 
+    // Enforce 8-message rate limit for guest users
+    if (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) {
+      showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập bằng Google để tiếp tục.');
+      onOpenLogin?.();
+      return;
+    }
+
     // Abort any previous call if still open
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -291,13 +313,21 @@ export const PetChatView: React.FC<Props> = ({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
+    // Increment guest message counter
+    if (isGuest) {
+      const nextCount = guestMsgCount + 1;
+      setGuestMsgCount(nextCount);
+      localStorage.setItem('petcare_guest_msg_count', nextCount.toString());
+    }
+
     const userMessage: ChatMessage = {
       id: `usr_${Date.now()}`,
       sender: 'user',
       text: queryText,
       imageUrl: selectedImage || undefined,
       petId: selectedPet?.id,
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      status: 'success'
     };
 
     const newMessages = [...messages, userMessage];
@@ -312,42 +342,46 @@ export const PetChatView: React.FC<Props> = ({
     if (!activeSessionId) {
       const initialTitle = queryText.length > 30 ? queryText.substring(0, 30) + '...' : queryText;
       
-      if (currentUser.id !== 'guest') {
-        try {
-          const newSession = await api.createChatSession({
-            userId: currentUser.id,
-            petId: selectedPet?.id || null,
-            title: initialTitle,
-            messages: newMessages
-          });
-          activeSessionId = newSession.id;
-          setCurrentSessionId(activeSessionId);
+      try {
+        const newSession = await api.createChatSession({
+          userId: currentUser.id,
+          petId: selectedPet?.id || null,
+          title: initialTitle,
+          messages: newMessages
+        });
+        activeSessionId = newSession.id;
+        setCurrentSessionId(activeSessionId);
+        if (!isGuest) {
           setSessions(prev => [newSession, ...prev]);
-
-          // Generate smart title in the background
-          api.generateTitle(queryText).then(async ({ title }) => {
-            if (title && activeSessionId) {
-               await api.updateChatSession(activeSessionId, { title });
-               setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title } : s));
-            }
-          }).catch(console.error);
-          
-        } catch (e) {
-          console.error(e);
         }
+
+        // Generate smart title in the background
+        api.generateTitle(queryText).then(async ({ title }) => {
+          if (title && activeSessionId) {
+             await api.updateChatSession(activeSessionId, { title });
+             if (!isGuest) {
+               setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title } : s));
+             }
+          }
+        }).catch(console.error);
+        
+      } catch (e) {
+        console.error('Error creating chat session:', e);
       }
     } else {
-      if (currentUser.id !== 'guest') {
-        try {
-          await api.updateChatSession(activeSessionId, { messages: newMessages });
+      try {
+        await api.updateChatSession(activeSessionId, { messages: newMessages });
+        if (!isGuest) {
           setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: newMessages } : s));
-        } catch (e) {
-          console.error(e);
         }
+      } catch (e) {
+        console.error('Error updating chat session:', e);
       }
     }
 
     const aiMessageId = `ai_${Date.now()}`;
+    const sendStartTime = Date.now();
+    let wasFallbackUsed = false;
 
     try {
       let finalText = '';
@@ -374,12 +408,13 @@ export const PetChatView: React.FC<Props> = ({
                 text: finalText,
                 triageLevel: finalTriageLevel,
                 triageDetails: finalTriageDetails,
-                timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+                status: wasFallbackUsed ? 'fallback' : 'success'
               }];
             }
             return prev.map(msg => 
               msg.id === aiMessageId 
-                ? { ...msg, text: finalText }
+                ? { ...msg, text: finalText, status: wasFallbackUsed ? 'fallback' : 'success' }
                 : msg
             );
           });
@@ -396,7 +431,8 @@ export const PetChatView: React.FC<Props> = ({
                 text: finalText,
                 triageLevel: triageLevel,
                 triageDetails: triageDetails,
-                timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+                status: wasFallbackUsed ? 'fallback' : 'success'
               }];
             }
             return prev.map(msg => 
@@ -408,6 +444,7 @@ export const PetChatView: React.FC<Props> = ({
         },
         (usedFallback) => {
           if (usedFallback) {
+            wasFallbackUsed = true;
             console.info('Using Gemini Direct Backup');
           }
         },
@@ -424,28 +461,42 @@ export const PetChatView: React.FC<Props> = ({
         }
       );
 
-      // Save the finalized chat history to the current session in the background
-      if (activeSessionId && finalText.trim()) {
-        setMessages(prev => {
-          const finalMessages = [...prev];
+      // Finalize AI message with status, latency, and persist session
+      const responseLatency = Date.now() - sendStartTime;
+      const finalAiStatus: 'success' | 'fallback' = wasFallbackUsed ? 'fallback' : 'success';
+
+      setMessages(prev => {
+        const finalMessages = prev.map(msg =>
+          msg.id === aiMessageId
+            ? { ...msg, status: finalAiStatus, latencyMs: responseLatency }
+            : msg
+        );
+        if (activeSessionId && finalText.trim()) {
           api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(console.error);
-          setSessions(currentSessions => 
-            currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s)
-          );
-          return finalMessages;
-        });
-      }
-    } catch (err: any) {
-      // ONLY treat as voluntary stop if the user explicitly clicked Stop button
-      if (abortController.signal.aborted) {
-        // User voluntarily stopped response - preserve partial response in chat history
-        if (activeSessionId) {
-          setMessages(prev => {
-            const finalMessages = [...prev];
-            api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(console.error);
+          if (!isGuest) {
             setSessions(currentSessions => 
               currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s)
             );
+          }
+        }
+        return finalMessages;
+      });
+    } catch (err: any) {
+      // ONLY treat as voluntary stop if the user explicitly clicked Stop button
+      if (abortController.signal.aborted) {
+        if (activeSessionId) {
+          setMessages(prev => {
+            const finalMessages = prev.map(msg =>
+              msg.id === aiMessageId
+                ? { ...msg, status: 'success' as const, latencyMs: Date.now() - sendStartTime }
+                : msg
+            );
+            api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(console.error);
+            if (!isGuest) {
+              setSessions(currentSessions => 
+                currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s)
+              );
+            }
             return finalMessages;
           });
         }
@@ -460,7 +511,10 @@ export const PetChatView: React.FC<Props> = ({
           sender: 'ai',
           text: `⚠️ **${errorText}**`,
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          triageLevel: 'YELLOW'
+          triageLevel: 'YELLOW',
+          status: 'error',
+          errorMessage: err?.message || errorText,
+          latencyMs: Date.now() - sendStartTime
         };
 
         // Ensure error message is added and persisted into the active chat session
@@ -469,9 +523,11 @@ export const PetChatView: React.FC<Props> = ({
           const updatedWithErr = [...cleaned, errMsg];
           if (activeSessionId) {
             api.updateChatSession(activeSessionId, { messages: updatedWithErr }).catch(console.error);
-            setSessions(currentSessions => 
-              currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: updatedWithErr } : s)
-            );
+            if (!isGuest) {
+              setSessions(currentSessions => 
+                currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: updatedWithErr } : s)
+              );
+            }
           }
           return updatedWithErr;
         });
@@ -1050,6 +1106,55 @@ export const PetChatView: React.FC<Props> = ({
             {/* Floating Bottom Bar */}
             <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-transparent pt-6 pb-3">
               <div className="max-w-3xl mx-auto px-4 sm:px-6">
+                {/* Guest Rate Limit Warning Banner */}
+                {isGuest && (
+                  <div className="mb-2.5">
+                    {guestMsgCount >= GUEST_MESSAGE_LIMIT ? (
+                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-red-500/10 to-amber-500/15 border border-amber-300 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-800 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                            <Lock className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">
+                              Đã sử dụng hết {guestMsgCount}/{GUEST_MESSAGE_LIMIT} tin nhắn dùng thử miễn phí
+                            </p>
+                            <p className="text-[11px] text-slate-600">
+                              Đăng nhập bằng tài khoản Google để tiếp tục tư vấn AI không giới hạn & lưu hồ sơ bệnh án!
+                            </p>
+                          </div>
+                        </div>
+                        {onOpenLogin && (
+                          <button
+                            type="button"
+                            onClick={onOpenLogin}
+                            className="shrink-0 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <span>Đăng nhập Google ngay</span>
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 px-2 py-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                          <span>Chế độ khách: <strong>{guestMsgCount}/{GUEST_MESSAGE_LIMIT}</strong> tin nhắn dùng thử</span>
+                        </div>
+                        {onOpenLogin && (
+                          <button
+                            type="button"
+                            onClick={onOpenLogin}
+                            className="text-emerald-700 hover:text-emerald-800 font-semibold underline underline-offset-2 cursor-pointer flex items-center gap-1"
+                          >
+                            Đăng nhập để chat không giới hạn
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {selectedImage && (
                   <div className="mb-2 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2 font-semibold text-emerald-800">
@@ -1063,7 +1168,7 @@ export const PetChatView: React.FC<Props> = ({
                 )}
 
                 <div className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200 shadow-md px-2.5 py-1.5">
-                  <button onClick={() => fileInputRef.current?.click()} disabled={isLoading} title="Đính kèm ảnh"
+                  <button onClick={() => fileInputRef.current?.click()} disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)} title="Đính kèm ảnh"
                     className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0 cursor-pointer">
                     <ImageIcon className="w-5 h-5" />
                   </button>
@@ -1072,14 +1177,25 @@ export const PetChatView: React.FC<Props> = ({
                     type="text"
                     ref={inputRef}
                     value={input}
-                    disabled={isLoading}
+                    disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)}
                     onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && !isLoading) handleSend(); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isLoading) {
+                        if (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) {
+                          showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập.');
+                          onOpenLogin?.();
+                          return;
+                        }
+                        handleSend();
+                      }
+                    }}
                     placeholder={
-                      isRetrying ? 'Đang cố gắng kết nối lại...'
-                      : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
-                      : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}...`
-                      : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'
+                      isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT
+                        ? 'Bạn đã hết lượt dùng thử miễn phí. Vui lòng đăng nhập để tiếp tục...'
+                        : isRetrying ? 'Đang cố gắng kết nối lại...'
+                        : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
+                        : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}...`
+                        : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'
                     }
                     className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 disabled:text-slate-400 py-1.5 px-2"
                   />
@@ -1092,7 +1208,7 @@ export const PetChatView: React.FC<Props> = ({
                     </button>
                   ) : (
                     <button type="button" onClick={() => handleSend()}
-                      disabled={!input.trim() && !selectedImage} title="Gửi"
+                      disabled={(!input.trim() && !selectedImage) || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)} title="Gửi"
                       className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 disabled:opacity-40 text-white font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer disabled:cursor-not-allowed flex-shrink-0">
                       <Send className="w-4 h-4" />
                     </button>

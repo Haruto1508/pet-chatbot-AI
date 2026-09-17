@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { ApiLog, ApiLogLevel, ApiLogType } from '../../types';
 import { api } from '../../services/api';
+import { AdminChatSessionsModal } from './AdminChatSessionsModal';
 
 const LOG_TYPES: { value: ApiLogType | 'all'; label: string; icon: React.ReactNode }[] = [
   { value: 'all',      label: 'Tất cả',    icon: <Activity className="w-3.5 h-3.5" /> },
@@ -73,6 +74,7 @@ export const AdminLogView: React.FC = () => {
   const [clearing, setClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showMigration, setShowMigration] = useState(false);
+  const [isChatModalOpen, setIsChatModalOpen] = useState(false);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -160,8 +162,16 @@ export const AdminLogView: React.FC = () => {
           </button>
 
           <button
+            onClick={() => setIsChatModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-700 hover:bg-blue-100 transition-all cursor-pointer shadow-2xs"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Xem hội thoại & Lỗi</span>
+          </button>
+
+          <button
             onClick={() => setShowClearConfirm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 rounded-lg text-xs font-semibold text-red-600 hover:bg-red-50 transition-all cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Xóa
@@ -365,6 +375,12 @@ export const AdminLogView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Admin Live Chat Sessions & Message Error Inspector Modal */}
+      <AdminChatSessionsModal
+        isOpen={isChatModalOpen}
+        onClose={() => setIsChatModalOpen(false)}
+      />
     </div>
   );
 };
