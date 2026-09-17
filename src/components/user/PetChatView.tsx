@@ -1011,8 +1011,9 @@ export const PetChatView: React.FC<Props> = ({
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200/90 shadow-md hover:shadow-lg transition-all px-3 py-2">
+              <div data-tour="chat-input" className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200/90 shadow-md hover:shadow-lg transition-all px-3 py-2">
                 <button
+                  data-tour="image-upload"
                   onClick={() => fileInputRef.current?.click()}
                   title="Đính kèm ảnh"
                   className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors flex-shrink-0 cursor-pointer"
@@ -1510,8 +1511,8 @@ export const PetChatView: React.FC<Props> = ({
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200 shadow-md px-2.5 py-1.5">
-                  <button onClick={() => fileInputRef.current?.click()} disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)} title="Đính kèm ảnh"
+                <div data-tour="chat-input" className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200 shadow-md px-2.5 py-1.5">
+                  <button data-tour="image-upload" onClick={() => fileInputRef.current?.click()} disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)} title="Đính kèm ảnh"
                     className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0 cursor-pointer">
                     <ImageIcon className="w-5 h-5" />
                   </button>

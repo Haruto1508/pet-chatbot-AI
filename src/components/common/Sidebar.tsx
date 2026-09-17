@@ -242,7 +242,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {userNavItems.map(({ id, label, icon: Icon, badge }: any) => {
               const isActive = currentTab === id || (id === "records" && currentTab === "record_detail");
               return (
-                <button key={id} onClick={() => handleNav(id)}
+                <button key={id} data-tour={`nav-${id}`} onClick={() => handleNav(id)}
                   className={`w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl text-sm transition-all text-left group ${
                     isActive
                       ? "bg-white text-slate-900 font-semibold shadow-xs border border-slate-200/80"

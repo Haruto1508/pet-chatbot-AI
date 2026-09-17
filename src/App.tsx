@@ -8,7 +8,7 @@ import { Sidebar } from './components/common/Sidebar';
 
 import { LoginModal } from './components/common/LoginModal';
 import { SuspendedAccountModal } from './components/common/SuspendedAccountModal';
-import { OnboardingTourModal } from './components/common/OnboardingTourModal';
+import { SpotlightTour } from './components/common/SpotlightTour';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { NotFoundView } from './components/common/NotFoundView';
 
@@ -161,7 +161,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const handleOpenTour = () => setIsOpenOnboardingTour(true);
+    const handleOpenTour = () => {
+      setCurrentTab('chat');
+      setIsOpenOnboardingTour(true);
+    };
     window.addEventListener('vethic_open_onboarding_tour', handleOpenTour);
     return () => window.removeEventListener('vethic_open_onboarding_tour', handleOpenTour);
   }, []);
@@ -408,7 +411,10 @@ export function App() {
               <AccountSettingsView 
                 currentUser={currentUser} 
                 onUpdateUser={handleUpdateUser}
-                onOpenOnboardingTour={() => setIsOpenOnboardingTour(true)}
+                onOpenOnboardingTour={() => {
+                  setCurrentTab('chat');
+                  setIsOpenOnboardingTour(true);
+                }}
               />
             )}
 
@@ -439,10 +445,12 @@ export function App() {
         onClose={() => setIsLoginModalOpen(false)}
       />
 
-      {/* Interactive Onboarding Tour Modal */}
-      <OnboardingTourModal
+      {/* Interactive UI Spotlight Tour */}
+      <SpotlightTour
         isOpen={isOpenOnboardingTour}
         onClose={() => setIsOpenOnboardingTour(false)}
+        onEnsureTab={setCurrentTab}
+        setIsOpenMobileSidebar={setIsOpenMobileSidebar}
       />
 
       {/* Suspended Account Overlay Modal */}
