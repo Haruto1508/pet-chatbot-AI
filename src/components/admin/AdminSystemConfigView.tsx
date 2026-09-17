@@ -45,7 +45,7 @@ export const AdminSystemConfigView: React.FC = () => {
       } catch {}
 
       const merged = {
-        aiModel: data?.aiModel || 'gemini-2.5-flash',
+        aiModel: data?.aiModel || 'gemini-3.6-flash',
         temperature: data?.temperature ?? 0.4,
         systemPrompt: data?.systemPrompt || '',
         maxTokens: data?.maxTokens || 2048,
@@ -85,7 +85,7 @@ export const AdminSystemConfigView: React.FC = () => {
       localStorage.setItem('petcare_fallback_config', JSON.stringify({
         enableGeminiFallback: config.enableGeminiFallback ?? true,
         fallbackGeminiApiKey: config.fallbackGeminiApiKey || config.backupGeminiApiKey || '',
-        fallbackModel: config.fallbackModel || 'gemini-2.5-flash',
+        fallbackModel: config.fallbackModel || 'gemini-3.6-flash',
         fallbackTimeoutMs: config.fallbackTimeoutMs || 20000
       }));
 
@@ -642,13 +642,11 @@ export const AdminSystemConfigView: React.FC = () => {
                 onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
               >
-                <option value="gemini-3.8-flash">Gemini 3.8 Flash (Mới nhất)</option>
+                <option value="gemini-3.6-flash">Gemini 3.6 Flash (Mặc định — Mới nhất)</option>
                 <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Siêu tiết kiệm)</option>
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Mặc định — Nhanh & Ổn định)</option>
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Tốc độ phản hồi cao)</option>
+                <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash Preview (Ổn định)</option>
                 <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite (Tiết kiệm Token)</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Ổn định)</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Phân tích chuyên sâu)</option>
+                <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash Latest (Cũ nhưng ổn)</option>
               </select>
               <p className="text-[11px] text-slate-400">
                 Gemini 2.5 Flash mang lại tốc độ stream câu trả lời nhanh nhất và độ chính xác phân loại Triage cao.
@@ -833,17 +831,15 @@ export const AdminSystemConfigView: React.FC = () => {
                     Model Fallback
                   </label>
                   <select
-                    value={config.fallbackModel ?? 'gemini-2.5-flash'}
+                    value={config.fallbackModel ?? 'gemini-3.6-flash'}
                     onChange={(e) => setConfig({ ...config, fallbackModel: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
                   >
-                    <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+                    <option value="gemini-3.6-flash">gemini-3.6-flash (mặc định)</option>
                     <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
-                    <option value="gemini-2.5-flash">gemini-2.5-flash (nhanh nhất)</option>
-                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                    <option value="gemini-2.5-flash-preview-05-20">gemini-2.5-flash-preview-05-20</option>
                     <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
-                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                    <option value="gemini-pro">gemini-pro (chất lượng cao)</option>
+                    <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest</option>
                   </select>
                 </div>
 

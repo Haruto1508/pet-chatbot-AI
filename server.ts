@@ -1571,15 +1571,16 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       let streamSucceeded = false;
       let lastError: any = null;
       let requestedModel = sysConfig.aiModel;
-      if (!requestedModel || requestedModel === 'gemini-1.5-flash') {
-        requestedModel = 'gemini-2.5-flash';
+      // Upgrade legacy/unavailable models to current defaults
+      const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+      if (!requestedModel || legacyModels.includes(requestedModel)) {
+        requestedModel = 'gemini-3.6-flash';
       }
       const modelCandidates = [
         requestedModel,
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
+        'gemini-3.6-flash',
+        'gemini-2.5-flash-preview-05-20',
         'gemini-2.0-flash-lite',
-        'gemini-1.5-flash-8b',
         'gemini-1.5-flash-latest'
       ].filter(Boolean);
       const fallbackModels = [...new Set(modelCandidates)];
