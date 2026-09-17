@@ -5,25 +5,27 @@
 /**
  * Extracts and cleans a list of unique API keys from a comma-separated,
  * newline-separated, or array source.
+ * Only accepts real Gemini API keys (AIzaSy...) — NOT OAuth tokens (AQ....).
  */
 export function parseApiKeys(input?: any): string[] {
   if (!input) return [];
 
+  // Only match real Gemini API keys starting with AIzaSy
+  // AQ. keys are short-lived OAuth tokens that are NOT valid for API calls
+  const GEMINI_KEY_REGEX = /AIzaSy[A-Za-z0-9_\-]{30,}/g;
+
   let rawList: any[] = [];
   if (Array.isArray(input)) {
-    // Flatten nested arrays and extract keys from each string
     const flattened = input.flat(Infinity).filter((item) => item != null && item !== '');
     rawList = flattened.flatMap(item => {
       if (typeof item === 'string') {
-        // Extract Gemini keys (AIza... or AQ....) even if they are glued together without spaces
-        const matches = item.match(/(?:AIza|AQ\.)[A-Za-z0-9_\-]{30,}/g);
+        const matches = item.match(GEMINI_KEY_REGEX);
         return matches || [];
       }
       return [item];
     });
   } else if (typeof input === 'string') {
-    // Extract Gemini keys even if they are glued together
-    const matches = input.match(/(?:AIza|AQ\.)[A-Za-z0-9_\-]{30,}/g);
+    const matches = input.match(GEMINI_KEY_REGEX);
     rawList = matches || [];
   } else {
     return [];
@@ -31,7 +33,6 @@ export function parseApiKeys(input?: any): string[] {
 
   const cleaned = rawList
     .map(k => (k != null ? String(k).trim() : ''))
-    // Ignore comments or empty tokens
     .filter(k => k.length > 5 && !k.startsWith('#') && !k.startsWith('//'));
 
   // Deduplicate while preserving original order

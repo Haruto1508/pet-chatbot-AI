@@ -294,7 +294,7 @@ export const api = {
       ...(serverConfig || {}),
       enableGeminiFallback: serverConfig?.enableGeminiFallback ?? local.enableGeminiFallback ?? true,
       fallbackGeminiApiKey: serverConfig?.fallbackGeminiApiKey || local.fallbackGeminiApiKey || serverConfig?.backupGeminiApiKey || '',
-      fallbackModel: serverConfig?.fallbackModel || local.fallbackModel || 'gemini-2.5-flash',
+      fallbackModel: serverConfig?.fallbackModel || local.fallbackModel || 'gemini-3.6-flash',
       fallbackTimeoutMs: serverConfig?.fallbackTimeoutMs || local.fallbackTimeoutMs || 20000
     };
 
@@ -573,7 +573,7 @@ export const api = {
     const startTime = Date.now();
 
     // 1. Resolve fallback configuration and gather prioritized API Key pool
-    let fallbackModel = customFallbackConfig?.model || 'gemini-2.5-flash';
+    let fallbackModel = customFallbackConfig?.model || 'gemini-3.6-flash';
     let fallbackEnabled = customFallbackConfig?.enabled ?? true;
     const timeoutMs = customFallbackConfig?.timeoutMs ?? (payload.imageBase64 ? 35000 : 20000);
 
@@ -898,7 +898,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
   },
 
   // Test individual Gemini API Key
-  testGeminiKey: async (apiKey: string, model: string = 'gemini-2.5-flash'): Promise<{ ok: boolean; latencyMs?: number; error?: string; message?: string }> => {
+  testGeminiKey: async (apiKey: string, model: string = 'gemini-3.6-flash'): Promise<{ ok: boolean; latencyMs?: number; error?: string; message?: string }> => {
     const t0 = Date.now();
     try {
       const res = await fetch(
@@ -928,7 +928,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
   },
 
   // Test all keys in an API Key pool
-  testGeminiKeyPool: async (keys: string[] | string, model: string = 'gemini-2.5-flash'): Promise<Array<{ key: string; maskedKey: string; ok: boolean; latencyMs?: number; error?: string }>> => {
+  testGeminiKeyPool: async (keys: string[] | string, model: string = 'gemini-3.6-flash'): Promise<Array<{ key: string; maskedKey: string; ok: boolean; latencyMs?: number; error?: string }>> => {
     const uniqueKeys = parseApiKeys(keys);
     const results = [];
     // Test sequentially to avoid triggering Google's rate limits (429) for burst requests
