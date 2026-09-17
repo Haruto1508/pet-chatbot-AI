@@ -682,43 +682,7 @@ export const PetChatView: React.FC<Props> = ({
       <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden relative">
 
         {/* Floating Header Toolbar */}
-        <div className="sticky top-0 z-20 px-3 sm:px-4 py-2 flex items-center gap-2 bg-white/80 backdrop-blur-md border-b border-slate-100">
-          {/* Sidebar toggle (desktop) */}
-          <button
-            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors hidden md:flex flex-shrink-0"
-            title={isSidebarOpen ? "Đóng lịch sử" : "Mở lịch sử"}
-          >
-            {isSidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
-          </button>
 
-          {/* Mobile History toggle */}
-          <button
-            onClick={() => setIsMobileHistoryOpen(true)}
-            className="p-1.5 text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors md:hidden relative flex-shrink-0"
-            title="Lịch sử chat"
-          >
-            <History className="w-4 h-4" />
-            {sessions.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center">
-                {sessions.length > 9 ? '9+' : sessions.length}
-              </span>
-            )}
-          </button>
-
-          <div className="flex-1" />
-
-          {/* Save medical record button */}
-          <button
-            onClick={handleCreateMedicalRecord}
-            disabled={isLoading || isSummarizing || messages.length <= 1}
-            title={messages.length <= 1 ? 'Hãy chat với AI trước khi lưu hồ sơ' : 'Lưu Hồ Sơ Bệnh Án từ đoạn chat'}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-blue-700 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all border border-transparent hover:border-blue-100"
-          >
-            {isSummarizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FilePlus className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">Lưu Hồ Sơ</span>
-          </button>
-        </div>
 
         {/* Scrollable Messages — full height */}
         <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
