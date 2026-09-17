@@ -1410,12 +1410,16 @@ LƯU Ý QUAN TRỌNG VỀ ĐỊNH DẠNG VÀ ĐỘ DÀI:
 1. BẮT BUỘC chèn khối Triage Alert ngay đầu phản hồi (tuyệt đối không dùng markdown block xung quanh). Hãy viết liền trên 1 dòng:
 [[TRIAGE_ALERT]]{"level": "RED|YELLOW|GREEN", "title": "Tóm tắt bệnh", "urgency": "Mức độ khẩn cấp", "actions": ["Hành động 1", "Hành động 2"]}[[/TRIAGE_ALERT]]
 
-2. Sau khối trên, câu trả lời cần SÚC TÍCH, CÔ ĐỌNG, ĐI THẲNG VÀO HÀNH ĐỘNG (tối đa 150 - 250 từ). Trình bày theo 3 phần ngắn gọn, dùng gạch đầu dòng rõ ràng:
-- **Chẩn đoán sơ bộ**: Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy hiểm (tránh giải thích cơ chế sinh hóa rườm rà).
-- **Xử lý & Sơ cứu tại nhà**: 3-4 bước hành động cụ thể và thực tế:
-  * Việc NÊN LÀM NGAY (sơ cứu cấp tốc, an toàn).
-  * Việc TUYỆT ĐỐI TRÁNH (không tự ý dùng thuốc người, không ép ăn uống, lưu ý cấm kỵ...).
-- **Dấu hiệu cần đi thú y gấp**: 3-4 triệu chứng cảnh báo đỏ nguy kịch (khó thở, co giật, lờ đờ, nôn liên tục...).
+2. Sau khối trên, câu trả lời cần SÚC TÍCH, CÔ ĐỌNG, ĐI THẲNG VÀO HÀNH ĐỘNG (tối đa 150 - 250 từ). Sử dụng cú pháp Markdown chuẩn (Heading 3 ###, gạch đầu dòng -, in đậm **...**) chia thành 3 phần rõ ràng:
+### 🩺 Chẩn đoán sơ bộ
+Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy hiểm (tránh giải thích cơ chế sinh hóa rườm rà).
+
+### 🩹 Xử lý & Sơ cứu tại nhà
+- **Việc nên làm ngay**: 2-3 bước hành động sơ cứu cấp tốc, an toàn và thực tế.
+- **Tuyệt đối tránh**: Không tự ý dùng thuốc người, không ép ăn uống, các lưu ý cấm kỵ...
+
+### 🚨 Dấu hiệu cần đi thú y gấp
+- 3-4 triệu chứng cảnh báo đỏ nguy kịch (khó thở, co giật, lờ đờ, nôn liên tục, xuất huyết...).
 
 3. NGUYÊN TẮC CẮT BỎ DƯ THỪA:
 - TUYỆT ĐỐI KHÔNG mô tả quy trình chuyên sâu mà phòng khám thú y sẽ làm (như rửa dạ dày, truyền dịch, tiêm thuốc tĩnh mạch...) vì gây rối mắt cho người nuôi trong lúc khẩn cấp.

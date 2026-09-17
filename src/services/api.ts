@@ -688,10 +688,16 @@ Quy tắc phân loại:
 - YELLOW: Bệnh cần khám thú y sớm, viêm da, nấm, ghẻ, tiêu chảy, nôn mửa, sốt, ngứa, bỏ ăn, đau mắt.
 - GREEN: Tư vấn dinh dưỡng, chăm sóc lông móng, sinh hoạt thường ngày, dấu hiệu nhẹ.
 
-2. Sau khối trên, câu trả lời cần SÚC TÍCH, CÔ ĐỌNG (tối đa 200 - 250 từ), chia 3 phần rõ ràng:
-- **Chẩn đoán sơ bộ**: Nguyên nhân và mức độ nguy hiểm (1-2 câu).
-- **Xử lý & Sơ cứu tại nhà**: Việc nên làm ngay và việc tuyệt đối tránh.
-- **Dấu hiệu nguy hiểm**: Khi nào cần đưa đi bệnh viện thú y cấp cứu ngay.`;
+2. Sau khối trên, câu trả lời cần SÚC TÍCH, CÔ ĐỌNG (tối đa 200 - 250 từ), sử dụng cú pháp Markdown chuẩn (Heading 3 ###, gạch đầu dòng -, in đậm **...**) chia 3 phần rõ ràng:
+### 🩺 Chẩn đoán sơ bộ
+Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy hiểm.
+
+### 🩹 Xử lý & Sơ cứu tại nhà
+- **Việc nên làm ngay**: [2-3 bước hành động sơ cứu cấp tốc, an toàn]
+- **Tuyệt đối tránh**: [Không tự ý dùng thuốc người, không ép ăn uống...]
+
+### 🚨 Dấu hiệu cần đi thú y gấp
+- [3-4 triệu chứng cảnh báo đỏ nguy kịch cần cấp cứu ngay]`;
 
       const currentParts: any[] = [];
       if (payload.imageBase64) {

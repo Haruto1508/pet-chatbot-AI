@@ -23,7 +23,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   RotateCcw,
-  RefreshCw
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord } from '../../types';
@@ -138,6 +139,24 @@ export const PetChatView: React.FC<Props> = ({
       }
     };
   }, []);
+
+  const handleDownloadMarkdown = (text: string, title?: string) => {
+    const cleanTitle = (title || 'tu-van-petcare')
+      .toLowerCase()
+      .replace(/[^a-z0-9àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ\s-]/g, '')
+      .replace(/\s+/g, '-');
+    const filename = `${cleanTitle}_${new Date().toISOString().slice(0, 10)}.md`;
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showSuccess('Đã tải câu trả lời về máy dưới dạng file .md!');
+  };
 
   const getWelcomeMsg = (): ChatMessage => ({
     id: 'msg_welcome',
@@ -429,7 +448,7 @@ export const PetChatView: React.FC<Props> = ({
           });
         }
       } else {
-        const errorText = err?.message || 'Server đang quá tải, vui lòng tải lại trang.';
+        const errorText = err?.message || 'Lưu lượng truy cập quá lớn, vui lòng tải lại trang.';
         const errMsg: ChatMessage = {
           id: `err_${Date.now()}`,
           sender: 'ai',
@@ -897,13 +916,7 @@ export const PetChatView: React.FC<Props> = ({
                   </div>
 
                   {/* AI Content */}
-                  <div className="pl-8 markdown-body prose prose-sm max-w-none text-slate-800
-                    prose-headings:text-slate-900 prose-headings:font-bold
-                    prose-strong:text-slate-900 prose-strong:font-semibold
-                    prose-li:marker:text-slate-400
-                    prose-a:text-emerald-600 prose-a:no-underline hover:prose-a:underline
-                    prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-emerald-700
-                    prose-blockquote:border-emerald-400 prose-blockquote:text-slate-600">
+                  <div className="pl-8 markdown-body text-slate-800">
                     {msg.imageUrl && (
                       <img
                         src={msg.imageUrl}
@@ -911,7 +924,20 @@ export const PetChatView: React.FC<Props> = ({
                         className="max-w-[280px] rounded-xl border border-slate-200 mb-4 object-cover shadow-sm"
                       />
                     )}
-                    <Markdown>{msg.text}</Markdown>
+                    <Markdown
+                      components={{
+                        a: ({ node, ...props }) => (
+                          <a {...props} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline font-medium hover:text-emerald-700" />
+                        ),
+                        table: ({ node, ...props }) => (
+                          <div className="overflow-x-auto my-3 rounded-xl border border-slate-200 shadow-2xs">
+                            <table {...props} className="w-full text-xs border-collapse" />
+                          </div>
+                        )
+                      }}
+                    >
+                      {msg.text}
+                    </Markdown>
                     {isLoading && idx === messages.length - 1 && (
                       <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />
                     )}
@@ -926,7 +952,7 @@ export const PetChatView: React.FC<Props> = ({
                         setTimeout(() => setCopiedMsgId(null), 2000);
                       }}
                       title="Sao chép"
-                      className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                      className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                     >
                       {copiedMsgId === msg.id ? (
                         <><CheckCircle className="w-3.5 h-3.5 text-emerald-600" /><span className="text-[11px] text-emerald-600 font-medium">Đã sao chép</span></>
@@ -934,10 +960,17 @@ export const PetChatView: React.FC<Props> = ({
                         <Copy className="w-3.5 h-3.5" />
                       )}
                     </button>
-                    <button title="Hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                    <button
+                      onClick={() => handleDownloadMarkdown(msg.text, msg.triageDetails?.riskTitle)}
+                      title="Tải câu trả lời về file .md"
+                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    <button title="Hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
                       <ThumbsUp className="w-3.5 h-3.5" />
                     </button>
-                    <button title="Không hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors">
+                    <button title="Không hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
                       <ThumbsDown className="w-3.5 h-3.5" />
                     </button>
                   </div>
