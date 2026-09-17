@@ -534,11 +534,12 @@ export const api = {
     onFallback?: (used: boolean) => void,
     signal?: AbortSignal,
     customFallbackConfig?: {
-      enabled: boolean;
+      enabled?: boolean;
       apiKey?: string;
       model?: string;
       timeoutMs?: number;
-    }
+    },
+    onRetry?: (isRetrying: boolean) => void
   ): Promise<void> => {
     const startTime = Date.now();
 
@@ -569,20 +570,31 @@ export const api = {
       } catch {}
     }
 
-    // Try primary backend first
-    try {
+    const callPrimary = async (attemptNum: number): Promise<void> => {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
+      const onAbort = () => controller.abort();
       if (signal) {
-        signal.addEventListener('abort', () => controller.abort(), { once: true });
+        signal.addEventListener('abort', onAbort, { once: true });
       }
 
-      await api.sendChatStream(payload, onChunk, onTriage, controller.signal);
-      clearTimeout(timeout);
+      try {
+        await api.sendChatStream(payload, onChunk, onTriage, controller.signal);
+      } finally {
+        clearTimeout(timeout);
+        if (signal) {
+          signal.removeEventListener('abort', onAbort);
+        }
+      }
+    };
+
+    // ── ATTEMPT 1: Primary Backend ──
+    let primaryFailed = false;
+    try {
+      await callPrimary(1);
       if (onFallback) onFallback(false);
 
-      // Log successful chat
       api.writeLog({
         log_type: 'chat',
         level: 'info',
@@ -595,18 +607,62 @@ export const api = {
       return;
     } catch (err: any) {
       if (signal?.aborted) throw err;
+      primaryFailed = true;
 
-      // Log primary failure to api_logs
       api.writeLog({
         log_type: 'render',
         level: 'warn',
-        message: `Máy chủ AI chính phản hồi lỗi: ${err?.message || 'unknown'}. ${fallbackApiKey ? 'Tự động chuyển sang Gemini Direct Backup...' : 'Chưa cấu hình Gemini Backup key.'}`,
+        message: `Máy chủ AI chính phản hồi lỗi (Lần 1): ${err?.message || 'unknown'}. Đang tự động thử lại...`,
         latency_ms: Date.now() - startTime,
-        metadata: { error: err?.message, hasFallbackKey: !!fallbackApiKey }
+        metadata: { error: err?.message, attempt: 1 }
       }).catch(() => {});
+    }
 
-      if (!fallbackEnabled || !fallbackApiKey) {
-        throw err;
+    // ── ATTEMPT 2: Auto Retry 1 Time ──
+    if (primaryFailed) {
+      if (onRetry) onRetry(true);
+
+      try {
+        // Wait 1.2s before retrying, checking for user cancel
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(resolve, 1200);
+          if (signal) {
+            signal.addEventListener('abort', () => {
+              clearTimeout(timer);
+              reject(new DOMException('Aborted', 'AbortError'));
+            }, { once: true });
+          }
+        });
+
+        await callPrimary(2);
+        if (onRetry) onRetry(false);
+        if (onFallback) onFallback(false);
+
+        api.writeLog({
+          log_type: 'render',
+          level: 'info',
+          message: `Kết nối lại máy chủ AI chính thành công ở lần 2 (${Date.now() - startTime}ms)`,
+          latency_ms: Date.now() - startTime,
+          status_code: 200,
+          metadata: { messagePreview: payload.message.slice(0, 80), attempt: 2 }
+        }).catch(() => {});
+
+        return;
+      } catch (retryErr: any) {
+        if (onRetry) onRetry(false);
+        if (signal?.aborted) throw retryErr;
+
+        api.writeLog({
+          log_type: 'render',
+          level: 'warn',
+          message: `Máy chủ AI chính thất bại lần 2: ${retryErr?.message || 'unknown'}. ${fallbackApiKey ? 'Tự động chuyển sang Gemini Direct Backup...' : 'Không có Gemini Backup key.'}`,
+          latency_ms: Date.now() - startTime,
+          metadata: { error: retryErr?.message, attempt: 2, hasFallbackKey: !!fallbackApiKey }
+        }).catch(() => {});
+
+        if (!fallbackEnabled || !fallbackApiKey) {
+          throw new Error('Server đang quá tải, vui lòng tải lại trang.');
+        }
       }
     }
 
@@ -631,9 +687,14 @@ Khi người dùng mô tả triệu chứng bệnh của thú cưng, hãy trình
 
       const currentParts: any[] = [];
       if (payload.imageBase64) {
+        let mimeType = 'image/jpeg';
+        const matchMime = payload.imageBase64.match(/^data:(image\/[a-zA-Z0-9.+_-]+);base64,/);
+        if (matchMime) {
+          mimeType = matchMime[1];
+        }
         currentParts.push({
           inlineData: {
-            mimeType: 'image/jpeg',
+            mimeType,
             data: payload.imageBase64.replace(/^data:image\/\w+;base64,/, '')
           }
         });
@@ -696,7 +757,7 @@ Khi người dùng mô tả triệu chứng bệnh của thú cưng, hãy trình
         latency_ms: Date.now() - fallbackStart,
         metadata: { error: err?.message }
       }).catch(() => {});
-      throw err;
+      throw new Error('Server đang quá tải, vui lòng tải lại trang.');
     }
   }
 };

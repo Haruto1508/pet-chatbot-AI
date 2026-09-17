@@ -22,7 +22,8 @@ import {
   Copy,
   ThumbsUp,
   ThumbsDown,
-  RotateCcw
+  RotateCcw,
+  RefreshCw
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord } from '../../types';
@@ -101,7 +102,8 @@ export const PetChatView: React.FC<Props> = ({
   onNavigateToPets,
   currentUser
 }) => {
-  const { showSuccess, showError } = useNotification();
+  const { showSuccess, showError, showInfo } = useNotification();
+  const [isRetrying, setIsRetrying] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -389,7 +391,17 @@ export const PetChatView: React.FC<Props> = ({
             console.info('Using Gemini Direct Backup');
           }
         },
-        abortController.signal
+        abortController.signal,
+        undefined,
+        (retrying) => {
+          setIsRetrying(retrying);
+          if (retrying) {
+            showInfo('Đang cố gắng kết nối lại...');
+            finalText = '';
+            setHasReceivedFirstChunk(false);
+            setMessages(prev => prev.filter(m => m.id !== aiMessageId));
+          }
+        }
       );
 
       // Save the finalized chat history to the current session in the background
@@ -417,25 +429,28 @@ export const PetChatView: React.FC<Props> = ({
           });
         }
       } else {
+        const errorText = err?.message || 'Server đang quá tải, vui lòng tải lại trang.';
         const errMsg: ChatMessage = {
           id: `err_${Date.now()}`,
           sender: 'ai',
-          text: `⚠️ **Lỗi kết nối**: ${err.message || 'Không thể kết nối tới hệ thống AI. Vui lòng kiểm tra lại mạng hoặc thử lại.'}`,
+          text: `⚠️ **${errorText}**`,
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           triageLevel: 'YELLOW'
         };
         setMessages(prev => [...prev, errMsg]);
+        showError(errorText);
 
         // Always log this to api_logs so Admin Log Viewer displays it!
         api.writeLog({
           log_type: 'chat',
           level: 'error',
-          message: `Lỗi chat: ${err?.message || 'Không rõ'}`,
+          message: errorText,
           metadata: { query: queryText.slice(0, 80), error: err?.message }
         }).catch(() => {});
       }
     } finally {
       setIsLoading(false);
+      setIsRetrying(false);
       setHasReceivedFirstChunk(false);
       abortControllerRef.current = null;
       inputRef.current?.focus();
@@ -938,6 +953,12 @@ export const PetChatView: React.FC<Props> = ({
                     <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-0.5" />
                   </div>
                   <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
+                  {isRetrying && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/80 animate-pulse">
+                      <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
+                      Đang cố gắng kết nối lại...
+                    </span>
+                  )}
                 </div>
                 <div className="pl-8 flex items-center gap-1.5">
                   <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }} />
@@ -979,7 +1000,8 @@ export const PetChatView: React.FC<Props> = ({
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !isLoading) handleSend(); }}
                     placeholder={
-                      isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
+                      isRetrying ? 'Đang cố gắng kết nối lại...'
+                      : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
                       : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}...`
                       : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'
                     }
