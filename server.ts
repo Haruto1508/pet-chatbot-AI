@@ -1349,9 +1349,46 @@ async function startServer(isVercel = false) {
   // --- AI CHAT ENDPOINT (Server-Side Gemini API) ---
   app.post('/api/chat', async (req: Request, res: Response) => {
 
-    const { message, petId, petInfo, imageBase64, history } = req.body;
+    const { message, petId, petInfo, imageBase64, history, userId } = req.body;
+
+    // 0. CHAR LIMIT CHECK
+    const cleanMessage = (message || '').trim();
+    if (cleanMessage.length > 2000) {
+      return res.status(400).json({ error: 'Tin nhắn quá dài. Giới hạn tối đa là 2000 ký tự.' });
+    }
 
     try {
+      // 1. GUEST RATE LIMIT CHECK (Server-side)
+      if (!userId || userId === 'guest') {
+        const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || 'unknown';
+        if (clientIp !== 'unknown') {
+          try {
+            const { data: limitData, error: fetchErr } = await supabase
+              .from('guest_rate_limits')
+              .select('message_count')
+              .eq('ip_address', clientIp)
+              .single();
+              
+            if (!fetchErr || fetchErr.code === 'PGRST116') { // PGRST116 means no rows found (which is fine)
+              const currentCount = limitData?.message_count || 0;
+              if (currentCount >= 8) {
+                serverLog('SYSTEM', 'WARN', '/api/chat', `Guest IP ${clientIp} exceeded limit`);
+                return res.status(429).json({ error: 'Bạn đã đạt giới hạn 8 tin nhắn miễn phí.' });
+              }
+              await supabase.from('guest_rate_limits').upsert({
+                ip_address: clientIp,
+                message_count: currentCount + 1,
+                last_message_at: new Date().toISOString()
+              }, { onConflict: 'ip_address' });
+            } else {
+              serverLog('SYSTEM', 'WARN', '/api/chat', `guest_rate_limits table error: ${fetchErr.message}`);
+            }
+          } catch (e: any) {
+            serverLog('SYSTEM', 'WARN', '/api/chat', `Guest limit check failed: ${e.message}`);
+          }
+        }
+      }
+
       // Retrieve System Config
       const cfgT0 = Date.now();
       const { data: configData, error: cfgErr } = await supabase.from('system_config').select('*').eq('id', 1).single();
@@ -1360,7 +1397,6 @@ async function startServer(isVercel = false) {
       const ai = getGeminiClient(configData?.gemini_api_key);
       const renderServiceUrl = configData?.render_service_url || 'https://pet-chatbot-ai.onrender.com';
 
-      const cleanMessage = (message || '').trim();
       const isCasualGreeting = /^(chào|hi|hello|cảm ơn|thank|dạ|vâng|ok|dạ vâng|ok ạ|không có gì|bye|tạm biệt|hihi|haha|hey|alo)/i.test(cleanMessage) && cleanMessage.length < 40;
 
       // Skip RAG Context for casual greetings to save time

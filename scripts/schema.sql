@@ -134,6 +134,13 @@ CREATE TABLE chat_sessions (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
+-- 7. Bảng Guest Rate Limits (Giới hạn chat cho khách)
+CREATE TABLE guest_rate_limits (
+  ip_address TEXT PRIMARY KEY,
+  message_count INTEGER DEFAULT 0,
+  last_message_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
 -- Tắt Row Level Security (RLS) cho tất cả các bảng để backend (dùng anon key) có thể truy cập được
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE pets DISABLE ROW LEVEL SECURITY;
@@ -141,3 +148,4 @@ ALTER TABLE medical_records DISABLE ROW LEVEL SECURITY;
 ALTER TABLE articles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE clinics DISABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE guest_rate_limits DISABLE ROW LEVEL SECURITY;

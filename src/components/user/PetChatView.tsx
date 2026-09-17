@@ -299,6 +299,12 @@ export const PetChatView: React.FC<Props> = ({
     const queryText = textToSend || input;
     if (!queryText.trim() && !selectedImage) return;
 
+    const MAX_CHAR_LIMIT = 2000;
+    if (queryText.length > MAX_CHAR_LIMIT) {
+      showError(`Tin nhắn quá dài (${queryText.length}/${MAX_CHAR_LIMIT} ký tự). Vui lòng tóm tắt lại.`);
+      return;
+    }
+
     // Enforce 8-message rate limit for guest users
     if (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) {
       showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập bằng Google để tiếp tục.');
@@ -394,7 +400,8 @@ export const PetChatView: React.FC<Props> = ({
           petId: selectedPet?.id,
           petInfo: selectedPet,
           imageBase64: imageToSend || undefined,
-          history: newMessages
+          history: newMessages,
+          userId: currentUser.id
         },
         (chunkText) => {
           setHasReceivedFirstChunk(true);
@@ -502,6 +509,12 @@ export const PetChatView: React.FC<Props> = ({
         }
       } else {
         const isTimeout = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('timeout') || err?.message?.toLowerCase().includes('quá thời gian');
+        const isRateLimit = err?.message?.includes('giới hạn 8 tin nhắn');
+        
+        if (isRateLimit && isGuest) {
+          setGuestMsgCount(GUEST_MESSAGE_LIMIT); // Trigger banner immediately
+        }
+
         const errorText = isTimeout
           ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại hoặc tải lại trang.'
           : (err?.message || 'Lưu lượng truy cập quá lớn, vui lòng tải lại trang.');

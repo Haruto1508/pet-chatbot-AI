@@ -386,6 +386,7 @@ export const api = {
     petInfo?: PetProfile | null;
     imageBase64?: string;
     history?: ChatMessage[];
+    userId?: string;
   }): Promise<{
     text: string;
     triageLevel: TriageLevel;
@@ -398,6 +399,9 @@ export const api = {
       body: JSON.stringify(payload)
     });
     if (!res.ok) {
+      if (res.status === 429) {
+        throw new Error('Bạn đã đạt giới hạn tin nhắn. Vui lòng đăng nhập để tiếp tục sử dụng miễn phí!');
+      }
       throw new Error('Lỗi kết nối máy chủ AI');
     }
     return res.json();
@@ -410,6 +414,7 @@ export const api = {
       petInfo?: PetProfile | null;
       imageBase64?: string;
       history?: ChatMessage[];
+      userId?: string;
     },
     onChunk: (text: string) => void,
     onTriage: (triageLevel: TriageLevel, triageDetails: any) => void,
@@ -550,6 +555,7 @@ export const api = {
       petInfo?: PetProfile | null;
       imageBase64?: string;
       history?: ChatMessage[];
+      userId?: string;
     },
     onChunk: (text: string) => void,
     onTriage: (triageLevel: TriageLevel, triageDetails: any) => void,
