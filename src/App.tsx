@@ -259,7 +259,7 @@ export function App() {
           <main
             className={`flex-1 min-h-0 w-full mx-auto pt-10 lg:pt-0 ${
               currentTab === 'chat'
-                ? 'flex flex-col p-2 sm:p-4 overflow-hidden max-w-7xl'
+                ? 'flex flex-col overflow-hidden'
                 : 'overflow-y-auto p-3 sm:p-6 max-w-7xl'
             }`}
           >
