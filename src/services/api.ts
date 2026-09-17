@@ -930,18 +930,20 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
   // Test all keys in an API Key pool
   testGeminiKeyPool: async (keys: string[] | string, model: string = 'gemini-2.5-flash'): Promise<Array<{ key: string; maskedKey: string; ok: boolean; latencyMs?: number; error?: string }>> => {
     const uniqueKeys = parseApiKeys(keys);
-    const results = await Promise.all(
-      uniqueKeys.map(async (k) => {
-        const testRes = await api.testGeminiKey(k, model);
-        return {
-          key: k,
-          maskedKey: maskApiKey(k),
-          ok: testRes.ok,
-          latencyMs: testRes.latencyMs,
-          error: testRes.error
-        };
-      })
-    );
+    const results = [];
+    // Test sequentially to avoid triggering Google's rate limits (429) for burst requests
+    for (const k of uniqueKeys) {
+      const testRes = await api.testGeminiKey(k, model);
+      results.push({
+        key: k,
+        maskedKey: maskApiKey(k),
+        ok: testRes.ok,
+        latencyMs: testRes.latencyMs,
+        error: testRes.error
+      });
+      // Add a small delay between tests
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
     return results;
   }
 };
