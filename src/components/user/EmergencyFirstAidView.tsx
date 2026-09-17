@@ -96,14 +96,6 @@ export const EmergencyFirstAidView: React.FC = () => {
             Hướng dẫn thao tác tức thì trong 15 phút vàng giúp bảo vệ tính mạng chó mèo trước khi di chuyển tới phòng khám.
           </p>
         </div>
-
-        <a
-          href="tel:0903123456"
-          className="flex items-center justify-center gap-2 bg-amber-400 hover:bg-amber-300 text-red-950 px-5 py-3 rounded-xl font-black text-xs shadow-md transition-all w-full md:w-auto"
-        >
-          <PhoneCall className="w-4 h-4 animate-bounce" />
-          GỌI HOTLINE CẤP CỨU: 0903 123 456
-        </a>
       </div>
 
       {/* Emergency Guide List */}
