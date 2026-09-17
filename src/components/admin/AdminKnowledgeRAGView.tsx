@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Plus, Edit, Trash2, Search, BookOpen, Image as ImageIcon, X } from 'lucide-react';
+import { Database, Plus, Edit, Trash2, Search, BookOpen, Image as ImageIcon, X, RefreshCw } from 'lucide-react';
 import { KnowledgeArticle, TriageLevel } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
@@ -13,6 +13,7 @@ export const AdminKnowledgeRAGView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<KnowledgeArticle | null>(null);
   const [articleToDelete, setArticleToDelete] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -95,14 +96,23 @@ export const AdminKnowledgeRAGView: React.FC = () => {
       content: formData.content
     };
 
-    if (editingArticle) {
-      await api.updateArticle(editingArticle.id, payload);
-    } else {
-      await api.createArticle(payload);
-    }
+    setIsSubmitting(true);
+    try {
+      if (editingArticle) {
+        await api.updateArticle(editingArticle.id, payload);
+        showSuccess('Đã cập nhật bài viết và đồng bộ Vector RAG thành công!');
+      } else {
+        await api.createArticle(payload);
+        showSuccess('Đã tạo mới bài viết và nhúng Vector RAG thành công!');
+      }
 
-    setIsModalOpen(false);
-    loadArticles();
+      setIsModalOpen(false);
+      loadArticles();
+    } catch (err: any) {
+      showError(err?.message || 'Lỗi khi lưu bài viết RAG');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -345,9 +355,16 @@ export const AdminKnowledgeRAGView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-teal-600 text-white font-bold"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
-                  Lưu RAG Data
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Đang tạo Vector RAG...
+                    </>
+                  ) : (
+                    'Lưu RAG Data'
+                  )}
                 </button>
               </div>
             </form>

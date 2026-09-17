@@ -252,7 +252,7 @@ async function startServer(isVercel = false) {
       }
     }
 
-    // Fallback: In-memory keyword filter
+    // Fallback: In-memory intelligent keyword & symptom filter
     const queryLower = queryText.toLowerCase();
     const ft0 = Date.now();
     const { data: articles, error: fetchErr } = await supabase.from('articles').select('*');
@@ -262,9 +262,25 @@ async function startServer(isVercel = false) {
     }
 
     const matched = articles.filter((art: any) => {
-      const titleMatch = art.title.toLowerCase().includes(queryLower);
-      const summaryMatch = art.summary.toLowerCase().includes(queryLower);
-      return titleMatch || summaryMatch;
+      const titleLower = (art.title || '').toLowerCase();
+      const summaryLower = (art.summary || '').toLowerCase();
+      const symptoms = (art.symptoms || []).map((s: string) => s.toLowerCase());
+
+      // 1. Direct phrase or sub-phrase match
+      if (titleLower.includes(queryLower) || summaryLower.includes(queryLower)) return true;
+
+      // 2. Symptom overlap
+      const symptomOverlap = symptoms.some((s: string) => 
+        queryLower.includes(s) || s.split(' ').some(w => w.length > 3 && queryLower.includes(w))
+      );
+      if (symptomOverlap) return true;
+
+      // 3. Keyword matching (tokens of length >= 3)
+      const keywords = queryLower.split(/[\s,.;!?]+/).filter((w: string) => w.length >= 3);
+      const matchesCount = keywords.filter((k: string) => 
+        titleLower.includes(k) || summaryLower.includes(k) || symptoms.some((s: string) => s.includes(k))
+      ).length;
+      return matchesCount >= 2;
     });
 
     if (matched.length === 0) {

@@ -114,6 +114,16 @@ export function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Proactively warm up Render Python AI service in background
+  useEffect(() => {
+    const warmUp = () => {
+      fetch('/api/keep-alive?service=render').catch(() => {});
+    };
+    warmUp();
+    const interval = setInterval(warmUp, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // PWA Install Prompt Logic
   const [showPwaBanner, setShowPwaBanner] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
