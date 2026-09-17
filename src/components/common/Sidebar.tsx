@@ -3,7 +3,7 @@ import {
   MessageSquare, FileText, Newspaper, ShieldAlert, MapPin,
   PawPrint, Settings, LayoutDashboard, Users, Database,
   Sliders, X, ShieldCheck, LogOut, LogIn, PawPrint as PawIcon,
-  Phone, ChevronLeft, ChevronRight, Menu, Activity, ScrollText
+  Phone, ChevronLeft, ChevronRight, Menu, Activity, ScrollText, HelpCircle
 } from "lucide-react";
 import { UserProfile } from "../../types";
 import { LogoutConfirmModal } from "./LogoutConfirmModal";
@@ -272,6 +272,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </button>
               </div>
             )}
+
+            <div className="pt-2 mt-1 border-t border-slate-200/80">
+              <button
+                type="button"
+                onClick={() => {
+                  onCloseMobile();
+                  window.dispatchEvent(new Event('vethic_open_onboarding_tour'));
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-emerald-700 hover:bg-emerald-50/60 transition-all cursor-pointer"
+              >
+                <HelpCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>Hướng Dẫn Sử Dụng</span>
+              </button>
+            </div>
           </nav>
 
           {/* Bottom User Profile Section */}

@@ -8,6 +8,7 @@ import { Sidebar } from './components/common/Sidebar';
 
 import { LoginModal } from './components/common/LoginModal';
 import { SuspendedAccountModal } from './components/common/SuspendedAccountModal';
+import { OnboardingTourModal } from './components/common/OnboardingTourModal';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { NotFoundView } from './components/common/NotFoundView';
 
@@ -143,6 +144,26 @@ export function App() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  // Interactive Onboarding Tour Guide Logic
+  const [isOpenOnboardingTour, setIsOpenOnboardingTour] = useState<boolean>(false);
+
+  useEffect(() => {
+    // Automatically trigger onboarding for first-time visitors
+    const hasCompletedTour = localStorage.getItem('vethic_onboarding_completed');
+    if (!hasCompletedTour) {
+      const timer = setTimeout(() => {
+        setIsOpenOnboardingTour(true);
+      }, 700);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleOpenTour = () => setIsOpenOnboardingTour(true);
+    window.addEventListener('vethic_open_onboarding_tour', handleOpenTour);
+    return () => window.removeEventListener('vethic_open_onboarding_tour', handleOpenTour);
   }, []);
 
   const handleInstallPwa = async () => {
@@ -387,6 +408,7 @@ export function App() {
               <AccountSettingsView 
                 currentUser={currentUser} 
                 onUpdateUser={handleUpdateUser}
+                onOpenOnboardingTour={() => setIsOpenOnboardingTour(true)}
               />
             )}
 
@@ -415,6 +437,12 @@ export function App() {
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
+      />
+
+      {/* Interactive Onboarding Tour Modal */}
+      <OnboardingTourModal
+        isOpen={isOpenOnboardingTour}
+        onClose={() => setIsOpenOnboardingTour(false)}
       />
 
       {/* Suspended Account Overlay Modal */}

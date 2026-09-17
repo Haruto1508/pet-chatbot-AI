@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut, Smartphone } from 'lucide-react';
+import { Settings, User, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut, Smartphone, Compass, Sparkles, HelpCircle } from 'lucide-react';
 import { UserProfile, ChatSession } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -8,9 +8,10 @@ import { LogoutConfirmModal } from '../common/LogoutConfirmModal';
 interface Props {
   currentUser: UserProfile;
   onUpdateUser: (updates: Partial<UserProfile>) => void;
+  onOpenOnboardingTour?: () => void;
 }
 
-export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser }) => {
+export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser, onOpenOnboardingTour }) => {
   const { showSuccess, showError } = useNotification();
   const [userName, setUserName] = useState(currentUser.name);
   const email = currentUser.email;
@@ -251,6 +252,46 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
                 </div>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Interactive Tour Guide Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Compass className="w-4 h-4 text-emerald-600" /> Hướng Dẫn & Giới Thiệu
+            </h3>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+              Interactive Tour
+            </span>
+          </div>
+
+          <div className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-emerald-50/40 via-white to-teal-50/20 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-3.5 w-full sm:w-auto">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 shadow-2xs">
+                <Sparkles className="w-6 h-6 text-emerald-600" />
+              </div>
+              <div className="text-xs text-slate-600">
+                <p className="font-extrabold text-slate-900 text-sm mb-1">Khám Phá Tính Năng Vethic AI</p>
+                <p className="text-slate-500 leading-relaxed">
+                  Xem lại toàn bộ hướng dẫn từng bước: phân loại Triage 3 cấp độ, định vị phòng khám, chẩn đoán qua ảnh và sơ cứu khẩn cấp.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenOnboardingTour) {
+                  onOpenOnboardingTour();
+                } else {
+                  window.dispatchEvent(new Event('vethic_open_onboarding_tour'));
+                }
+              }}
+              className="w-full sm:w-auto px-5 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 active:scale-95 text-slate-800 hover:text-emerald-700 text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+            >
+              <HelpCircle className="w-4 h-4 text-emerald-600" /> Xem Lại Hướng Dẫn
+            </button>
           </div>
         </div>
 
