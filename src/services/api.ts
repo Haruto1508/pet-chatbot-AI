@@ -8,8 +8,12 @@ import {
   SystemConfig,
   SystemStats,
   TriageLevel,
-  ChatSession
+  ChatSession,
+  ApiLog,
+  ApiLogType,
+  ApiLogLevel
 } from '../types';
+import { supabase } from './supabaseClient';
 
 export const api = {
   // Stats
@@ -445,6 +449,205 @@ export const api = {
         return;
       }
       throw e;
+    }
+  },
+
+  // ─────────────────────────────────────────────
+  // API LOGS (via Supabase)
+  // ─────────────────────────────────────────────
+
+  getLogs: async (filters?: {
+    log_type?: ApiLogType;
+    level?: ApiLogLevel;
+    limit?: number;
+  }): Promise<ApiLog[]> => {
+    let query = supabase
+      .from('api_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(filters?.limit ?? 200);
+
+    if (filters?.log_type) query = query.eq('log_type', filters.log_type);
+    if (filters?.level) query = query.eq('level', filters.level);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return (data ?? []) as ApiLog[];
+  },
+
+  writeLog: async (log: Omit<ApiLog, 'id' | 'created_at'>): Promise<void> => {
+    await supabase.from('api_logs').insert([log]);
+  },
+
+  clearLogs: async (log_type?: ApiLogType): Promise<void> => {
+    let query = supabase.from('api_logs').delete();
+    if (log_type) {
+      query = query.eq('log_type', log_type) as any;
+    } else {
+      query = query.neq('id', '00000000-0000-0000-0000-000000000000') as any;
+    }
+    await query;
+  },
+
+  // ─────────────────────────────────────────────
+  // GEMINI DIRECT FALLBACK STREAM
+  // ─────────────────────────────────────────────
+
+  sendChatStreamWithFallback: async (
+    payload: {
+      message: string;
+      petId?: string;
+      petInfo?: PetProfile | null;
+      imageBase64?: string;
+      history?: ChatMessage[];
+    },
+    onChunk: (text: string) => void,
+    onTriage: (triageLevel: TriageLevel, triageDetails: any) => void,
+    onFallback: (used: boolean) => void,
+    signal?: AbortSignal,
+    fallbackConfig?: {
+      enabled: boolean;
+      apiKey: string;
+      model: string;
+      timeoutMs: number;
+    }
+  ): Promise<void> => {
+    const startTime = Date.now();
+
+    // Try primary Render backend first
+    try {
+      const controller = new AbortController();
+      const timeout = fallbackConfig?.enabled
+        ? setTimeout(() => controller.abort(), fallbackConfig.timeoutMs ?? 12000)
+        : null;
+
+      const combinedSignal = signal ?? controller.signal;
+
+      await api.sendChatStream(payload, onChunk, onTriage, combinedSignal);
+      if (timeout) clearTimeout(timeout);
+      onFallback(false);
+
+      // Log successful chat
+      api.writeLog({
+        log_type: 'chat',
+        level: 'info',
+        message: `Chat OK via Render (${Date.now() - startTime}ms)`,
+        latency_ms: Date.now() - startTime,
+        status_code: 200,
+        metadata: { messagePreview: payload.message.slice(0, 80) }
+      }).catch(() => {});
+
+      return;
+    } catch (err: any) {
+      // If aborted by user (not timeout), rethrow
+      if (signal?.aborted) throw err;
+
+      const isTimeout = err?.name === 'AbortError' || err?.message?.includes('timeout');
+      const isNetworkErr = err?.message?.includes('fetch') || err?.message?.includes('connect') || err?.message?.includes('Lỗi');
+
+      if (!fallbackConfig?.enabled || !fallbackConfig.apiKey || (!isTimeout && !isNetworkErr)) {
+        // Log the error
+        api.writeLog({
+          log_type: 'render',
+          level: 'error',
+          message: `Render error: ${err?.message ?? 'unknown'}`,
+          latency_ms: Date.now() - startTime,
+          metadata: { error: err?.message }
+        }).catch(() => {});
+        throw err;
+      }
+
+      // Log render failure before fallback
+      api.writeLog({
+        log_type: 'render',
+        level: 'warn',
+        message: `Render failed (${err?.message}), switching to Gemini fallback`,
+        latency_ms: Date.now() - startTime,
+        metadata: { error: err?.message, fallbackModel: fallbackConfig.model }
+      }).catch(() => {});
+    }
+
+    // ── GEMINI DIRECT FALLBACK ──
+    onFallback(true);
+    const fallbackStart = Date.now();
+
+    try {
+      const model = fallbackConfig!.model || 'gemini-2.5-flash';
+      const apiKey = fallbackConfig!.apiKey;
+
+      // Build history for Gemini
+      const geminiHistory = (payload.history ?? [])
+        .filter(m => m.id !== 'msg_welcome')
+        .map(m => ({
+          role: m.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: m.text }]
+        }));
+
+      const currentParts: any[] = [];
+      if (payload.imageBase64) {
+        currentParts.push({
+          inlineData: { mimeType: 'image/jpeg', data: payload.imageBase64.split(',')[1] ?? payload.imageBase64 }
+        });
+      }
+      currentParts.push({ text: payload.message });
+
+      const body = {
+        contents: [...geminiHistory, { role: 'user', parts: currentParts }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
+      };
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }
+      );
+
+      if (!res.ok || !res.body) {
+        throw new Error(`Gemini fallback error: ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        if (signal?.aborted) { try { await reader.cancel(); } catch {} break; }
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const json = JSON.parse(line.slice(6));
+            const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) onChunk(text);
+          } catch {}
+        }
+      }
+
+      // Default triage for fallback
+      onTriage('GREEN', { riskTitle: 'Bình thường', urgency: 'Không cấp bách', immediateActions: [] });
+
+      api.writeLog({
+        log_type: 'fallback',
+        level: 'info',
+        message: `Gemini fallback OK (${Date.now() - fallbackStart}ms) model=${model}`,
+        latency_ms: Date.now() - fallbackStart,
+        status_code: 200,
+        metadata: { model }
+      }).catch(() => {});
+
+    } catch (err: any) {
+      if (signal?.aborted) throw err;
+      api.writeLog({
+        log_type: 'fallback',
+        level: 'error',
+        message: `Gemini fallback also failed: ${err?.message}`,
+        latency_ms: Date.now() - fallbackStart,
+        metadata: { error: err?.message }
+      }).catch(() => {});
+      throw err;
     }
   }
 };

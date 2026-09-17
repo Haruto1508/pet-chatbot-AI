@@ -113,6 +113,27 @@ export interface SystemConfig {
   customModelName?: string;
   apiProvider?: 'gemini' | 'openai' | 'custom';
   autoKeepAliveIntervalMinutes?: number;
+  // Fallback config
+  enableGeminiFallback?: boolean;
+  fallbackGeminiApiKey?: string;
+  fallbackModel?: string;
+  fallbackTimeoutMs?: number;
+}
+
+export type ApiLogLevel = 'info' | 'warn' | 'error';
+export type ApiLogType = 'chat' | 'supabase' | 'render' | 'gemini' | 'fallback' | 'error' | 'system';
+
+export interface ApiLog {
+  id: string;
+  created_at: string;
+  log_type: ApiLogType;
+  level: ApiLogLevel;
+  user_id?: string | null;
+  session_id?: string | null;
+  message: string;
+  metadata?: Record<string, any> | null;
+  latency_ms?: number | null;
+  status_code?: number | null;
 }
 
 export interface SystemStats {

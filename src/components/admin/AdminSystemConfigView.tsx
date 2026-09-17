@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Cpu, Save, ShieldAlert, Check, RefreshCw, Sliders,
   Key, Database, Server, Zap, Activity, CheckCircle2,
@@ -520,6 +520,115 @@ export const AdminSystemConfigView: React.FC = () => {
           <p className="text-[11px] text-slate-400">
             System Prompt sẽ được gắn vào đầu mỗi phiên tư vấn của AI cùng với ngữ cảnh thú cưng và tri thức RAG.
           </p>
+        </div>
+
+        {/* Section: Fallback & Dự Phòng */}
+        <div className="bg-white p-6 rounded-2xl border border-orange-200 shadow-xs space-y-5">
+          <div className="flex items-center gap-3 border-b border-orange-100 pb-4">
+            <div className="p-2 bg-orange-50 rounded-xl">
+              <Zap className="w-5 h-5 text-orange-600" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Fallback & Dự Phòng</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Khi Render backend lỗi hoặc timeout, tự động gọi thẳng Gemini API từ frontend
+              </p>
+            </div>
+            {/* Enable toggle */}
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-semibold">
+                {config.enableGeminiFallback ? 'Đã bật' : 'Đã tắt'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, enableGeminiFallback: !config.enableGeminiFallback })}
+                className={`relative inline-flex h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none ${
+                  config.enableGeminiFallback ? 'bg-orange-500' : 'bg-slate-200'
+                }`}
+              >
+                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform duration-200 mt-0.5 ${
+                  config.enableGeminiFallback ? 'translate-x-5.5' : 'translate-x-0.5'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          {config.enableGeminiFallback && (
+            <div className="space-y-4">
+              {/* Fallback API Key */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                  Gemini API Key (Fallback)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showBackupKey ? 'text' : 'password'}
+                    value={config.fallbackGeminiApiKey ?? ''}
+                    onChange={(e) => setConfig({ ...config, fallbackGeminiApiKey: e.target.value })}
+                    placeholder="AIza..."
+                    className="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 text-sm font-mono bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowBackupKey(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showBackupKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Key này sẽ được dùng gọi trực tiếp Gemini REST API khi Render không phản hồi.
+                  Key sẽ visible trong browser network tab khi fallback xảy ra.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Fallback Model */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                    Model Fallback
+                  </label>
+                  <select
+                    value={config.fallbackModel ?? 'gemini-2.5-flash'}
+                    onChange={(e) => setConfig({ ...config, fallbackModel: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
+                  >
+                    <option value="gemini-2.5-flash">gemini-2.5-flash (nhanh nhất)</option>
+                    <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                    <option value="gemini-pro">gemini-pro (chất lượng cao)</option>
+                  </select>
+                </div>
+
+                {/* Timeout */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                    Timeout Render (ms)
+                  </label>
+                  <input
+                    type="number"
+                    min={3000}
+                    max={30000}
+                    step={1000}
+                    value={config.fallbackTimeoutMs ?? 12000}
+                    onChange={(e) => setConfig({ ...config, fallbackTimeoutMs: Number(e.target.value) })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Chờ tối đa bao nhiêu ms trước khi coi là Render lỗi và chuyển sang fallback.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2 p-3 bg-orange-50 rounded-xl border border-orange-100">
+                <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-orange-700">
+                  <strong>Lưu ý bảo mật:</strong> Fallback gọi Gemini trực tiếp từ trình duyệt người dùng.
+                  API key fallback sẽ xuất hiện trong network request. Chỉ dùng key có quota giới hạn riêng.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Save Bar */}

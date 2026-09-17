@@ -3,7 +3,7 @@ import {
   MessageSquare, FileText, Newspaper, ShieldAlert, MapPin,
   PawPrint, Settings, LayoutDashboard, Users, Database,
   Sliders, X, ShieldCheck, LogOut, LogIn, PawPrint as PawIcon,
-  Phone, ChevronLeft, ChevronRight, Menu, Activity
+  Phone, ChevronLeft, ChevronRight, Menu, Activity, ScrollText
 } from "lucide-react";
 import { UserProfile } from "../../types";
 import { LogoutConfirmModal } from "./LogoutConfirmModal";
@@ -39,13 +39,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const adminNavItems = [
-    { id: "admin_dashboard", label: "Thống Kê & Báo Cáo", icon: LayoutDashboard },
-    { id: "admin_users", label: "Quản Lý Người Dùng", icon: Users },
-    { id: "admin_records", label: "Quản Lý Bệnh Án", icon: FileText },
-    { id: "admin_clinics", label: "Danh Sách Phòng Khám", icon: MapPin },
-    { id: "admin_rag", label: "Tri Thức RAG & AI", icon: Database },
-    { id: "admin_config", label: "Cấu Hình AI & API", icon: Sliders },
-    { id: "admin_health", label: "Kiểm Tra & Giữ Sống", icon: Activity },
+    { id: "admin_dashboard", label: "Thống Kê & Báo Cáo",      icon: LayoutDashboard },
+    { id: "admin_users",     label: "Quản Lý Người Dùng",      icon: Users },
+    { id: "admin_records",   label: "Quản Lý Bệnh Án",         icon: FileText },
+    { id: "admin_clinics",   label: "Danh Sách Phòng Khám",    icon: MapPin },
+    { id: "admin_rag",       label: "Tri Thức RAG & AI",       icon: Database },
+    { id: "admin_config",    label: "Cấu Hình AI & API",       icon: Sliders },
+    { id: "admin_health",    label: "Kiểm Tra & Giữ Sống",     icon: Activity },
+    { id: "admin_logs",      label: "Log Hệ Thống",            icon: ScrollText },
   ];
 
   const handleNav = (tabId: string) => {

@@ -28,7 +28,8 @@ const AdminPetsRecordsView = lazy(() => import('./components/admin/AdminPetsReco
 const AdminClinicsView = lazy(() => import('./components/admin/AdminClinicsView').then(m => ({ default: m.AdminClinicsView })));
 const AdminKnowledgeRAGView = lazy(() => import('./components/admin/AdminKnowledgeRAGView').then(m => ({ default: m.AdminKnowledgeRAGView })));
 const AdminSystemConfigView = lazy(() => import('./components/admin/AdminSystemConfigView').then(m => ({ default: m.AdminSystemConfigView })));
-const AdminHealthCheckView = lazy(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
+const AdminHealthCheckView  = lazy(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
+const AdminLogView          = lazy(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
 
 // Loading spinner fallback for lazy-loaded components
 function PageLoader() {
@@ -339,12 +340,13 @@ export function App() {
             {currentUser.role === 'admin' && (
               <>
                 {currentTab === 'admin_dashboard' && <AdminDashboardView />}
-                {currentTab === 'admin_users' && <AdminUsersView currentUser={currentUser} />}
-                {currentTab === 'admin_records' && <AdminPetsRecordsView />}
-                {currentTab === 'admin_clinics' && <AdminClinicsView />}
-                {currentTab === 'admin_rag' && <AdminKnowledgeRAGView />}
-                {currentTab === 'admin_config' && <AdminSystemConfigView />}
-                {currentTab === 'admin_health' && <AdminHealthCheckView />}
+                {currentTab === 'admin_users'     && <AdminUsersView currentUser={currentUser} />}
+                {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
+                {currentTab === 'admin_clinics'   && <AdminClinicsView />}
+                {currentTab === 'admin_rag'       && <AdminKnowledgeRAGView />}
+                {currentTab === 'admin_config'    && <AdminSystemConfigView />}
+                {currentTab === 'admin_health'    && <AdminHealthCheckView />}
+                {currentTab === 'admin_logs'      && <AdminLogView />}
               </>
             )}
 
