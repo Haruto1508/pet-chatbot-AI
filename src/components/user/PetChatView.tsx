@@ -702,7 +702,7 @@ export const PetChatView: React.FC<Props> = ({
         {/* Scrollable Messages — full height */}
         <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
           <div className="max-w-3xl mx-auto px-4 sm:px-6">
-            {messages.map((msg, idx) => {
+            {messages.filter(m => m.id !== 'msg_welcome').map((msg, idx) => {
               const isUser = msg.sender === 'user';
 
               if (isUser) {
@@ -844,25 +844,35 @@ export const PetChatView: React.FC<Props> = ({
         {/* Floating Bottom Bar */}
         <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-transparent pt-6 pb-3">
           <div className="max-w-3xl mx-auto px-4 sm:px-6">
-          {/* Prompt suggestions */}
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-none mb-2">
-            {promptSuggestions.map((prompt, idx) => (
-              <button
-                key={idx}
-                type="button"
-                disabled={isLoading}
-                onClick={(e) => {
-                  e.preventDefault();
-                  if (isLoading) return;
-                  setInput(prompt);
-                  inputRef.current?.focus();
-                }}
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-xl bg-white hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 whitespace-nowrap transition-all border border-slate-200 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
+
+          {/* Empty state label — only when no real messages */}
+          {messages.filter(m => m.sender === 'user').length === 0 && !isLoading && (
+            <p className="text-center text-slate-400 text-sm mb-4 font-medium">
+              Khi bạn sẵn sàng là chúng ta có thể bắt đầu.
+            </p>
+          )}
+
+          {/* Prompt suggestions — only when no real messages */}
+          {/* {messages.filter(m => m.sender === 'user').length === 0 && !isLoading && (
+            <div className="flex gap-1.5 overflow-x-auto scrollbar-none mb-2">
+              {promptSuggestions.map((prompt, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (isLoading) return;
+                    setInput(prompt);
+                    inputRef.current?.focus();
+                  }}
+                  className="text-[11px] font-semibold px-2.5 py-1 rounded-xl bg-white hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 whitespace-nowrap transition-all border border-slate-200 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          )} */}
 
           {/* Attached image indicator */}
           {selectedImage && (
