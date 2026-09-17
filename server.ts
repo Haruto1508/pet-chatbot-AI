@@ -276,7 +276,7 @@ async function startServer(isVercel = false) {
     // 4. Check active system config (AI model being used)
     results.activeConfig = {
       status: dbConfig ? 'ok' : 'warn',
-      aiModel: dbConfig?.ai_model || 'gemini-2.5-flash (default)',
+      aiModel: dbConfig?.ai_model || 'gemini-3.6-flash',
       temperature: dbConfig?.temperature ?? 0.4,
       lastUpdated: dbConfig?.updated_at || null,
       source: dbConfig ? 'Supabase system_config' : 'Default (system_config table not found)',
@@ -1040,7 +1040,7 @@ async function startServer(isVercel = false) {
       } catch {}
 
       res.json({
-        aiModel: dbData?.ai_model || local.aiModel || 'gemini-2.5-flash',
+        aiModel: dbData?.ai_model || local.aiModel || 'gemini-3.6-flash',
         temperature: dbData?.temperature ?? local.temperature ?? 0.4,
         systemPrompt: dbData?.system_prompt || local.systemPrompt || '',
         maxTokens: dbData?.max_tokens ?? local.maxTokens ?? 2048,
@@ -1055,7 +1055,7 @@ async function startServer(isVercel = false) {
         autoKeepAliveIntervalMinutes: dbData?.auto_keep_alive_interval ?? local.autoKeepAliveIntervalMinutes ?? 10,
         enableGeminiFallback: dbData?.enable_gemini_fallback ?? local.enableGeminiFallback ?? true,
         fallbackGeminiApiKey: dbData?.fallback_gemini_api_key || local.fallbackGeminiApiKey || local.backupGeminiApiKey || (process.env.GEMINI_API_KEY || ''),
-        fallbackModel: dbData?.fallback_model || local.fallbackModel || 'gemini-2.5-flash',
+        fallbackModel: dbData?.fallback_model || local.fallbackModel || 'gemini-3.6-flash',
         fallbackTimeoutMs: dbData?.fallback_timeout_ms || local.fallbackTimeoutMs || 20000
       });
     } catch (e: any) {
@@ -1076,7 +1076,7 @@ async function startServer(isVercel = false) {
       // 1. Core payload (always supported by basic system_config table)
       const corePayload: Record<string, any> = {
         id: 1,
-        ai_model: updated.aiModel || 'gemini-2.5-flash',
+        ai_model: updated.aiModel || 'gemini-3.6-flash',
         temperature: updated.temperature ?? 0.4,
         system_prompt: updated.systemPrompt || '',
         max_tokens: updated.maxTokens ?? 2048,
@@ -1732,7 +1732,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
     try {
       const { data: configData } = await supabase.from('system_config').select('*').eq('id', 1).single();
       const ai = getGeminiClient(configData?.gemini_api_key);
-      const sysConfig = configData ? { aiModel: configData.ai_model } : { aiModel: 'gemini-2.5-flash' };
+      const sysConfig = configData ? { aiModel: configData.ai_model } : { aiModel: 'gemini-3.6-flash' };
 
       const summaryPrompt = `
 Bạn là Bác sĩ Thú y AI cực kỳ tận tâm và có chuyên môn cao. Hãy đọc đoạn hội thoại chat tư vấn dưới đây và tổng hợp thành 1 Hồ Sơ Bệnh Án chuẩn y khoa thú y chi tiết, đầy đủ và dễ hiểu cho người nuôi.
