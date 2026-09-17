@@ -3,7 +3,7 @@ import {
   Cpu, Save, ShieldAlert, Check, RefreshCw, Sliders,
   Key, Database, Server, Zap, Activity, CheckCircle2,
   XCircle, AlertTriangle, Clock, Eye, EyeOff, Sparkles,
-  Layers, Lock, HelpCircle, ArrowRight, ExternalLink
+  Layers, Lock, HelpCircle, ArrowRight, ExternalLink, Plus, Trash2
 } from 'lucide-react';
 import { SystemConfig } from '../../types';
 import { api } from '../../services/api';
@@ -27,8 +27,11 @@ export const AdminSystemConfigView: React.FC = () => {
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; latencyMs?: number } | null>(null);
 
-  // Multi-Key Pool testing states
+  // Multi-Key Pool testing & adding states
+  const [newKeyInput, setNewKeyInput] = useState('');
   const [testingPool, setTestingPool] = useState(false);
+  const [testingSingleKeyIdx, setTestingSingleKeyIdx] = useState<number | null>(null);
+  const [individualTestResults, setIndividualTestResults] = useState<Record<number, { ok: boolean; latencyMs?: number; error?: string }>>({});
   const [poolResults, setPoolResults] = useState<Array<{ key: string; maskedKey: string; ok: boolean; latencyMs?: number; error?: string }> | null>(null);
 
   const loadConfig = async () => {
@@ -162,6 +165,79 @@ export const AdminSystemConfigView: React.FC = () => {
       setTestingPool(false);
     }
   };
+
+  const handleAddKey = () => {
+    const trimmed = newKeyInput.trim();
+    if (!trimmed) {
+      showInfo('Vui lòng nhập API Key để thêm.');
+      return;
+    }
+    if (trimmed.length < 10) {
+      showError('API Key không hợp lệ (độ dài tối thiểu 10 ký tự).');
+      return;
+    }
+
+    const currentKeys = parseApiKeys(config?.backupGeminiApiKey || config?.fallbackGeminiApiKey || '');
+    if (currentKeys.includes(trimmed)) {
+      showInfo('API Key này đã tồn tại trong danh sách.');
+      return;
+    }
+
+    const updatedKeys = [...currentKeys, trimmed];
+    const joinedStr = updatedKeys.join('\n');
+    setConfig(prev => prev ? {
+      ...prev,
+      backupGeminiApiKey: joinedStr,
+      fallbackGeminiApiKey: joinedStr
+    } : null);
+
+    setNewKeyInput('');
+    showSuccess(`Đã thêm Key #${updatedKeys.length} vào Pool!`);
+  };
+
+  const handleRemoveKey = (indexToRemove: number) => {
+    const currentKeys = parseApiKeys(config?.backupGeminiApiKey || config?.fallbackGeminiApiKey || '');
+    const updatedKeys = currentKeys.filter((_, idx) => idx !== indexToRemove);
+    const joinedStr = updatedKeys.join('\n');
+    setConfig(prev => prev ? {
+      ...prev,
+      backupGeminiApiKey: joinedStr,
+      fallbackGeminiApiKey: joinedStr
+    } : null);
+
+    setIndividualTestResults(prev => {
+      const next = { ...prev };
+      delete next[indexToRemove];
+      return next;
+    });
+
+    showInfo('Đã xóa Key khỏi danh sách.');
+  };
+
+  const handleTestSingleKey = async (key: string, index: number) => {
+    setTestingSingleKeyIdx(index);
+    try {
+      const res = await api.testGeminiKey(key, config?.fallbackModel || config?.aiModel || 'gemini-2.5-flash');
+      setIndividualTestResults(prev => ({
+        ...prev,
+        [index]: { ok: res.ok, latencyMs: res.latencyMs, error: res.error }
+      }));
+      if (res.ok) {
+        showSuccess(`Key #${index + 1} hoạt động tốt (${res.latencyMs}ms)!`);
+      } else {
+        showError(`Key #${index + 1} lỗi: ${res.error}`);
+      }
+    } catch (e: any) {
+      setIndividualTestResults(prev => ({
+        ...prev,
+        [index]: { ok: false, error: e?.message || 'Lỗi kết nối' }
+      }));
+      showError(`Key #${index + 1} không thể kết nối.`);
+    } finally {
+      setTestingSingleKeyIdx(null);
+    }
+  };
+
 
   const handleResetPrompt = () => {
     if (!config) return;
@@ -315,101 +391,156 @@ export const AdminSystemConfigView: React.FC = () => {
             </div>
 
             {/* Backup Gemini API Key Pool */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <ShieldAlert className="w-3.5 h-3.5 text-blue-500" />
-                  Gemini API Key Dự Phòng (Backup Keys Pool)
-                </label>
-                {(() => {
-                  const detected = parseApiKeys(config.backupGeminiApiKey || config.fallbackGeminiApiKey);
-                  return detected.length > 0 ? (
-                    <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                      Đã nhận diện {detected.length} Keys
-                    </span>
-                  ) : (
-                    <span className="text-[11px] text-slate-400">Tùy chọn</span>
-                  );
-                })()}
+            <div className="space-y-3 col-span-1 lg:col-span-2 bg-slate-50/70 p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+                <div>
+                  <label className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-blue-600" />
+                    Gemini API Key Dự Phòng (Backup Keys Pool)
+                  </label>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Hệ thống sẽ luân phiên lần lượt: nếu Key #1 chạm quota 429 hoặc lỗi &rarr; tự động chuyển sang Key #2 &rarr; Key #3...
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-blue-700 bg-blue-100/80 px-2.5 py-1 rounded-full border border-blue-200">
+                    {parseApiKeys(config.backupGeminiApiKey || config.fallbackGeminiApiKey).length} Keys trong Pool
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleTestBackupPool}
+                    disabled={testingPool || !parseApiKeys(config.backupGeminiApiKey || config.fallbackGeminiApiKey).length}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    {testingPool ? 'Đang test pool...' : 'Kiểm tra tất cả'}
+                  </button>
+                </div>
               </div>
-              <div className="relative">
-                {showBackupKey ? (
-                  <textarea
-                    rows={3}
-                    value={config.backupGeminiApiKey || ''}
-                    onChange={(e) => setConfig({ ...config, backupGeminiApiKey: e.target.value, fallbackGeminiApiKey: e.target.value })}
-                    placeholder="Nhập 1 hoặc nhiều API Key phân cách bằng dấu phẩy hoặc xuống dòng:&#10;AIzaSyKey1...&#10;AIzaSyKey2..."
-                    className="w-full pl-3 pr-10 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
-                  />
-                ) : (
+
+              {/* Add Key Input Form */}
+              <div className="flex gap-2 pt-1">
+                <div className="relative flex-1">
                   <input
-                    type="password"
-                    value={config.backupGeminiApiKey || ''}
-                    onChange={(e) => setConfig({ ...config, backupGeminiApiKey: e.target.value, fallbackGeminiApiKey: e.target.value })}
-                    placeholder="AIzaSy1..., AIzaSy2... (Nhập nhiều key phân cách bằng dấu phẩy)"
-                    className="w-full pl-3 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
+                    type="text"
+                    value={newKeyInput}
+                    onChange={(e) => setNewKeyInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddKey();
+                      }
+                    }}
+                    placeholder="Dán Gemini API Key mới vào đây (AIzaSy...)"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all shadow-2xs"
                   />
-                )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddKey}
+                  disabled={!newKeyInput.trim()}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center gap-1.5 cursor-pointer flex-shrink-0 active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  Thêm Key (Add)
+                </button>
+              </div>
+
+              {/* List of Keys in Pool */}
+              {(() => {
+                const keysList = parseApiKeys(config.backupGeminiApiKey || config.fallbackGeminiApiKey);
+                if (keysList.length === 0) {
+                  return (
+                    <div className="p-4 rounded-xl border border-dashed border-slate-300 bg-white/60 text-center text-xs text-slate-400">
+                      Chưa có API Key dự phòng nào. Nhập key vào ô trên và bấm <b>"Thêm Key (Add)"</b>.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2 pt-1">
+                    {keysList.map((k, idx) => {
+                      const testInfo = individualTestResults[idx];
+                      const isTesting = testingSingleKeyIdx === idx;
+
+                      return (
+                        <div
+                          key={idx}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white rounded-xl border border-slate-200 gap-2 shadow-2xs hover:border-slate-300 transition-all"
+                        >
+                          <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                            <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-bold text-[11px] flex items-center justify-center flex-shrink-0 border border-slate-200 font-mono">
+                              #{idx + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-semibold text-slate-800">
+                                  {showBackupKey ? k : maskApiKey(k)}
+                                </span>
+                                {idx === 0 && (
+                                  <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                    Ưu tiên 1
+                                  </span>
+                                )}
+                              </div>
+                              {testInfo && (
+                                <div className="text-[11px] mt-0.5 flex items-center gap-1">
+                                  {testInfo.ok ? (
+                                    <span className="text-emerald-700 font-medium flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      Sẵn sàng ({testInfo.latencyMs}ms)
+                                    </span>
+                                  ) : (
+                                    <span className="text-red-600 font-medium flex items-center gap-1 truncate max-w-sm" title={testInfo.error}>
+                                      <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
+                                      {testInfo.error}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => handleTestSingleKey(k, idx)}
+                              disabled={isTesting}
+                              className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              title="Kiểm tra kết nối của key này"
+                            >
+                              <Zap className="w-3 h-3 text-amber-500" />
+                              {isTesting ? 'Đang test...' : 'Kiểm tra'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveKey(idx)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                              title="Xóa key này khỏi pool"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              <div className="flex items-center justify-between pt-1">
                 <button
                   type="button"
                   onClick={() => setShowBackupKey(!showBackupKey)}
-                  className="absolute right-2 top-2.5 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
-                  title={showBackupKey ? 'Ẩn key' : 'Hiện key'}
+                  className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 cursor-pointer"
                 >
-                  {showBackupKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showBackupKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  {showBackupKey ? 'Ẩn ký tự các key' : 'Hiện toàn bộ ký tự các key'}
                 </button>
+                <span className="text-[11px] text-slate-400 italic">
+                  * Nhớ nhấn "Lưu Cấu Hình AI" ở góc trên sau khi thêm/xóa key
+                </span>
               </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <p className="text-[11px] text-slate-400">
-                  Hỗ trợ nhập <b>nhiều key</b> (dấu phẩy hoặc xuống dòng). Tự động luân phiên khi key chạm quota 429.
-                </p>
-                <button
-                  type="button"
-                  onClick={handleTestBackupPool}
-                  disabled={testingPool || !parseApiKeys(config.backupGeminiApiKey || config.fallbackGeminiApiKey).length}
-                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-lg text-[11px] font-bold transition-all disabled:opacity-40 flex items-center gap-1 flex-shrink-0 cursor-pointer"
-                >
-                  <Zap className="w-3 h-3" />
-                  {testingPool ? 'Đang test...' : 'Kiểm tra Pool'}
-                </button>
-              </div>
-
-              {/* Pool Test Results List */}
-              {poolResults && poolResults.length > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  {poolResults.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex items-center justify-between text-[11px] px-3 py-1.5 rounded-lg border ${
-                        item.ok
-                          ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-                          : 'bg-red-50/70 border-red-200 text-red-900'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {item.ok ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                        ) : (
-                          <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
-                        )}
-                        <span className="font-mono font-bold">Key #{idx + 1} ({item.maskedKey})</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.ok ? (
-                          <span className="font-mono text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
-                            {item.latencyMs}ms - Sẵn sàng
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-medium text-red-700 max-w-[180px] truncate" title={item.error}>
-                            {item.error || 'Lỗi'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Render Python AI Service URL */}
