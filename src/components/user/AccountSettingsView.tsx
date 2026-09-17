@@ -256,14 +256,44 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
 
         {/* PWA App Install Section */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
-            <Smartphone className="w-4 h-4 text-emerald-600" /> Cài Đặt Ứng Dụng
-          </h3>
-          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-xs text-slate-600">
-              <p className="font-bold text-slate-800 mb-1">Ứng dụng PetCare AI</p>
-              <p>Cài đặt ứng dụng vào màn hình chính để truy cập nhanh chóng như một ứng dụng độc lập.</p>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-emerald-600" /> Cài Đặt Ứng Dụng
+            </h3>
+            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+              PWA Web App
+            </span>
+          </div>
+
+          <div className="p-4 sm:p-5 rounded-2xl border border-slate-200/80 bg-gradient-to-r from-slate-50 via-white to-emerald-50/30 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+              {/* Logo Web / App Icon */}
+              <div className="relative group shrink-0">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-white p-2 shadow-sm border border-slate-200 flex items-center justify-center overflow-hidden group-hover:scale-105 transition-transform">
+                  <img
+                    src="/logo.png"
+                    alt="PetCare AI Logo"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs ring-2 ring-white">
+                  ✓
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-600">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <p className="font-extrabold text-slate-900 text-sm">PetCare AI Assistant</p>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                    Ứng Dụng Chính Thức
+                  </span>
+                </div>
+                <p className="text-slate-500 leading-relaxed">
+                  Cài đặt ứng dụng vào màn hình chính để truy cập nhanh chóng, toàn màn hình và hoạt động độc lập như app di động.
+                </p>
+              </div>
             </div>
+
             <button
               type="button"
               onClick={async () => {
@@ -278,12 +308,12 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
                 } else if (window.matchMedia('(display-mode: standalone)').matches) {
                   showSuccess('Ứng dụng đã được cài đặt trên thiết bị của bạn!');
                 } else {
-                  showError('Trình duyệt của bạn không hỗ trợ cài đặt hoặc bạn đã cài đặt rồi.');
+                  showError('Trình duyệt của bạn không hỗ trợ cài đặt tự động hoặc ứng dụng đã được cài đặt.');
                 }
               }}
-              className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm whitespace-nowrap flex-shrink-0"
+              className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow whitespace-nowrap flex-shrink-0 flex items-center justify-center gap-2 cursor-pointer"
             >
-              Cài Đặt Ngay
+              <Smartphone className="w-4 h-4" /> Cài Đặt Ngay
             </button>
           </div>
         </div>
