@@ -138,7 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <aside className="hidden lg:flex flex-col items-center bg-[#f9f9f9] border-r border-slate-200 shrink-0 w-[60px] h-full py-3 gap-1">
           {/* Toggle button */}
           <button onClick={onToggleDesktop} title="Mở sidebar"
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-all mb-1">
+            className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:scale-95 text-slate-700 flex items-center justify-center border border-slate-200/60 shadow-xs transition-all mb-1 cursor-pointer">
             <Menu className="w-5 h-5" />
           </button>
 

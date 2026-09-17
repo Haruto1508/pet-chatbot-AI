@@ -21,7 +21,8 @@ import {
   Sparkles,
   Copy,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  RotateCcw
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord } from '../../types';
@@ -688,16 +689,34 @@ export const PetChatView: React.FC<Props> = ({
       {/* Main Chat Area */}
       <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white overflow-hidden relative">
 
-        {/* Floating sidebar toggle — only when sidebar is closed */}
+        {/* Floating sidebar toggle — only when sidebar is closed on desktop */}
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
             title="Mở lịch sử chat"
-            className="absolute top-3 left-3 z-30 hidden md:flex p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 bg-white shadow-sm transition-all"
+            className="absolute top-3 left-3 z-30 hidden lg:flex w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:scale-95 text-slate-700 items-center justify-center border border-slate-200/60 shadow-xs transition-all cursor-pointer"
           >
-            <PanelLeftOpen className="w-4 h-4" />
+            <PanelLeftOpen className="w-5 h-5" />
           </button>
         )}
+
+        {/* Top Right Actions: Mobile History & New Chat */}
+        <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+          <button
+            onClick={() => setIsMobileHistoryOpen(true)}
+            title="Lịch sử chat"
+            className="md:hidden w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:scale-95 text-slate-700 flex items-center justify-center border border-slate-200/60 shadow-xs transition-all cursor-pointer"
+          >
+            <History className="w-5 h-5" />
+          </button>
+          <button
+            onClick={startNewChat}
+            title="Cuộc trò chuyện mới"
+            className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:scale-95 text-slate-700 flex items-center justify-center border border-slate-200/60 shadow-xs transition-all cursor-pointer"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
 
         {/* ── Shared: hidden file input ── */}
         <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
@@ -707,14 +726,11 @@ export const PetChatView: React.FC<Props> = ({
              EMPTY STATE — input + greeting centered on screen
              ══════════════════════════════════════════════════════════════════════ */
           <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 gap-6">
-            {/* Greeting */}
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center mx-auto shadow-md mb-3 overflow-hidden">
-                <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-1"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display='none'; }} />
-              </div>
-              <h2 className="text-2xl font-bold text-slate-800">Chúng ta nên bắt đầu từ đâu?</h2>
-              <p className="text-sm text-slate-400">Mô tả triệu chứng hoặc câu hỏi về sức khỏe thú cưng của bạn.</p>
+            {/* Greeting (Image 1 style) */}
+            <div className="text-center">
+              <h2 className="text-2xl sm:text-3xl font-semibold text-slate-800 tracking-tight">
+                Chúng ta nên bắt đầu từ đâu?
+              </h2>
             </div>
 
             {/* Centered input bar */}
@@ -730,10 +746,13 @@ export const PetChatView: React.FC<Props> = ({
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-2 bg-white rounded-2xl border border-slate-200 shadow-lg px-2 py-1.5">
-                <button onClick={() => fileInputRef.current?.click()} title="Đính kèm ảnh"
-                  className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors flex-shrink-0">
-                  <ImageIcon className="w-4 h-4" />
+              <div className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200/90 shadow-md hover:shadow-lg transition-all px-3 py-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Đính kèm ảnh"
+                  className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors flex-shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-5 h-5" />
                 </button>
                 <input
                   type="text"
@@ -741,24 +760,32 @@ export const PetChatView: React.FC<Props> = ({
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
-                  placeholder={selectedPet ? `Mô tả triệu chứng của ${selectedPet.name}...` : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'}
-                  className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 py-1.5 px-2"
+                  placeholder={selectedPet ? `Hỏi về triệu chứng của ${selectedPet.name}...` : 'Hỏi bất kỳ điều gì về thú cưng của bạn...'}
+                  className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 py-1 px-1"
                 />
-                <button type="button" onClick={() => handleSend()}
+                <button
+                  type="button"
+                  onClick={() => handleSend()}
                   disabled={!input.trim() && !selectedImage}
-                  className="p-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white transition-all flex items-center justify-center shadow-sm cursor-pointer disabled:cursor-not-allowed flex-shrink-0">
+                  title="Gửi"
+                  className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white transition-all flex items-center justify-center shadow-xs cursor-pointer disabled:cursor-not-allowed flex-shrink-0"
+                >
                   <Send className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Quick suggestion chips */}
-            <div className="flex flex-wrap justify-center gap-2 max-w-2xl">
-              {promptSuggestions.slice(0, 4).map((prompt, idx) => (
-                <button key={idx} type="button"
+            {/* Quick suggestion items */}
+            <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-2 w-full max-w-2xl px-2">
+              {promptSuggestions.slice(0, 3).map((prompt, idx) => (
+                <button
+                  key={idx}
+                  type="button"
                   onClick={() => { setInput(prompt); inputRef.current?.focus(); }}
-                  className="text-xs font-medium px-3 py-1.5 rounded-full bg-white border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all shadow-xs">
-                  {prompt}
+                  className="text-xs font-medium px-4 py-2.5 rounded-2xl bg-slate-50/80 hover:bg-emerald-50/60 border border-slate-200/80 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 transition-all text-left flex items-center gap-2.5 shadow-2xs cursor-pointer"
+                >
+                  <span className="text-sm">{prompt.slice(0, 2)}</span>
+                  <span className="truncate">{prompt.slice(2).trim()}</span>
                 </button>
               ))}
             </div>
@@ -771,7 +798,7 @@ export const PetChatView: React.FC<Props> = ({
           <>
         {/* Scrollable Messages — full height */}
         <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-32">
             {messages.filter(m => m.id !== 'msg_welcome').map((msg, idx) => {
               const isUser = msg.sender === 'user';
 
@@ -925,10 +952,10 @@ export const PetChatView: React.FC<Props> = ({
                   </div>
                 )}
 
-                <div className="flex items-center gap-2 bg-white rounded-2xl border border-slate-200 shadow-md px-2 py-1.5">
+                <div className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200 shadow-md px-2.5 py-1.5">
                   <button onClick={() => fileInputRef.current?.click()} disabled={isLoading} title="Đính kèm ảnh"
-                    className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0">
-                    <ImageIcon className="w-4 h-4" />
+                    className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0 cursor-pointer">
+                    <ImageIcon className="w-5 h-5" />
                   </button>
 
                   <input
@@ -948,14 +975,14 @@ export const PetChatView: React.FC<Props> = ({
 
                   {isLoading ? (
                     <button type="button" onClick={handleStop} title="Dừng"
-                      className="p-2 rounded-xl bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold transition-all flex items-center gap-1 flex-shrink-0">
+                      className="p-2 rounded-xl bg-red-500 hover:bg-red-600 active:scale-95 text-white font-bold transition-all flex items-center gap-1 flex-shrink-0 cursor-pointer">
                       <Square className="w-3.5 h-3.5 fill-current" />
                       <span className="text-xs">Dừng</span>
                     </button>
                   ) : (
                     <button type="button" onClick={() => handleSend()}
                       disabled={!input.trim() && !selectedImage} title="Gửi"
-                      className="p-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer disabled:cursor-not-allowed flex-shrink-0">
+                      className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 disabled:opacity-40 text-white font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer disabled:cursor-not-allowed flex-shrink-0">
                       <Send className="w-4 h-4" />
                     </button>
                   )}

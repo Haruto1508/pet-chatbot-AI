@@ -247,21 +247,23 @@ export function App() {
           {/* Mobile open sidebar button */}
           <button
             onClick={() => setIsOpenMobileSidebar(true)}
-            className="lg:hidden fixed top-3 left-3 z-30 p-2 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-600 hover:bg-slate-50 transition-all"
+            className="lg:hidden fixed top-3 left-3 z-40 w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200/80 active:scale-95 text-slate-700 flex items-center justify-center border border-slate-200/60 shadow-xs transition-all cursor-pointer"
             title="Mở Menu"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <line x1="4" y1="7" x2="20" y2="7" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="17" x2="20" y2="17" />
             </svg>
           </button>
 
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           <main
-            className={`flex-1 min-h-0 w-full mx-auto pt-10 lg:pt-0 ${
+            className={`flex-1 min-h-0 w-full mx-auto ${
               currentTab === 'chat'
-                ? 'flex flex-col overflow-hidden'
-                : 'overflow-y-auto p-3 sm:p-6 max-w-7xl'
+                ? 'flex flex-col overflow-hidden pt-0'
+                : 'overflow-y-auto p-3 sm:p-6 max-w-7xl pt-14 lg:pt-6'
             }`}
           >
             <Suspense fallback={<PageLoader />}>
