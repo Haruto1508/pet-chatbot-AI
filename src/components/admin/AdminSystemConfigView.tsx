@@ -60,7 +60,7 @@ export const AdminSystemConfigView: React.FC = () => {
         autoKeepAliveIntervalMinutes: data?.autoKeepAliveIntervalMinutes || 10,
         enableGeminiFallback: data?.enableGeminiFallback ?? localFallback.enableGeminiFallback ?? true,
         fallbackGeminiApiKey: data?.fallbackGeminiApiKey || localFallback.fallbackGeminiApiKey || data?.backupGeminiApiKey || '',
-        fallbackModel: data?.fallbackModel || localFallback.fallbackModel || 'gemini-2.5-flash',
+        fallbackModel: data?.fallbackModel || localFallback.fallbackModel || 'gemini-3.6-flash',
         fallbackTimeoutMs: data?.fallbackTimeoutMs || localFallback.fallbackTimeoutMs || 20000
       };
 
@@ -111,7 +111,7 @@ export const AdminSystemConfigView: React.FC = () => {
     try {
       const res = await api.testApiKey({
         apiKey: config.geminiApiKey,
-        model: config.aiModel || 'gemini-2.5-flash',
+        model: config.aiModel || 'gemini-3.6-flash',
         provider: config.apiProvider || 'gemini',
         customBaseUrl: config.customApiBaseUrl
       });
@@ -151,7 +151,7 @@ export const AdminSystemConfigView: React.FC = () => {
     setTestingPool(true);
     setPoolResults(null);
     try {
-      const results = await api.testGeminiKeyPool(keys, config?.fallbackModel || config?.aiModel || 'gemini-2.5-flash');
+      const results = await api.testGeminiKeyPool(keys, config?.fallbackModel || config?.aiModel || 'gemini-3.6-flash');
       setPoolResults(results);
       const passedCount = results.filter(r => r.ok).length;
       if (passedCount === results.length) {
@@ -217,7 +217,7 @@ export const AdminSystemConfigView: React.FC = () => {
   const handleTestSingleKey = async (key: string, index: number) => {
     setTestingSingleKeyIdx(index);
     try {
-      const res = await api.testGeminiKey(key, config?.fallbackModel || config?.aiModel || 'gemini-2.5-flash');
+      const res = await api.testGeminiKey(key, config?.fallbackModel || config?.aiModel || 'gemini-3.6-flash');
       setIndividualTestResults(prev => ({
         ...prev,
         [index]: { ok: res.ok, latencyMs: res.latencyMs, error: res.error }
@@ -895,3 +895,4 @@ export const AdminSystemConfigView: React.FC = () => {
     </div>
   );
 };
+

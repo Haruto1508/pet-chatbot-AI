@@ -461,7 +461,7 @@ async function startServer(isVercel = false) {
 
   // Test API Key Endpoint
   app.post('/api/test-api-key', async (req: Request, res: Response) => {
-    const { apiKey, model = 'gemini-2.5-flash', provider = 'gemini', customBaseUrl } = req.body;
+    const { apiKey, model = 'gemini-3.6-flash', provider = 'gemini', customBaseUrl } = req.body;
     if (!apiKey) {
       return res.status(400).json({ ok: false, error: 'Vui lòng nhập API Key để kiểm tra.' });
     }
@@ -471,14 +471,14 @@ async function startServer(isVercel = false) {
       if (provider === 'gemini') {
         const testAi = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
         const testRes = await testAi.models.generateContent({
-          model: model || 'gemini-2.5-flash',
+          model: model || 'gemini-3.6-flash',
           contents: 'Trả lời đúng 1 chữ: OK',
         });
         const text = testRes.candidates?.[0]?.content?.parts?.[0]?.text || 'OK';
         return res.json({
           ok: true,
           latencyMs: Date.now() - t0,
-          model: model || 'gemini-2.5-flash',
+          model: model || 'gemini-3.6-flash',
           responsePreview: text.trim(),
           message: 'API Key hoạt động chính xác và phản hồi thành công!'
         });
@@ -991,7 +991,7 @@ async function startServer(isVercel = false) {
   const CONFIG_FILE = path.join(process.cwd(), 'system_config.json');
 
   const defaultSystemConfig = {
-    aiModel: 'gemini-2.5-flash',
+    aiModel: 'gemini-3.6-flash',
     temperature: 0.4,
     systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
     maxTokens: 2048,
@@ -1006,7 +1006,7 @@ async function startServer(isVercel = false) {
     autoKeepAliveIntervalMinutes: 10,
     enableGeminiFallback: true,
     fallbackGeminiApiKey: process.env.GEMINI_API_KEY || '',
-    fallbackModel: 'gemini-2.5-flash',
+    fallbackModel: 'gemini-3.6-flash',
     fallbackTimeoutMs: 20000
   };
 
@@ -1333,7 +1333,7 @@ async function startServer(isVercel = false) {
       const prompt = `Tạo một tiêu đề SIÊU NGẮN (tối đa 4-6 chữ) tóm tắt nội dung sau (nếu là chào hỏi thì ghi "Trò chuyện chung", không dùng ngoặc kép): "${cleanMessage}"`;
       
       const genConfig = {
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: { parts: [{ text: prompt }] }
       };
       
@@ -1411,7 +1411,7 @@ async function startServer(isVercel = false) {
         systemPrompt: configData.system_prompt,
         maxTokens: configData.max_tokens,
         emergencyKeywords: configData.emergency_keywords
-      } : { aiModel: 'gemini-2.5-flash', temperature: 0.4, systemPrompt: '', emergencyKeywords: [] };
+      } : { aiModel: 'gemini-3.6-flash', temperature: 0.4, systemPrompt: '', emergencyKeywords: [] };
 
       let petContextPrompt = '';
       if (petInfo) {
@@ -1762,7 +1762,7 @@ YÊU CẦU:
       let response;
       try {
         response = await ai.models.generateContent({
-          model: sysConfig.aiModel || 'gemini-2.5-flash',
+          model: sysConfig.aiModel || 'gemini-3.6-flash',
           contents: summaryPrompt,
           config: {
             responseMimeType: 'application/json'
