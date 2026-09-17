@@ -599,6 +599,11 @@ export const api = {
       keyCandidates.push(cfg?.geminiApiKey);
     } catch {}
 
+    const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    if (legacyModels.includes(fallbackModel)) {
+      fallbackModel = 'gemini-3.1-flash-lite';
+    }
+
     keyCandidates.push((process.env as any).GEMINI_API_KEYS);
     keyCandidates.push(process.env.GEMINI_API_KEY);
 
@@ -726,9 +731,13 @@ LƯU Ý QUAN TRỌNG VỀ ĐỊNH DẠNG:
 1. BẮT BUỘC chèn khối Triage Alert ngay đầu phản hồi (tuyệt đối không dùng markdown block xung quanh, viết liền trên 1 dòng):
 [[TRIAGE_ALERT]]{"level": "RED" | "YELLOW" | "GREEN", "title": "Tên bệnh hoặc triệu chứng tóm tắt", "urgency": "Mức độ khẩn cấp", "actions": ["Hành động 1", "Hành động 2"]}[[/TRIAGE_ALERT]]
 Quy tắc phân loại:
-- RED: Cấp cứu nguy kịch, khó thở, xuất huyết, co giật, ngộ độc, chấn thương nặng, hôn mê.
-- YELLOW: Bệnh cần khám thú y sớm, viêm da, nấm, ghẻ, tiêu chảy, nôn mửa, sốt, ngứa, bỏ ăn, đau mắt.
-- GREEN: Tư vấn dinh dưỡng, chăm sóc lông móng, sinh hoạt thường ngày, dấu hiệu nhẹ.
+- RED: Cấp cứu nguy kịch, khó thở, xuất huyết, co giật, ngộ độc, chấn thương nặng, hôn mê, hoặc SUY KIỆT CƠ THỂ/GẦY TRƠ XƯƠNG (BCS 1/9).
+- YELLOW: Bệnh cần khám thú y sớm, viêm da, nấm, ghẻ, tiêu chảy, nôn mửa, sốt, ngứa, bỏ ăn, đau mắt, gầy ốm.
+- GREEN: Tư vấn dinh dưỡng, chăm sóc lông móng, sinh hoạt thường ngày, thể trạng hoàn toàn khỏe mạnh.
+
+NGUYÊN TẮC QUAN SÁT HÌNH ẢNH LÂM SÀNG:
+- BẮT BUỘC quan sát trực quan thể trạng toàn thân: Body Condition Score (BCS), độ lộ xương sườn/xương chậu, teo cơ.
+- TUYỆT ĐỐI KHÔNG a dua hoặc tin theo lời đùa/mỉa mai của người dùng nếu hình ảnh thực tế cho thấy thú cưng đang bị suy kiệt, gầy trơ xương hay bệnh tật!
 
 2. Sau khối trên, câu trả lời cần SÚC TÍCH, CÔ ĐỌNG (tối đa 200 - 250 từ), sử dụng cú pháp Markdown chuẩn (Heading 3 ###, gạch đầu dòng -, in đậm **...**) chia 3 phần rõ ràng:
 ### 🩺 Chẩn đoán sơ bộ
@@ -736,7 +745,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 
 ### 🩹 Xử lý & Sơ cứu tại nhà
 - **Việc nên làm ngay**: [2-3 bước hành động sơ cứu cấp tốc, an toàn]
-- **Tuyệt đối tránh**: [Không tự ý dùng thuốc người, không ép ăn uống...]
+- **Tuyệt đối tránh**: [Không tự ý dùng thuốc người, không ép ăn uống dồn dập tránh hội chứng nuôi ăn lại...]
 
 ### 🚨 Dấu hiệu cần đi thú y gấp
 - [3-4 triệu chứng cảnh báo đỏ nguy kịch cần cấp cứu ngay]`;
@@ -764,22 +773,29 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 
     let lastFallbackError: any = null;
 
+    const fallbackCandidates = [...new Set([fallbackModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.6-flash'])];
+
     // Try each key sequentially
     for (let keyIdx = 0; keyIdx < fallbackApiKeys.length; keyIdx++) {
       const activeKey = fallbackApiKeys[keyIdx];
       const masked = maskApiKey(activeKey);
       const keyStart = Date.now();
 
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:streamGenerateContent?alt=sse&key=${activeKey}`,
-          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }
-        );
+      for (const targetModel of fallbackCandidates) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${activeKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }
+          );
 
-        if (!res.ok || !res.body) {
-          const errText = await res.text().catch(() => '');
-          throw new Error(`HTTP ${res.status}: ${errText.slice(0, 120)}`);
-        }
+          if (!res.ok || !res.body) {
+            const errText = await res.text().catch(() => '');
+            if (res.status === 503 || res.status === 404) {
+              console.warn(`Direct fallback model ${targetModel} hit ${res.status}, trying next model candidate...`);
+              continue;
+            }
+            throw new Error(`HTTP ${res.status}: ${errText.slice(0, 120)}`);
+          }
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -884,6 +900,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
         }).catch(() => {});
       }
     }
+  }
 
     // All fallback keys failed
     api.writeLog({
@@ -901,27 +918,43 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
   testGeminiKey: async (apiKey: string, model: string = 'gemini-3.6-flash'): Promise<{ ok: boolean; latencyMs?: number; error?: string; message?: string }> => {
     const t0 = Date.now();
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Trả lời đúng 1 từ: OK' }] }] }),
-          signal: AbortSignal.timeout(10000)
-        }
-      );
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        let errorMsg = `HTTP ${res.status}`;
-        try {
-          const json = JSON.parse(errText);
-          if (json?.error?.message) errorMsg += `: ${json.error.message}`;
-        } catch {
-          if (errText) errorMsg += `: ${errText.slice(0, 80)}`;
-        }
-        return { ok: false, latencyMs: Date.now() - t0, error: errorMsg };
+      const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+      let targetModel = model || 'gemini-3.6-flash';
+      if (legacyModels.includes(targetModel)) {
+        targetModel = 'gemini-3.6-flash';
       }
-      return { ok: true, latencyMs: Date.now() - t0, message: 'Hoạt động tốt' };
+
+      const candidates = [...new Set([targetModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.6-flash'])];
+      let lastErrorMsg = '';
+
+      for (const m of candidates) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Trả lời đúng 1 từ: OK' }] }] }),
+              signal: AbortSignal.timeout(10000)
+            }
+          );
+          if (res.ok) {
+            return { ok: true, latencyMs: Date.now() - t0, message: `Hoạt động tốt (${m})` };
+          }
+          const errText = await res.text().catch(() => '');
+          let errorMsg = `HTTP ${res.status}`;
+          try {
+            const json = JSON.parse(errText);
+            if (json?.error?.message) errorMsg += `: ${json.error.message}`;
+          } catch {
+            if (errText) errorMsg += `: ${errText.slice(0, 80)}`;
+          }
+          lastErrorMsg = errorMsg;
+        } catch (e: any) {
+          lastErrorMsg = e?.message || 'Không thể kết nối tới Google';
+        }
+      }
+      return { ok: false, latencyMs: Date.now() - t0, error: lastErrorMsg };
     } catch (e: any) {
       return { ok: false, latencyMs: Date.now() - t0, error: e?.message || 'Không thể kết nối tới Google' };
     }

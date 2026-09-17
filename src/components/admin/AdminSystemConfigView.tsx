@@ -45,7 +45,7 @@ export const AdminSystemConfigView: React.FC = () => {
       } catch {}
 
       const merged = {
-        aiModel: data?.aiModel || 'gemini-3.6-flash',
+        aiModel: (data?.aiModel && !['gemini-2.5-flash', 'gemini-1.5-flash'].includes(data.aiModel)) ? data.aiModel : 'gemini-3.6-flash',
         temperature: data?.temperature ?? 0.4,
         systemPrompt: data?.systemPrompt || '',
         maxTokens: data?.maxTokens || 2048,
@@ -60,7 +60,7 @@ export const AdminSystemConfigView: React.FC = () => {
         autoKeepAliveIntervalMinutes: data?.autoKeepAliveIntervalMinutes || 10,
         enableGeminiFallback: data?.enableGeminiFallback ?? localFallback.enableGeminiFallback ?? true,
         fallbackGeminiApiKey: data?.fallbackGeminiApiKey || localFallback.fallbackGeminiApiKey || data?.backupGeminiApiKey || '',
-        fallbackModel: data?.fallbackModel || localFallback.fallbackModel || 'gemini-2.5-flash',
+        fallbackModel: (data?.fallbackModel && !['gemini-2.5-flash', 'gemini-1.5-flash'].includes(data.fallbackModel)) ? data.fallbackModel : (localFallback.fallbackModel || 'gemini-3.6-flash'),
         fallbackTimeoutMs: data?.fallbackTimeoutMs || localFallback.fallbackTimeoutMs || 20000
       };
 
@@ -109,9 +109,10 @@ export const AdminSystemConfigView: React.FC = () => {
     setTestingKey(true);
     setTestResult(null);
     try {
+      const targetModel = (config.aiModel && !['gemini-2.5-flash', 'gemini-1.5-flash'].includes(config.aiModel)) ? config.aiModel : 'gemini-3.6-flash';
       const res = await api.testApiKey({
         apiKey: config.geminiApiKey,
-        model: config.aiModel || 'gemini-2.5-flash',
+        model: targetModel,
         provider: config.apiProvider || 'gemini',
         customBaseUrl: config.customApiBaseUrl
       });
@@ -151,7 +152,10 @@ export const AdminSystemConfigView: React.FC = () => {
     setTestingPool(true);
     setPoolResults(null);
     try {
-      const results = await api.testGeminiKeyPool(keys, config?.fallbackModel || config?.aiModel || 'gemini-2.5-flash');
+      const activeModel = (config?.fallbackModel && !['gemini-2.5-flash', 'gemini-1.5-flash'].includes(config.fallbackModel)) 
+        ? config.fallbackModel 
+        : ((config?.aiModel && !['gemini-2.5-flash', 'gemini-1.5-flash'].includes(config.aiModel)) ? config.aiModel : 'gemini-3.6-flash');
+      const results = await api.testGeminiKeyPool(keys, activeModel);
       setPoolResults(results);
       const passedCount = results.filter(r => r.ok).length;
       if (passedCount === results.length) {
@@ -217,7 +221,10 @@ export const AdminSystemConfigView: React.FC = () => {
   const handleTestSingleKey = async (key: string, index: number) => {
     setTestingSingleKeyIdx(index);
     try {
-      const res = await api.testGeminiKey(key, config?.fallbackModel || config?.aiModel || 'gemini-2.5-flash');
+      const activeModel = (config?.fallbackModel && !['gemini-2.5-flash', 'gemini-1.5-flash'].includes(config.fallbackModel)) 
+        ? config.fallbackModel 
+        : ((config?.aiModel && !['gemini-2.5-flash', 'gemini-1.5-flash'].includes(config.aiModel)) ? config.aiModel : 'gemini-3.6-flash');
+      const res = await api.testGeminiKey(key, activeModel);
       setIndividualTestResults(prev => ({
         ...prev,
         [index]: { ok: res.ok, latencyMs: res.latencyMs, error: res.error }
@@ -642,14 +649,13 @@ export const AdminSystemConfigView: React.FC = () => {
                 onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
               >
-                <option value="gemini-3.6-flash">Gemini 3.6 Flash (Mặc định — Mới nhất)</option>
-                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Siêu tiết kiệm)</option>
-                <option value="gemini-2.5-flash-preview-05-20">Gemini 2.5 Flash Preview (Ổn định)</option>
-                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite (Tiết kiệm Token)</option>
-                <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash Latest (Cũ nhưng ổn)</option>
+                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (⚡ Chống 503 tốt nhất — Phản hồi ~900ms)</option>
+                <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (⚡ Thế hệ mới — Tốc độ cao ~850ms)</option>
+                <option value="gemini-flash-lite-latest">Gemini Flash Lite Latest (Bản Lite ổn định)</option>
+                <option value="gemini-3.6-flash">Gemini 3.6 Flash (🧠 Thông minh nhất — Dễ nghẽn 503)</option>
               </select>
               <p className="text-[11px] text-slate-400">
-                Gemini 2.5 Flash mang lại tốc độ stream câu trả lời nhanh nhất và độ chính xác phân loại Triage cao.
+                Mẹo: Chọn <strong>Gemini 3.1 Flash Lite</strong> hoặc <strong>3.5 Flash Lite</strong> để hoàn toàn né lỗi quá tải HTTP 503 và có tốc độ phản hồi nhanh nhất.
               </p>
             </div>
 
@@ -831,15 +837,14 @@ export const AdminSystemConfigView: React.FC = () => {
                     Model Fallback
                   </label>
                   <select
-                    value={config.fallbackModel ?? 'gemini-3.6-flash'}
+                    value={config.fallbackModel ?? 'gemini-3.1-flash-lite'}
                     onChange={(e) => setConfig({ ...config, fallbackModel: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
                   >
-                    <option value="gemini-3.6-flash">gemini-3.6-flash (mặc định)</option>
-                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
-                    <option value="gemini-2.5-flash-preview-05-20">gemini-2.5-flash-preview-05-20</option>
-                    <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
-                    <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest</option>
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Khuyên dùng — Chống 503)</option>
+                    <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Siêu nhẹ)</option>
+                    <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
+                    <option value="gemini-3.6-flash">gemini-3.6-flash</option>
                   </select>
                 </div>
 

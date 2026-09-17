@@ -361,7 +361,7 @@ export const AdminHealthCheckView: React.FC = () => {
             <div>
               <h3 className="text-sm font-bold text-slate-900">Google Gemini LLM Engine</h3>
               <p className="text-xs text-slate-500 truncate mt-0.5">
-                Model: <span className="font-semibold text-blue-600">{health?.activeConfig?.aiModel || 'gemini-2.5-flash'}</span>
+                Model: <span className="font-semibold text-blue-600">{health?.activeConfig?.aiModel || 'gemini-3.6-flash'}</span>
               </p>
             </div>
 

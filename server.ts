@@ -5,6 +5,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { supabase } from './src/services/supabaseClient.js';
+import { parseApiKeys, maskApiKey } from './src/utils/apiKeys.js';
 import { TriageLevel } from './src/types.js';
 
 let appInstance: express.Express | null = null;
@@ -100,38 +101,123 @@ async function startServer(isVercel = false) {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // Gemini AI Client Helper (Lazy initialization)
+  // System Config File & Local Persistence Helper
+  const CONFIG_FILE = path.join(process.cwd(), 'system_config.json');
+
+  const defaultSystemConfig = {
+    aiModel: 'gemini-3.6-flash',
+    temperature: 0.4,
+    systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
+    maxTokens: 2048,
+    emergencyKeywords: ['máu', 'co giật', 'khó thở', 'bất tỉnh', 'ngộ độc'],
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    backupGeminiApiKey: '',
+    renderServiceUrl: 'https://pet-chatbot-ai.onrender.com',
+    openaiApiKey: '',
+    customApiBaseUrl: '',
+    customModelName: '',
+    apiProvider: 'gemini',
+    autoKeepAliveIntervalMinutes: 10,
+    enableGeminiFallback: true,
+    fallbackGeminiApiKey: process.env.GEMINI_API_KEY || '',
+    fallbackModel: 'gemini-3.1-flash-lite',
+    fallbackTimeoutMs: 20000
+  };
+
+  function getLocalConfig(): Record<string, any> {
+    try {
+      if (fs.existsSync(CONFIG_FILE)) {
+        const fileContent = fs.readFileSync(CONFIG_FILE, 'utf-8');
+        return { ...defaultSystemConfig, ...JSON.parse(fileContent) };
+      }
+    } catch (e) {
+      console.warn('Could not read system_config.json', e);
+    }
+    return { ...defaultSystemConfig };
+  }
+
+  function saveLocalConfig(data: Record<string, any>): void {
+    try {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('Could not write system_config.json', e);
+    }
+  }
+
+  // Gemini API Key Pool Resolver: Aggregates keys from DB, Local JSON, and Environment
+  function getGeminiKeyPool(configData?: any): string[] {
+    const candidates: any[] = [];
+    if (configData) {
+      candidates.push(configData.gemini_api_key);
+      candidates.push(configData.backup_gemini_api_key);
+      candidates.push(configData.fallback_gemini_api_key);
+      candidates.push(configData.gemini_api_keys_pool);
+    }
+    const local = getLocalConfig();
+    if (local) {
+      candidates.push(local.geminiApiKey);
+      candidates.push(local.backupGeminiApiKey);
+      candidates.push(local.fallbackGeminiApiKey);
+      candidates.push(local.geminiApiKeysPool);
+    }
+    candidates.push(process.env.GEMINI_API_KEY);
+    candidates.push(process.env.GEMINI_API_KEYS);
+
+    const keys = parseApiKeys(candidates);
+    if (keys.length === 0 && process.env.GEMINI_API_KEY) {
+      keys.push(process.env.GEMINI_API_KEY);
+    }
+    return keys;
+  }
+
+  // Gemini AI Client Helper (Lazy initialization with custom key or active pool key)
   function getGeminiClient(customApiKey?: string): GoogleGenAI {
-    const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+    let apiKey = customApiKey;
+    if (!apiKey) {
+      const pool = getGeminiKeyPool();
+      apiKey = pool[0] || process.env.GEMINI_API_KEY;
+    }
     if (!apiKey) {
       serverLog('GEMINI', 'ERROR', 'getGeminiClient()', 'GEMINI_API_KEY bị thiếu — sẽ dùng dummy-key');
     }
     return new GoogleGenAI({
       apiKey: apiKey || 'dummy-key-for-dev',
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-
     });
   }
 
-  // Vector Embedding Helper
+  // Vector Embedding Helper with Key Rotation
   async function generateEmbedding(text: string, customApiKey?: string): Promise<number[] | null> {
     const t0 = Date.now();
-    try {
-      const ai = getGeminiClient(customApiKey);
-      const response = await ai.models.embedContent({
-        model: 'gemini-embedding-001',
-        contents: text,
-        config: {
-          outputDimensionality: 768
-        }
-      });
-      const dims = response.embeddings?.[0]?.values?.length ?? 0;
-      serverLog('GEMINI', 'OK', 'Embedding generated', `gemini-embedding-001 → ${dims} dims`, Date.now() - t0);
-      return response.embeddings?.[0]?.values || null;
-    } catch (e: any) {
-      serverLog('GEMINI', 'ERROR', 'Embedding FAILED', e?.message?.substring(0, 80), Date.now() - t0);
-      return null;
+    const keys = customApiKey ? [customApiKey] : getGeminiKeyPool();
+    if (keys.length === 0 && process.env.GEMINI_API_KEY) {
+      keys.push(process.env.GEMINI_API_KEY);
     }
+
+    for (let i = 0; i < keys.length; i++) {
+      const k = keys[i];
+      try {
+        const ai = getGeminiClient(k);
+        const response = await ai.models.embedContent({
+          model: 'gemini-embedding-001',
+          contents: text,
+          config: {
+            outputDimensionality: 768
+          }
+        });
+        const dims = response.embeddings?.[0]?.values?.length ?? 0;
+        serverLog('GEMINI', 'OK', 'Embedding generated', `gemini-embedding-001 → ${dims} dims [Key #${i + 1}/${keys.length}]`, Date.now() - t0);
+        return response.embeddings?.[0]?.values || null;
+      } catch (e: any) {
+        const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(e?.message || '');
+        if (isQuota && i + 1 < keys.length) {
+          serverLog('GEMINI', 'WARN', 'Embedding Key Quota Exceeded', `Key #${i + 1} hết quota → xoay sang Key #${i + 2}`, Date.now() - t0);
+          continue;
+        }
+        serverLog('GEMINI', 'ERROR', 'Embedding FAILED', e?.message?.substring(0, 80), Date.now() - t0);
+      }
+    }
+    return null;
   }
 
   // Helper for RAG Knowledge Search (Upgraded to Vector Search)
@@ -262,15 +348,18 @@ async function startServer(isVercel = false) {
       };
     }
 
-    // 3. Check Gemini API Key
-    const activeKey = customGeminiKey || process.env.GEMINI_API_KEY;
+    // 3. Check Gemini API Key & Key Pool
+    const keyPool = getGeminiKeyPool(dbConfig);
+    const activeKey = customGeminiKey || keyPool[0] || process.env.GEMINI_API_KEY;
     results.gemini = {
-      status: activeKey ? 'ok' : 'error',
-      message: activeKey
-        ? (customGeminiKey ? 'Gemini API Key (từ Cấu hình Admin)' : 'GEMINI_API_KEY (từ biến môi trường)')
-        : 'GEMINI_API_KEY bị thiếu!',
-      keyPreview: activeKey ? activeKey.substring(0, 8) + '...' + activeKey.slice(-4) : null,
-      source: customGeminiKey ? 'database' : (process.env.GEMINI_API_KEY ? 'env' : 'missing')
+      status: (activeKey || keyPool.length > 0) ? 'ok' : 'error',
+      poolSize: keyPool.length,
+      keysPreview: keyPool.map(k => maskApiKey(k)),
+      message: keyPool.length > 0
+        ? `Sẵn sàng ${keyPool.length} API Key (Key Pool xoay vòng tự động chống hết token/quota)`
+        : (activeKey ? 'GEMINI_API_KEY đang hoạt động' : 'GEMINI_API_KEY bị thiếu!'),
+      keyPreview: activeKey ? maskApiKey(activeKey) : null,
+      source: customGeminiKey ? 'database' : (process.env.GEMINI_API_KEY ? 'env' : (keyPool.length > 0 ? 'pool' : 'missing'))
     };
 
     // 4. Check active system config (AI model being used)
@@ -461,7 +550,7 @@ async function startServer(isVercel = false) {
 
   // Test API Key Endpoint
   app.post('/api/test-api-key', async (req: Request, res: Response) => {
-    const { apiKey, model = 'gemini-2.5-flash', provider = 'gemini', customBaseUrl } = req.body;
+    const { apiKey, model = 'gemini-3.6-flash', provider = 'gemini', customBaseUrl } = req.body;
     if (!apiKey) {
       return res.status(400).json({ ok: false, error: 'Vui lòng nhập API Key để kiểm tra.' });
     }
@@ -469,16 +558,41 @@ async function startServer(isVercel = false) {
     const t0 = Date.now();
     try {
       if (provider === 'gemini') {
+        const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+        let targetModel = model || 'gemini-3.6-flash';
+        if (legacyModels.includes(targetModel)) {
+          targetModel = 'gemini-3.6-flash';
+        }
+
         const testAi = new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
-        const testRes = await testAi.models.generateContent({
-          model: model || 'gemini-2.5-flash',
-          contents: 'Trả lời đúng 1 chữ: OK',
-        });
+        const candidates = [...new Set([targetModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.6-flash'])];
+        let testRes: any = null;
+        let successfulModel = targetModel;
+        let lastErr: any = null;
+
+        for (const m of candidates) {
+          try {
+            testRes = await testAi.models.generateContent({
+              model: m,
+              contents: 'Trả lời đúng 1 chữ: OK',
+            });
+            successfulModel = m;
+            lastErr = null;
+            break;
+          } catch (err: any) {
+            lastErr = err;
+          }
+        }
+
+        if (!testRes && lastErr) {
+          throw lastErr;
+        }
+
         const text = testRes.candidates?.[0]?.content?.parts?.[0]?.text || 'OK';
         return res.json({
           ok: true,
           latencyMs: Date.now() - t0,
-          model: model || 'gemini-2.5-flash',
+          model: successfulModel,
           responsePreview: text.trim(),
           message: 'API Key hoạt động chính xác và phản hồi thành công!'
         });
@@ -987,48 +1101,7 @@ async function startServer(isVercel = false) {
   });
 
 
-  // System Config (AI Models, API Keys, Service URLs, Hyperparameters & Fallback)
-  const CONFIG_FILE = path.join(process.cwd(), 'system_config.json');
-
-  const defaultSystemConfig = {
-    aiModel: 'gemini-2.5-flash',
-    temperature: 0.4,
-    systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
-    maxTokens: 2048,
-    emergencyKeywords: ['máu', 'co giật', 'khó thở', 'bất tỉnh', 'ngộ độc'],
-    geminiApiKey: process.env.GEMINI_API_KEY || '',
-    backupGeminiApiKey: '',
-    renderServiceUrl: 'https://pet-chatbot-ai.onrender.com',
-    openaiApiKey: '',
-    customApiBaseUrl: '',
-    customModelName: '',
-    apiProvider: 'gemini',
-    autoKeepAliveIntervalMinutes: 10,
-    enableGeminiFallback: true,
-    fallbackGeminiApiKey: process.env.GEMINI_API_KEY || '',
-    fallbackModel: 'gemini-2.5-flash',
-    fallbackTimeoutMs: 20000
-  };
-
-  function getLocalConfig(): Record<string, any> {
-    try {
-      if (fs.existsSync(CONFIG_FILE)) {
-        const fileContent = fs.readFileSync(CONFIG_FILE, 'utf-8');
-        return { ...defaultSystemConfig, ...JSON.parse(fileContent) };
-      }
-    } catch (e) {
-      console.warn('Could not read system_config.json', e);
-    }
-    return { ...defaultSystemConfig };
-  }
-
-  function saveLocalConfig(data: Record<string, any>): void {
-    try {
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (e) {
-      console.warn('Could not write system_config.json', e);
-    }
-  }
+  // System Config Endpoints (Using CONFIG_FILE and local persistence declared above)
 
   app.get('/api/config', async (_req: Request, res: Response) => {
     try {
@@ -1039,8 +1112,14 @@ async function startServer(isVercel = false) {
         if (!error && data) dbData = data;
       } catch {}
 
+      const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+      const rawAiModel = dbData?.ai_model || local.aiModel || 'gemini-3.6-flash';
+      const aiModel = legacyModels.includes(rawAiModel) ? 'gemini-3.6-flash' : rawAiModel;
+      const rawFallbackModel = dbData?.fallback_model || local.fallbackModel || 'gemini-3.6-flash';
+      const fallbackModel = legacyModels.includes(rawFallbackModel) ? 'gemini-3.6-flash' : rawFallbackModel;
+
       res.json({
-        aiModel: dbData?.ai_model || local.aiModel || 'gemini-3.6-flash',
+        aiModel,
         temperature: dbData?.temperature ?? local.temperature ?? 0.4,
         systemPrompt: dbData?.system_prompt || local.systemPrompt || '',
         maxTokens: dbData?.max_tokens ?? local.maxTokens ?? 2048,
@@ -1055,7 +1134,7 @@ async function startServer(isVercel = false) {
         autoKeepAliveIntervalMinutes: dbData?.auto_keep_alive_interval ?? local.autoKeepAliveIntervalMinutes ?? 10,
         enableGeminiFallback: dbData?.enable_gemini_fallback ?? local.enableGeminiFallback ?? true,
         fallbackGeminiApiKey: dbData?.fallback_gemini_api_key || local.fallbackGeminiApiKey || local.backupGeminiApiKey || (process.env.GEMINI_API_KEY || ''),
-        fallbackModel: dbData?.fallback_model || local.fallbackModel || 'gemini-3.6-flash',
+        fallbackModel,
         fallbackTimeoutMs: dbData?.fallback_timeout_ms || local.fallbackTimeoutMs || 20000
       });
     } catch (e: any) {
@@ -1329,16 +1408,27 @@ async function startServer(isVercel = false) {
       const cleanMessage = (message || '').trim().substring(0, 500);
       if (!cleanMessage) return res.json({ title: 'Phiên khám thú cưng' });
       
-      const ai = getGeminiClient();
       const prompt = `Tạo một tiêu đề SIÊU NGẮN (tối đa 4-6 chữ) tóm tắt nội dung sau (nếu là chào hỏi thì ghi "Trò chuyện chung", không dùng ngoặc kép): "${cleanMessage}"`;
-      
-      const genConfig = {
-        model: 'gemini-2.5-flash',
-        contents: { parts: [{ text: prompt }] }
-      };
-      
-      const result = await ai.models.generateContent(genConfig);
-      const title = result.text?.replace(/["*\n]/g, '').trim() || 'Phiên khám mới';
+      const keyPool = getGeminiKeyPool();
+      let title = 'Phiên khám thú cưng';
+
+      for (const k of keyPool) {
+        try {
+          const ai = getGeminiClient(k);
+          const result = await ai.models.generateContent({
+            model: 'gemini-3.6-flash',
+            contents: { parts: [{ text: prompt }] }
+          });
+          const text = result.text?.replace(/["*\n]/g, '').trim();
+          if (text) {
+            title = text;
+            break;
+          }
+        } catch (err: any) {
+          const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(err?.message || '');
+          if (isQuota) continue;
+        }
+      }
       res.json({ title });
     } catch (e) {
       console.error(e);
@@ -1393,8 +1483,8 @@ async function startServer(isVercel = false) {
       const cfgT0 = Date.now();
       const { data: configData, error: cfgErr } = await supabase.from('system_config').select('*').eq('id', 1).single();
       serverLog('SUPABASE', cfgErr ? 'WARN' : 'OK', '/api/chat → load system_config',
-        cfgErr ? cfgErr.message : `model=${configData?.ai_model || 'gemini-2.5-flash'}`, Date.now() - cfgT0);
-      const ai = getGeminiClient(configData?.gemini_api_key);
+        cfgErr ? cfgErr.message : `model=${configData?.ai_model || 'gemini-3.6-flash'}`, Date.now() - cfgT0);
+      const keyPool = getGeminiKeyPool(configData);
       const renderServiceUrl = configData?.render_service_url || 'https://pet-chatbot-ai.onrender.com';
 
       const isCasualGreeting = /^(chào|hi|hello|cảm ơn|thank|dạ|vâng|ok|dạ vâng|ok ạ|không có gì|bye|tạm biệt|hihi|haha|hey|alo)/i.test(cleanMessage) && cleanMessage.length < 40;
@@ -1405,13 +1495,16 @@ async function startServer(isVercel = false) {
         ragContext = await searchRAGKnowledge(cleanMessage);
       }
 
+      const rawChatModel = configData?.ai_model || 'gemini-3.6-flash';
+      const safeChatModel = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'].includes(rawChatModel) ? 'gemini-3.6-flash' : rawChatModel;
+
       const sysConfig = configData ? {
-        aiModel: configData.ai_model,
+        aiModel: safeChatModel,
         temperature: configData.temperature,
         systemPrompt: configData.system_prompt,
         maxTokens: configData.max_tokens,
         emergencyKeywords: configData.emergency_keywords
-      } : { aiModel: 'gemini-2.5-flash', temperature: 0.4, systemPrompt: '', emergencyKeywords: [] };
+      } : { aiModel: 'gemini-3.6-flash', temperature: 0.4, systemPrompt: '', emergencyKeywords: [] };
 
       let petContextPrompt = '';
       if (petInfo) {
@@ -1441,7 +1534,8 @@ async function startServer(isVercel = false) {
           const resnetRes = await fetch(`${renderServiceUrl}/predict`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image_base64: imageBase64 })
+            body: JSON.stringify({ image_base64: imageBase64 }),
+            signal: AbortSignal.timeout(8000)
           });
 
           if (resnetRes.ok) {
@@ -1459,31 +1553,26 @@ async function startServer(isVercel = false) {
               const enhancedRAG   = await searchRAGKnowledge(diseaseForRAG);
               if (enhancedRAG) ragContext = enhancedRAG;
 
-              if (!isMock && confidence >= 70) {
-                // ✅ HIGH CONFIDENCE: KHÔNG gửi ảnh vào Gemini → tiết kiệm token
-                imageForGemini = null;
-                serverLog('RENDER_AI', 'OK', '/predict ResNet HIGH confidence',
-                  `${pred.class_name_vi} (${confidence}%) — text-only cho Gemini`, Date.now() - rnT0);
-                resnetPrediction = `
-[CHẨN ĐOÁN HÌNH ẢNH TỪ AI CHUYÊN BIỆT (ResNet18 — Độ tin cậy CAO)]:
-- Chẩn đoán chính: ${pred.class_name_vi} (${pred.class_name}) — ${confidence}%
-- Top-3 chẩn đoán phân biệt:
+              // ✅ BẮT BUỘC: LUÔN LUÔN gửi ảnh vào Gemini để Gemini Vision trực tiếp đánh giá hình thể toàn diện
+              imageForGemini = imageBase64;
+              serverLog('RENDER_AI', 'INFO', '/predict ResNet result',
+                `${pred.class_name_vi} (${confidence}%) — gửi kèm ảnh gốc cho Gemini Vision`, Date.now() - rnT0);
+
+              const isHealthyPred = pred.class_name === 'Healthy' || pred.class_name_vi === 'Khỏe mạnh';
+              const labelNote = isHealthyPred 
+                ? '⚠️ LƯU Ý Y KHOA: Mô hình ResNet chỉ quét tổn thương bề mặt da (nấm/ghẻ), hoàn toàn KHÔNG có khả năng nhận diện thể trạng toàn thân, gầy còm, suy dinh dưỡng hay bệnh nội khoa.'
+                : '';
+
+              resnetPrediction = `
+[KẾT QUẢ THAM KHẢO TỪ MÔ HÌNH NHẬN DIỆN DA LIỄU CỤC BỘ (ResNet18)]:
+- Dự đoán ngoài da tham khảo: ${pred.class_name_vi} (${pred.class_name}) — ${confidence}%
+${labelNote ? `- ${labelNote}\n` : ''}- Top-3 chẩn đoán ngoài da tham khảo:
 ${top3Text}
-- Hướng dẫn: Model đã phân tích ảnh với độ tin cậy cao. Hãy xác nhận chẩn đoán, giải thích triệu chứng điển hình và đưa ra phác đồ điều trị cụ thể.
+🚨 NGUYÊN TẮC KHÁM LÂM SÀNG TỐI CAO DÀNH CHO BÁC SĨ AI:
+1. BẠN PHẢI TỰ QUAN SÁT HÌNH ẢNH TRỰC TIẾP để đánh giá toàn diện: Chỉ số thể trạng (Body Condition Score - BCS), mức độ lộ xương sườn/xương chậu, teo cơ, suy kiệt (Emaciation), tư thế, dáng đứng, mắt, mũi.
+2. NẾU quan sát thấy thú cưng bị gầy trơ xương, suy dinh dưỡng nặng (BCS 1-2/9), chấn thương hoặc suy kiệt: BẠN PHẢI ƯU TIÊN KẾT LUẬN TỪ MẮT NHÌN TRỰC QUAN CỦA BẠN. TUYỆT ĐỐI KHÔNG máy móc nói thú cưng "khỏe mạnh" chỉ vì mô hình da liễu báo Healthy hoặc người dùng nói đùa/nói mỉa mai ("khỏe vl", "mập mạp", "bình thường").
+3. Hãy đính chính nhẹ nhàng, giải thích rõ tình trạng suy kiệt, phân loại Triage CẢNH BÁO ĐỎ (RED) hoặc VÀNG (YELLOW). Cảnh báo nguy cơ "Hội chứng nuôi ăn lại" (Refeeding Syndrome) - không cho ăn ồ ạt mà cần đưa đi khám thú y để truyền dịch và thiết lập chế độ phục hồi an toàn.
 `;
-              } else {
-                // ⚠️ LOW CONFIDENCE hoặc MOCK: giữ ảnh, thêm gợi ý
-                const label = isMock ? '[Chế độ thử nghiệm]' : `[Độ tin cậy thấp: ${confidence}%]`;
-                serverLog('RENDER_AI', 'WARN', '/predict ResNet LOW confidence',
-                  `${pred.class_name_vi} (${confidence}%, mock=${isMock}) — gửi cả ảnh cho Gemini`, Date.now() - rnT0);
-                resnetPrediction = `
-[GỢI Ý NHẬN DIỆN HÌNH ẢNH ${label}]:
-- Dự đoán ban đầu: ${pred.class_name_vi} (${pred.class_name}) — ${confidence}%
-- Top-3 gợi ý:
-${top3Text}
-- Hướng dẫn: Hãy phân tích ảnh trực tiếp để xác nhận chẩn đoán chính xác hơn.
-`;
-              }
             }
           }
         } catch (e: any) {
@@ -1578,10 +1667,10 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       }
       const modelCandidates = [
         requestedModel,
-        'gemini-3.6-flash',
-        'gemini-2.5-flash-preview-05-20',
-        'gemini-2.0-flash-lite',
-        'gemini-1.5-flash-latest'
+        'gemini-3.1-flash-lite',
+        'gemini-3.5-flash-lite',
+        'gemini-flash-lite-latest',
+        'gemini-3.6-flash'
       ].filter(Boolean);
       const fallbackModels = [...new Set(modelCandidates)];
 
@@ -1590,119 +1679,138 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
         res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
       };
 
-      for (const targetModel of fallbackModels) {
-        const gemT0 = Date.now();
-        try {
-          serverLog('GEMINI', 'INFO', `generateContentStream → ${targetModel}`, `temp=${sysConfig.temperature}`);
-          const stream = await ai.models.generateContentStream({
-            model: targetModel,
-            contents: { parts: contents },
-            config: {
-              temperature: sysConfig.temperature || 0.4
+      keyLoop: for (let keyIdx = 0; keyIdx < keyPool.length; keyIdx++) {
+        const currentKey = keyPool[keyIdx];
+        const ai = getGeminiClient(currentKey);
+        const maskedKey = maskApiKey(currentKey);
+        const keyTag = `Key #${keyIdx + 1}/${keyPool.length} (${maskedKey})`;
+
+        for (const targetModel of fallbackModels) {
+          const gemT0 = Date.now();
+          try {
+            serverLog('GEMINI', 'INFO', `generateContentStream → ${targetModel}`, `${keyTag}, temp=${sysConfig.temperature}`);
+            const stream = await ai.models.generateContentStream({
+              model: targetModel,
+              contents: { parts: contents },
+              config: {
+                temperature: sysConfig.temperature || 0.4
+              }
+            });
+
+            // Test reading first chunk: phát hiện ngay nếu model bị lỗi 503 hoặc 429
+            const iterator = stream[Symbol.asyncIterator]();
+            const firstChunk = await iterator.next();
+
+            if (firstChunk.done && !firstChunk.value) {
+              continue;
             }
-          });
 
-          // Test reading first chunk: phát hiện ngay nếu model bị lỗi 503
-          const iterator = stream[Symbol.asyncIterator]();
-          const firstChunk = await iterator.next();
+            // Model phản hồi tốt! Tiến hành stream đầy đủ cho client
+            let fullText = '';
+            let isInsideTriage = false;
+            let triageBuffer = '';
+            let triageSent = false;
 
-          if (firstChunk.done && !firstChunk.value) {
-            continue;
-          }
+            const handleChunk = (chunkText: string) => {
+              if (!chunkText) return;
+              fullText += chunkText;
 
-          // Model phản hồi tốt! Tiến hành stream đầy đủ cho client
-          let fullText = '';
-          let isInsideTriage = false;
-          let triageBuffer = '';
-          let triageSent = false;
+              if (!triageSent && !isCasualGreeting) {
+                if (!isInsideTriage && fullText.includes('[[TRIAGE_ALERT]]')) {
+                  isInsideTriage = true;
+                }
+                if (isInsideTriage) {
+                  triageBuffer = fullText;
+                  if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
+                    isInsideTriage = false;
+                    triageSent = true;
+                    const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
+                    if (alertMatch && alertMatch[1]) {
+                      try {
+                        const parsed = JSON.parse(alertMatch[1].trim());
+                        sendEvent('triage', {
+                          triageLevel: parsed.level || 'GREEN',
+                          triageDetails: {
+                            riskTitle: parsed.title || 'THÔNG TIN SỨC KHỎE',
+                            urgency: parsed.urgency || '',
+                            immediateActions: parsed.actions || []
+                          }
+                        });
+                      } catch (e) {
+                        console.error('Error parsing Triage Alert JSON from Gemini response:', e);
+                      }
+                    }
+                    const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
+                    if (afterTriage && afterTriage.length > 0) {
+                      const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
+                      if (cleanAfterTriage.length > 0) {
+                        sendEvent('chunk', { text: cleanAfterTriage });
+                      }
+                    }
+                  }
+                  return;
+                }
+              }
+              sendEvent('chunk', { text: chunkText });
+            };
 
-          const handleChunk = (chunkText: string) => {
-            if (!chunkText) return;
-            fullText += chunkText;
+            // Gửi chunk đầu tiên
+            if (firstChunk.value?.text) {
+              handleChunk(firstChunk.value.text);
+            }
 
+            // Gửi các chunk tiếp theo
+            while (true) {
+              const nextResult = await iterator.next();
+              if (nextResult.done) break;
+              if (nextResult.value?.text) {
+                handleChunk(nextResult.value.text);
+              }
+            }
+
+            // Check fallback keywords nếu chưa gửi triage
             if (!triageSent && !isCasualGreeting) {
-              if (!isInsideTriage && fullText.includes('[[TRIAGE_ALERT]]')) {
-                isInsideTriage = true;
-              }
-              if (isInsideTriage) {
-                triageBuffer = fullText;
-                if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
-                  isInsideTriage = false;
-                  triageSent = true;
-                  const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
-                  if (alertMatch && alertMatch[1]) {
-                    try {
-                      const parsed = JSON.parse(alertMatch[1].trim());
-                      sendEvent('triage', {
-                        triageLevel: parsed.level || 'GREEN',
-                        triageDetails: {
-                          riskTitle: parsed.title || 'THÔNG TIN SỨC KHỎE',
-                          urgency: parsed.urgency || '',
-                          immediateActions: parsed.actions || []
-                        }
-                      });
-                    } catch (e) {
-                      console.error('Error parsing Triage Alert JSON from Gemini response:', e);
-                    }
+              const textLower = fullText.toLowerCase();
+              if ((sysConfig.emergencyKeywords || []).some((k: string) => textLower.includes(k.toLowerCase()))) {
+                sendEvent('triage', {
+                  triageLevel: 'RED',
+                  triageDetails: {
+                    riskTitle: 'CẤP BÁCH / NGUY HIỂM CAO (Cảnh báo tự động)',
+                    urgency: 'Cần đưa đến trạm thú y ngay lập tức!',
+                    immediateActions: ['Giữ ấm', 'Đưa đến bệnh viện thú y gần nhất']
                   }
-                  const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
-                  if (afterTriage && afterTriage.length > 0) {
-                    const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
-                    if (cleanAfterTriage.length > 0) {
-                      sendEvent('chunk', { text: cleanAfterTriage });
-                    }
-                  }
-                }
-                return;
+                });
               }
             }
-            sendEvent('chunk', { text: chunkText });
-          };
 
-          // Gửi chunk đầu tiên
-          if (firstChunk.value?.text) {
-            handleChunk(firstChunk.value.text);
-          }
+            sendEvent('done', { rawText: fullText });
+            res.end();
+            serverLog('GEMINI', 'OK', `stream done ← ${targetModel}`,
+              `${fullText.length} chars [${keyTag}]`, Date.now() - gemT0);
+            streamSucceeded = true;
+            break keyLoop; // Hoàn tất thành công toàn bộ!
 
-          // Gửi các chunk tiếp theo
-          while (true) {
-            const nextResult = await iterator.next();
-            if (nextResult.done) break;
-            if (nextResult.value?.text) {
-              handleChunk(nextResult.value.text);
+          } catch (err: any) {
+            lastError = err;
+            const errMsg = err?.message || String(err);
+            const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(errMsg);
+            const isAuth = /API_KEY_INVALID|key not valid|403|401/i.test(errMsg);
+
+            serverLog('GEMINI', isQuota || isAuth ? 'WARN' : 'WARN', `stream FAILED ← ${targetModel} [${keyTag}]`,
+              isQuota ? `🔴 HẾT QUOTA (429): ${errMsg.substring(0, 80)}` : errMsg.substring(0, 80),
+              Date.now() - gemT0);
+
+            // Nếu key chạm quota 429 hoặc lỗi Auth: xoay ngay sang Key tiếp theo trong keyLoop
+            if (isQuota || isAuth) {
+              if (keyIdx + 1 < keyPool.length) {
+                serverLog('GEMINI', 'WARN', 'Key Rotation Active',
+                  `${keyTag} chạm giới hạn Quota → tự động kích hoạt Key #${keyIdx + 2}/${keyPool.length}`);
+              }
+              break; // break khỏi model loop để sang key tiếp theo
             }
+
+            await new Promise(resolve => setTimeout(resolve, 500));
           }
-
-          // Check fallback keywords nếu chưa gửi triage
-          if (!triageSent && !isCasualGreeting) {
-            const textLower = fullText.toLowerCase();
-            if ((sysConfig.emergencyKeywords || []).some((k: string) => textLower.includes(k.toLowerCase()))) {
-              sendEvent('triage', {
-                triageLevel: 'RED',
-                triageDetails: {
-                  riskTitle: 'CẤP BÁCH / NGUY HIỂM CAO (Cảnh báo tự động)',
-                  urgency: 'Cần đưa đến trạm thú y ngay lập tức!',
-                  immediateActions: ['Giữ ấm', 'Đưa đến bệnh viện thú y gần nhất']
-                }
-              });
-            }
-          }
-
-          sendEvent('done', { rawText: fullText });
-          res.end();
-          serverLog('GEMINI', 'OK', `stream done ← ${targetModel}`,
-            `${fullText.length} chars`, Date.now() - gemT0);
-          streamSucceeded = true;
-          break; // Hoàn tất thành công!
-
-        } catch (err: any) {
-          lastError = err;
-          const errMsg = err?.message || String(err);
-          const isQuota = /quota|rate.?limit|429/i.test(errMsg);
-          serverLog('GEMINI', isQuota ? 'ERROR' : 'WARN', `stream FAILED ← ${targetModel}`,
-            isQuota ? `🔴 HẾT QUOTA: ${errMsg.substring(0, 80)}` : errMsg.substring(0, 80),
-            Date.now() - gemT0);
-          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 
@@ -1731,7 +1839,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 
     try {
       const { data: configData } = await supabase.from('system_config').select('*').eq('id', 1).single();
-      const ai = getGeminiClient(configData?.gemini_api_key);
+      const keyPool = getGeminiKeyPool(configData);
       const sysConfig = configData ? { aiModel: configData.ai_model } : { aiModel: 'gemini-3.6-flash' };
 
       const summaryPrompt = `
@@ -1759,29 +1867,38 @@ YÊU CẦU:
 }
 `;
 
-      let response;
-      try {
-        response = await ai.models.generateContent({
-          model: sysConfig.aiModel || 'gemini-2.5-flash',
-          contents: summaryPrompt,
-          config: {
-            responseMimeType: 'application/json'
-          }
-        });
-      } catch (err: any) {
-        console.warn('Gemini model call failed, trying fallback...', err.message);
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-1.5-flash-8b',
-            contents: summaryPrompt,
-            config: {
-              responseMimeType: 'application/json'
+      let analyzeModel = sysConfig.aiModel || 'gemini-3.6-flash';
+      if (['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'].includes(analyzeModel)) {
+        analyzeModel = 'gemini-3.6-flash';
+      }
+
+      let response: any = null;
+      const analyzeCandidates = [...new Set([analyzeModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.6-flash'])];
+      
+      summaryKeyLoop: for (const k of keyPool) {
+        const ai = getGeminiClient(k);
+        for (const m of analyzeCandidates) {
+          try {
+            response = await ai.models.generateContent({
+              model: m,
+              contents: summaryPrompt,
+              config: {
+                responseMimeType: 'application/json'
+              }
+            });
+            if (response?.text) break summaryKeyLoop;
+          } catch (err: any) {
+            const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(err?.message || '');
+            if (isQuota) {
+              console.warn(`[SUMMARIZE] Key ${maskApiKey(k)} out of quota (429), rotating to next key...`);
+              break; // break to next key
             }
-          });
-        } catch (fallbackErr: any) {
-          console.warn('Gemini fallback model also failed. Using rule-based local summary.', fallbackErr.message);
-          response = { text: null };
+            console.warn(`Gemini model ${m} failed (503/error), trying next fallback...`, err.message);
+          }
         }
+      }
+      if (!response) {
+        response = { text: null };
       }
 
       let jsonResult: any = {};

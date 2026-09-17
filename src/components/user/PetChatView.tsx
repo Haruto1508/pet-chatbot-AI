@@ -25,7 +25,10 @@ import {
   RotateCcw,
   RefreshCw,
   Download,
-  Lock
+  Lock,
+  Brain,
+  Stethoscope,
+  Check
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord } from '../../types';
@@ -42,6 +45,29 @@ interface Props {
   currentUser: UserProfile;
   onOpenLogin?: () => void;
 }
+
+const THINKING_STEPS = [
+  {
+    title: 'Truy tìm kiến thức...',
+    detail: 'Đang tra cứu dữ liệu bệnh học & tiền sử bệnh thú cưng',
+    icon: Search,
+  },
+  {
+    title: 'Đang phân tích...',
+    detail: 'Đánh giá các dấu hiệu bất thường & phân loại Triage',
+    icon: Brain,
+  },
+  {
+    title: 'Đối chiếu thông tin...',
+    detail: 'Xác minh phác đồ điều trị an toàn cho loài & thể trạng',
+    icon: Stethoscope,
+  },
+  {
+    title: 'Đang tổng hợp câu trả lời...',
+    detail: 'Soạn thảo lời khuyên & hướng dẫn sơ cứu chuẩn y khoa',
+    icon: Sparkles,
+  },
+];
 
 // Helper to group sessions by date
 function groupSessionsByDate(sessions: ChatSession[]): { label: string; sessions: ChatSession[] }[] {
@@ -135,6 +161,26 @@ export const PetChatView: React.FC<Props> = ({
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [hasReceivedFirstChunk, setHasReceivedFirstChunk] = useState(false);
+  const [thinkingStep, setThinkingStep] = useState<number>(0);
+
+  // Progressive reasoning step timer
+  useEffect(() => {
+    if (!isLoading || hasReceivedFirstChunk) {
+      setThinkingStep(0);
+      return;
+    }
+
+    setThinkingStep(0);
+    const t1 = setTimeout(() => setThinkingStep(1), 1100);
+    const t2 = setTimeout(() => setThinkingStep(2), 2400);
+    const t3 = setTimeout(() => setThinkingStep(3), 3900);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [isLoading, hasReceivedFirstChunk, isRetrying]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -210,7 +256,7 @@ export const PetChatView: React.FC<Props> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading]);
+  }, [messages, isLoading, thinkingStep]);
 
   // Filter sessions by search query
   const filteredSessions = useMemo(() => {
@@ -291,6 +337,7 @@ export const PetChatView: React.FC<Props> = ({
     }
     setIsLoading(false);
     setHasReceivedFirstChunk(false);
+    setThinkingStep(0);
     inputRef.current?.focus();
   };
 
@@ -343,6 +390,7 @@ export const PetChatView: React.FC<Props> = ({
     setSelectedImage(null);
     setIsLoading(true);
     setHasReceivedFirstChunk(false);
+    setThinkingStep(0);
 
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
@@ -460,7 +508,7 @@ export const PetChatView: React.FC<Props> = ({
         (retrying) => {
           setIsRetrying(retrying);
           if (retrying) {
-            showInfo('Đang cố gắng kết nối lại...');
+            setThinkingStep(0);
             finalText = '';
             setHasReceivedFirstChunk(false);
             setMessages(prev => prev.filter(m => m.id !== aiMessageId));
@@ -1090,25 +1138,99 @@ export const PetChatView: React.FC<Props> = ({
               );
             })}
 
-            {/* Typing dots loading indicator */}
+            {/* Dynamic AI Reasoning & Thinking Indicator */}
             {isLoading && !hasReceivedFirstChunk && (
-              <div className="py-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+              <div className="py-6 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2.5 mb-3.5">
+                  <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-xs">
                     <img src="/logo.png" alt="PetCare AI" className="w-full h-full object-contain p-0.5" />
                   </div>
                   <span className="text-sm font-semibold text-slate-900">PetCare AI</span>
+                  
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    Bác sĩ AI đang suy luận
+                  </span>
+
                   {isRetrying && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200/80 animate-pulse">
-                      <RefreshCw className="w-3 h-3 animate-spin text-amber-600" />
-                      Đang cố gắng kết nối lại...
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 text-teal-700 border border-teal-200/80 animate-pulse shadow-2xs">
+                      <Sparkles className="w-3 h-3 text-teal-600 animate-spin" />
+                      {THINKING_STEPS[thinkingStep]?.title || 'Truy tìm kiến thức...'}
                     </span>
                   )}
                 </div>
-                <div className="pl-8 flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms', animationDuration: '1s' }} />
-                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '200ms', animationDuration: '1s' }} />
-                  <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '400ms', animationDuration: '1s' }} />
+
+                {/* Reasoning Steps Card */}
+                <div className="pl-8 max-w-lg">
+                  <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-50/90 to-white/95 border border-slate-200/80 shadow-xs backdrop-blur-xs space-y-3">
+                    <div className="space-y-2.5">
+                      {THINKING_STEPS.map((step, sIdx) => {
+                        const isCompleted = sIdx < thinkingStep;
+                        const isCurrent = sIdx === thinkingStep;
+                        const StepIcon = step.icon;
+
+                        return (
+                          <div
+                            key={sIdx}
+                            className={`flex items-start gap-3 text-xs transition-all duration-300 ${
+                              isCurrent
+                                ? 'text-slate-900 font-semibold'
+                                : isCompleted
+                                ? 'text-slate-500 font-medium'
+                                : 'text-slate-300 font-normal opacity-60'
+                            }`}
+                          >
+                            <div
+                              className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-all duration-300 ${
+                                isCompleted
+                                  ? 'bg-emerald-500 text-white shadow-2xs'
+                                  : isCurrent
+                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-300 shadow-xs ring-2 ring-emerald-400/25'
+                                  : 'bg-slate-100 text-slate-300 border border-slate-200/60'
+                              }`}
+                            >
+                              {isCompleted ? (
+                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                              ) : isCurrent ? (
+                                <StepIcon className="w-3.5 h-3.5 animate-pulse" />
+                              ) : (
+                                <span className="text-[10px] font-bold">{sIdx + 1}</span>
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="truncate">{step.title}</span>
+                                {isCurrent && (
+                                  <span className="inline-flex gap-1">
+                                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:0ms]"></span>
+                                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:150ms]"></span>
+                                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:300ms]"></span>
+                                  </span>
+                                )}
+                              </div>
+                              {isCurrent && (
+                                <p className="text-[11px] text-slate-400 font-normal mt-0.5 animate-in fade-in duration-200">
+                                  {step.detail}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Shimmer progress bar */}
+                    <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden mt-3">
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${Math.min(100, (thinkingStep + 1) * 25)}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1205,7 +1327,7 @@ export const PetChatView: React.FC<Props> = ({
                     placeholder={
                       isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT
                         ? 'Bạn đã hết lượt dùng thử miễn phí. Vui lòng đăng nhập để tiếp tục...'
-                        : isRetrying ? 'Đang cố gắng kết nối lại...'
+                        : isRetrying ? 'Bác sĩ AI đang đối chiếu thông tin & tổng hợp phác đồ...'
                         : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
                         : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}...`
                         : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'
