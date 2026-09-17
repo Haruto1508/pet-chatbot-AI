@@ -1038,6 +1038,9 @@ export const PetChatView: React.FC<Props> = ({
                   <Send className="w-4 h-4" />
                 </button>
               </div>
+              <p className="text-[10px] sm:text-[11px] text-slate-400 text-center mt-2 px-2 leading-relaxed select-none">
+                PetCare AI chỉ mang tính chất tham khảo &amp; hỗ trợ tư vấn sơ bộ, không thay thế chẩn đoán y khoa từ bác sĩ thú y. Vui lòng liên hệ cơ sở thú y gần nhất trong trường hợp khẩn cấp.
+              </p>
             </div>
 
             {/* Quick suggestion items */}
@@ -1554,6 +1557,9 @@ export const PetChatView: React.FC<Props> = ({
                     </button>
                   )}
                 </div>
+                <p className="text-[10px] sm:text-[11px] text-slate-400 text-center mt-2 px-2 leading-relaxed select-none">
+                  PetCare AI chỉ mang tính chất tham khảo &amp; hỗ trợ tư vấn sơ bộ, không thay thế chẩn đoán y khoa từ bác sĩ thú y. Vui lòng liên hệ cơ sở thú y gần nhất trong trường hợp khẩn cấp.
+                </p>
               </div>
             </div>
           </>
