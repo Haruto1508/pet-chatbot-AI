@@ -680,10 +680,18 @@ export const api = {
         }));
 
       const systemPrompt = `Bạn là Bác sĩ Thú y AI PetCare hỗ trợ 24/7. Trả lời súc tích, thân thiện và chuyên nghiệp bằng tiếng Việt.
-Khi người dùng mô tả triệu chứng bệnh của thú cưng, hãy trình bày rõ ràng:
-- **Chẩn đoán sơ bộ**: Nguyên nhân và mức độ nguy hiểm
-- **Xử lý & Sơ cứu tại nhà**: Việc nên làm ngay và việc tuyệt đối tránh
-- **Dấu hiệu nguy hiểm**: Khi nào cần đưa đi bệnh viện thú y cấp cứu ngay`;
+LƯU Ý QUAN TRỌNG VỀ ĐỊNH DẠNG:
+1. BẮT BUỘC chèn khối Triage Alert ngay đầu phản hồi (tuyệt đối không dùng markdown block xung quanh, viết liền trên 1 dòng):
+[[TRIAGE_ALERT]]{"level": "RED" | "YELLOW" | "GREEN", "title": "Tên bệnh hoặc triệu chứng tóm tắt", "urgency": "Mức độ khẩn cấp", "actions": ["Hành động 1", "Hành động 2"]}[[/TRIAGE_ALERT]]
+Quy tắc phân loại:
+- RED: Cấp cứu nguy kịch, khó thở, xuất huyết, co giật, ngộ độc, chấn thương nặng, hôn mê.
+- YELLOW: Bệnh cần khám thú y sớm, viêm da, nấm, ghẻ, tiêu chảy, nôn mửa, sốt, ngứa, bỏ ăn, đau mắt.
+- GREEN: Tư vấn dinh dưỡng, chăm sóc lông móng, sinh hoạt thường ngày, dấu hiệu nhẹ.
+
+2. Sau khối trên, câu trả lời cần SÚC TÍCH, CÔ ĐỌNG (tối đa 200 - 250 từ), chia 3 phần rõ ràng:
+- **Chẩn đoán sơ bộ**: Nguyên nhân và mức độ nguy hiểm (1-2 câu).
+- **Xử lý & Sơ cứu tại nhà**: Việc nên làm ngay và việc tuyệt đối tránh.
+- **Dấu hiệu nguy hiểm**: Khi nào cần đưa đi bệnh viện thú y cấp cứu ngay.`;
 
       const currentParts: any[] = [];
       if (payload.imageBase64) {
@@ -719,6 +727,53 @@ Khi người dùng mô tả triệu chứng bệnh của thú cưng, hãy trình
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';
+      let triageSent = false;
+      let fullFallbackText = '';
+      let isInsideTriage = false;
+      let triageBuffer = '';
+
+      const handleFallbackChunk = (chunkText: string) => {
+        if (!chunkText) return;
+        fullFallbackText += chunkText;
+
+        if (!triageSent) {
+          if (!isInsideTriage && fullFallbackText.includes('[[TRIAGE_ALERT]]')) {
+            isInsideTriage = true;
+          }
+          if (isInsideTriage) {
+            triageBuffer = fullFallbackText;
+            if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
+              isInsideTriage = false;
+              triageSent = true;
+              const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
+              if (alertMatch && alertMatch[1]) {
+                try {
+                  const parsed = JSON.parse(alertMatch[1].trim());
+                  const level: TriageLevel = (parsed.level === 'RED' || parsed.level === 'YELLOW' || parsed.level === 'GREEN')
+                    ? parsed.level
+                    : 'YELLOW';
+                  onTriage(level, {
+                    riskTitle: parsed.title || 'Đánh giá sức khỏe',
+                    urgency: parsed.urgency || '',
+                    immediateActions: Array.isArray(parsed.actions) ? parsed.actions : []
+                  });
+                } catch (e) {
+                  console.error('Error parsing Triage Alert from Gemini fallback:', e);
+                }
+              }
+              const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
+              if (afterTriage && afterTriage.length > 0) {
+                const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
+                if (cleanAfterTriage.length > 0) {
+                  onChunk(cleanAfterTriage);
+                }
+              }
+            }
+            return;
+          }
+        }
+        onChunk(chunkText);
+      };
 
       while (true) {
         if (signal?.aborted) { try { await reader.cancel(); } catch {} break; }
@@ -732,12 +787,18 @@ Khi người dùng mô tả triệu chứng bệnh của thú cưng, hãy trình
           try {
             const json = JSON.parse(line.slice(6));
             const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) onChunk(text);
+            if (text) handleFallbackChunk(text);
           } catch {}
         }
       }
 
-      onTriage('GREEN', { riskTitle: 'Tư vấn AI Backup', urgency: 'Theo dõi thường xuyên', immediateActions: ['Theo dõi sát các triệu chứng của thú cưng'] });
+      if (!triageSent) {
+        onTriage('GREEN', {
+          riskTitle: 'Tư vấn sức khỏe',
+          urgency: 'Theo dõi thường xuyên',
+          immediateActions: ['Theo dõi sát các triệu chứng của thú cưng']
+        });
+      }
 
       api.writeLog({
         log_type: 'fallback',
