@@ -200,14 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Bottom User Profile Section */}
           <div className="border-t border-slate-200 p-2 space-y-1">
-            {/* Hotline icon-only tooltip */}
-            <a href="tel:0903123456" title="Hotline Cấp Cứu 24/7: 0903 123 456"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-red-600 hover:bg-red-50 transition-all group">
-              <Phone className="w-4 h-4 flex-shrink-0 group-hover:animate-bounce" />
-              <span>Hotline 0903 123 456</span>
-              <span className="ml-auto text-[9px] bg-red-100 text-red-700 font-black px-1.5 py-0.5 rounded-full">24/7</span>
-            </a>
-
+            
             {/* User Profile Row */}
             {currentUser.id === "guest" ? (
               <button onClick={onOpenLoginModal}
