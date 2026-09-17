@@ -546,7 +546,7 @@ export const api = {
     let fallbackApiKey = customFallbackConfig?.apiKey || process.env.GEMINI_API_KEY || '';
     let fallbackModel = customFallbackConfig?.model || 'gemini-2.5-flash';
     let fallbackEnabled = customFallbackConfig?.enabled ?? true;
-    const timeoutMs = customFallbackConfig?.timeoutMs ?? 15000;
+    const timeoutMs = customFallbackConfig?.timeoutMs ?? (payload.imageBase64 ? 35000 : 20000);
 
     if (!fallbackApiKey) {
       try {
