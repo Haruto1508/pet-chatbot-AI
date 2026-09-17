@@ -17,7 +17,7 @@ out/
 .next/
 dist-ssr/
 
-# Environment variables
+# Environment variables & runtime credentials
 .env
 .env.local
 .env.development.local
@@ -25,6 +25,8 @@ dist-ssr/
 .env.production.local
 *.local
 !.env.example
+system_config.json
+!system_config.example.json
 
 # Editor directories and files
 .vscode/*

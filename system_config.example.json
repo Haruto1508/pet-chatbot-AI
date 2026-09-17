@@ -10,7 +10,7 @@
     "bất tỉnh",
     "ngộ độc"
   ],
-  "geminiApiKey": "AIzaSyCjyee4lAcyKdqxGn9fBJpdWvozIXSupAE",
+  "geminiApiKey": "",
   "backupGeminiApiKey": "",
   "renderServiceUrl": "https://pet-chatbot-ai.onrender.com",
   "openaiApiKey": "",
@@ -19,7 +19,7 @@
   "apiProvider": "gemini",
   "autoKeepAliveIntervalMinutes": 10,
   "enableGeminiFallback": true,
-  "fallbackGeminiApiKey": "AIzaSyCjyee4lAcyKdqxGn9fBJpdWvozIXSupAE",
+  "fallbackGeminiApiKey": "",
   "fallbackModel": "gemini-3.1-flash-lite",
   "fallbackTimeoutMs": 20000
 }
