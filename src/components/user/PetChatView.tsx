@@ -870,8 +870,8 @@ export const PetChatView: React.FC<Props> = ({
 
               if (isUser) {
                 return (
-                  <div key={msg.id} className="py-4 flex justify-end">
-                    <div className="max-w-[80%] flex flex-col items-end gap-2">
+                  <div key={msg.id} className="group py-4 flex justify-end">
+                    <div className="max-w-[80%] flex flex-col items-end gap-1.5">
                       {msg.imageUrl && (
                         <img
                           src={msg.imageUrl}
@@ -884,7 +884,31 @@ export const PetChatView: React.FC<Props> = ({
                           {msg.text}
                         </div>
                       )}
-                      <span className="text-[10px] text-slate-400 pr-1">{msg.timestamp}</span>
+                      <div className="flex items-center gap-1.5 pr-1">
+                        <button
+                          onClick={() => {
+                            if (msg.text) {
+                              navigator.clipboard.writeText(msg.text);
+                              setCopiedMsgId(msg.id);
+                              setTimeout(() => setCopiedMsgId(null), 2000);
+                            }
+                          }}
+                          title="Sao chép câu hỏi"
+                          className={`flex items-center gap-1 p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-all cursor-pointer ${
+                            copiedMsgId === msg.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+                          }`}
+                        >
+                          {copiedMsgId === msg.id ? (
+                            <>
+                              <CheckCircle className="w-3 h-3 text-emerald-600" />
+                              <span className="text-[10px] text-emerald-600 font-medium">Đã sao chép</span>
+                            </>
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                        <span className="text-[10px] text-slate-400">{msg.timestamp}</span>
+                      </div>
                     </div>
                   </div>
                 );
