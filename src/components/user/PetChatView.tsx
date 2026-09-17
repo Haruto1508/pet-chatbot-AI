@@ -563,9 +563,16 @@ export const PetChatView: React.FC<Props> = ({
           setGuestMsgCount(GUEST_MESSAGE_LIMIT); // Trigger banner immediately
         }
 
+        const isOverload = err?.message?.toLowerCase().includes('quá tải') ||
+                           err?.message?.toLowerCase().includes('lưu lượng') ||
+                           err?.message?.toLowerCase().includes('lượng lớn người truy cập') ||
+                           err?.message?.toLowerCase().includes('tải lại trang');
+
         const errorText = isTimeout
-          ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại hoặc tải lại trang.'
-          : (err?.message || 'Lưu lượng truy cập quá lớn, vui lòng tải lại trang.');
+          ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại sau ít phút.'
+          : isOverload
+          ? 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
+          : (err?.message || 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
 
         const errMsg: ChatMessage = {
           id: `err_${Date.now()}`,

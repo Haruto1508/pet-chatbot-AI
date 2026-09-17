@@ -709,7 +709,7 @@ export const api = {
         }).catch(() => {});
 
         if (!fallbackEnabled || fallbackApiKeys.length === 0) {
-          throw new Error('Server đang quá tải, vui lòng tải lại trang.');
+          throw new Error('Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
         }
       }
     }
@@ -911,7 +911,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       metadata: { totalKeys: fallbackApiKeys.length, lastError: lastFallbackError?.message }
     }).catch(() => {});
 
-    throw new Error('Server đang quá tải, vui lòng tải lại trang.');
+    throw new Error('Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
   },
 
   // Test individual Gemini API Key

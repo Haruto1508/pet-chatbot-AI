@@ -1825,7 +1825,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       } else {
         res.write(`data: ${JSON.stringify({
           type: 'error',
-          message: 'Hệ thống AI hiện đang quá tải hoặc gặp sự cố (Lỗi 503). Hệ thống đã thử kết nối lại nhưng vẫn không thành công. Bạn vui lòng thử lại sau vài phút nhé!'
+          message: 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
         })}\n\n`);
         res.end();
       }
