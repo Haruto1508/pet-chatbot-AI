@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import fs from 'fs';
 import crypto from 'crypto';
 import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -986,42 +987,76 @@ async function startServer(isVercel = false) {
   });
 
 
-  // System Config (AI Models, API Keys, Service URLs, Hyperparameters)
+  // System Config (AI Models, API Keys, Service URLs, Hyperparameters & Fallback)
+  const CONFIG_FILE = path.join(process.cwd(), 'system_config.json');
+
+  const defaultSystemConfig = {
+    aiModel: 'gemini-2.5-flash',
+    temperature: 0.4,
+    systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
+    maxTokens: 2048,
+    emergencyKeywords: ['máu', 'co giật', 'khó thở', 'bất tỉnh', 'ngộ độc'],
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    backupGeminiApiKey: '',
+    renderServiceUrl: 'https://pet-chatbot-ai.onrender.com',
+    openaiApiKey: '',
+    customApiBaseUrl: '',
+    customModelName: '',
+    apiProvider: 'gemini',
+    autoKeepAliveIntervalMinutes: 10,
+    enableGeminiFallback: true,
+    fallbackGeminiApiKey: process.env.GEMINI_API_KEY || '',
+    fallbackModel: 'gemini-2.5-flash',
+    fallbackTimeoutMs: 20000
+  };
+
+  function getLocalConfig(): Record<string, any> {
+    try {
+      if (fs.existsSync(CONFIG_FILE)) {
+        const fileContent = fs.readFileSync(CONFIG_FILE, 'utf-8');
+        return { ...defaultSystemConfig, ...JSON.parse(fileContent) };
+      }
+    } catch (e) {
+      console.warn('Could not read system_config.json', e);
+    }
+    return { ...defaultSystemConfig };
+  }
+
+  function saveLocalConfig(data: Record<string, any>): void {
+    try {
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('Could not write system_config.json', e);
+    }
+  }
+
   app.get('/api/config', async (_req: Request, res: Response) => {
     try {
-      const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
-      if (error || !data) {
-        return res.json({
-          aiModel: 'gemini-2.5-flash',
-          temperature: 0.7,
-          systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
-          maxTokens: 2048,
-          emergencyKeywords: ['máu', 'co giật', 'khó thở', 'bất tỉnh'],
-          geminiApiKey: process.env.GEMINI_API_KEY || '',
-          backupGeminiApiKey: '',
-          renderServiceUrl: 'https://pet-chatbot-ai.onrender.com',
-          openaiApiKey: '',
-          customApiBaseUrl: '',
-          customModelName: '',
-          apiProvider: 'gemini',
-          autoKeepAliveIntervalMinutes: 10
-        });
-      }
+      const local = getLocalConfig();
+      let dbData: any = null;
+      try {
+        const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
+        if (!error && data) dbData = data;
+      } catch {}
 
       res.json({
-        aiModel: data.ai_model || 'gemini-2.5-flash',
-        temperature: data.temperature ?? 0.7,
-        systemPrompt: data.system_prompt || '',
-        maxTokens: data.max_tokens ?? 2048,
-        emergencyKeywords: data.emergency_keywords || ['máu', 'co giật', 'khó thở'],
-        geminiApiKey: data.gemini_api_key || (process.env.GEMINI_API_KEY || ''),
-        backupGeminiApiKey: data.backup_gemini_api_key || '',
-        renderServiceUrl: data.render_service_url || 'https://pet-chatbot-ai.onrender.com',
-        openaiApiKey: data.openai_api_key || '',
-        customApiBaseUrl: data.custom_api_base_url || '',
-        customModelName: data.custom_model_name || '',
-        apiProvider: data.api_provider || 'gemini',
-        autoKeepAliveIntervalMinutes: data.auto_keep_alive_interval ?? 10
+        aiModel: dbData?.ai_model || local.aiModel || 'gemini-2.5-flash',
+        temperature: dbData?.temperature ?? local.temperature ?? 0.4,
+        systemPrompt: dbData?.system_prompt || local.systemPrompt || '',
+        maxTokens: dbData?.max_tokens ?? local.maxTokens ?? 2048,
+        emergencyKeywords: dbData?.emergency_keywords || local.emergencyKeywords || ['máu', 'co giật', 'khó thở'],
+        geminiApiKey: dbData?.gemini_api_key || local.geminiApiKey || (process.env.GEMINI_API_KEY || ''),
+        backupGeminiApiKey: dbData?.backup_gemini_api_key || local.backupGeminiApiKey || '',
+        renderServiceUrl: dbData?.render_service_url || local.renderServiceUrl || 'https://pet-chatbot-ai.onrender.com',
+        openaiApiKey: dbData?.openai_api_key || local.openaiApiKey || '',
+        customApiBaseUrl: dbData?.custom_api_base_url || local.customApiBaseUrl || '',
+        customModelName: dbData?.custom_model_name || local.customModelName || '',
+        apiProvider: dbData?.api_provider || local.apiProvider || 'gemini',
+        autoKeepAliveIntervalMinutes: dbData?.auto_keep_alive_interval ?? local.autoKeepAliveIntervalMinutes ?? 10,
+        enableGeminiFallback: dbData?.enable_gemini_fallback ?? local.enableGeminiFallback ?? true,
+        fallbackGeminiApiKey: dbData?.fallback_gemini_api_key || local.fallbackGeminiApiKey || local.backupGeminiApiKey || (process.env.GEMINI_API_KEY || ''),
+        fallbackModel: dbData?.fallback_model || local.fallbackModel || 'gemini-2.5-flash',
+        fallbackTimeoutMs: dbData?.fallback_timeout_ms || local.fallbackTimeoutMs || 20000
       });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
@@ -1030,43 +1065,51 @@ async function startServer(isVercel = false) {
 
   app.post('/api/config', async (req: Request, res: Response) => {
     try {
-      const payload: Record<string, any> = {
+      const local = getLocalConfig();
+      const updated = {
+        ...local,
+        ...req.body,
+        updatedAt: new Date().toISOString()
+      };
+      saveLocalConfig(updated);
+
+      // 1. Core payload (always supported by basic system_config table)
+      const corePayload: Record<string, any> = {
         id: 1,
-        ai_model: req.body.aiModel,
-        temperature: req.body.temperature,
-        system_prompt: req.body.systemPrompt,
-        max_tokens: req.body.maxTokens,
-        emergency_keywords: req.body.emergencyKeywords,
+        ai_model: updated.aiModel || 'gemini-2.5-flash',
+        temperature: updated.temperature ?? 0.4,
+        system_prompt: updated.systemPrompt || '',
+        max_tokens: updated.maxTokens ?? 2048,
+        emergency_keywords: updated.emergencyKeywords || ['máu', 'co giật', 'khó thở'],
         updated_at: new Date().toISOString()
       };
 
-      if (req.body.geminiApiKey !== undefined) payload.gemini_api_key = req.body.geminiApiKey;
-      if (req.body.backupGeminiApiKey !== undefined) payload.backup_gemini_api_key = req.body.backupGeminiApiKey;
-      if (req.body.renderServiceUrl !== undefined) payload.render_service_url = req.body.renderServiceUrl;
-      if (req.body.openaiApiKey !== undefined) payload.openai_api_key = req.body.openaiApiKey;
-      if (req.body.customApiBaseUrl !== undefined) payload.custom_api_base_url = req.body.customApiBaseUrl;
-      if (req.body.customModelName !== undefined) payload.custom_model_name = req.body.customModelName;
-      if (req.body.apiProvider !== undefined) payload.api_provider = req.body.apiProvider;
-      if (req.body.autoKeepAliveIntervalMinutes !== undefined) payload.auto_keep_alive_interval = req.body.autoKeepAliveIntervalMinutes;
+      // 2. Extended payload (includes optional/custom columns if migrated)
+      const extendedPayload: Record<string, any> = {
+        ...corePayload,
+        gemini_api_key: updated.geminiApiKey || '',
+        backup_gemini_api_key: updated.backupGeminiApiKey || updated.fallbackGeminiApiKey || '',
+        render_service_url: updated.renderServiceUrl || 'https://pet-chatbot-ai.onrender.com',
+        openai_api_key: updated.openaiApiKey || '',
+        custom_api_base_url: updated.customApiBaseUrl || '',
+        custom_model_name: updated.customModelName || '',
+        api_provider: updated.apiProvider || 'gemini',
+        auto_keep_alive_interval: updated.autoKeepAliveIntervalMinutes ?? 10
+      };
 
-      const { data, error } = await supabase.from('system_config').upsert(payload).select().single();
-      if (error) return res.status(500).json({ error: error.message });
+      try {
+        const { error: extErr } = await supabase.from('system_config').upsert(extendedPayload);
+        if (extErr) {
+          // If custom columns don't exist in Supabase schema cache, gracefully upsert core fields
+          await supabase.from('system_config').upsert(corePayload);
+        }
+      } catch {
+        try {
+          await supabase.from('system_config').upsert(corePayload);
+        } catch {}
+      }
 
-      res.json({
-        aiModel: data.ai_model,
-        temperature: data.temperature,
-        systemPrompt: data.system_prompt,
-        maxTokens: data.max_tokens,
-        emergencyKeywords: data.emergency_keywords,
-        geminiApiKey: data.gemini_api_key,
-        backupGeminiApiKey: data.backup_gemini_api_key,
-        renderServiceUrl: data.render_service_url,
-        openaiApiKey: data.openai_api_key,
-        customApiBaseUrl: data.custom_api_base_url,
-        customModelName: data.custom_model_name,
-        apiProvider: data.api_provider,
-        autoKeepAliveIntervalMinutes: data.auto_keep_alive_interval
-      });
+      res.json(updated);
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

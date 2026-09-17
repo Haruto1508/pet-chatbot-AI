@@ -30,39 +30,33 @@ export const AdminSystemConfigView: React.FC = () => {
     setLoading(true);
     try {
       const data: any = await api.getSystemConfig();
-      if (data && !data.error) {
-        setConfig({
-          aiModel: data.aiModel || 'gemini-2.5-flash',
-          temperature: data.temperature ?? 0.4,
-          systemPrompt: data.systemPrompt || '',
-          maxTokens: data.maxTokens || 2048,
-          emergencyKeywords: data.emergencyKeywords || ['máu', 'co giật', 'khó thở', 'bất tỉnh'],
-          geminiApiKey: data.geminiApiKey || '',
-          backupGeminiApiKey: data.backupGeminiApiKey || '',
-          renderServiceUrl: data.renderServiceUrl || 'https://pet-chatbot-ai.onrender.com',
-          openaiApiKey: data.openaiApiKey || '',
-          customApiBaseUrl: data.customApiBaseUrl || '',
-          customModelName: data.customModelName || '',
-          apiProvider: data.apiProvider || 'gemini',
-          autoKeepAliveIntervalMinutes: data.autoKeepAliveIntervalMinutes || 10
-        });
-      } else {
-        setConfig({
-          aiModel: 'gemini-2.5-flash',
-          temperature: 0.4,
-          systemPrompt: 'Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.',
-          maxTokens: 2048,
-          emergencyKeywords: ['máu', 'co giật', 'khó thở', 'bất tỉnh'],
-          geminiApiKey: '',
-          backupGeminiApiKey: '',
-          renderServiceUrl: 'https://pet-chatbot-ai.onrender.com',
-          openaiApiKey: '',
-          customApiBaseUrl: '',
-          customModelName: '',
-          apiProvider: 'gemini',
-          autoKeepAliveIntervalMinutes: 10
-        });
-      }
+      const savedFallback = localStorage.getItem('petcare_fallback_config');
+      let localFallback: any = {};
+      try {
+        if (savedFallback) localFallback = JSON.parse(savedFallback);
+      } catch {}
+
+      const merged = {
+        aiModel: data?.aiModel || 'gemini-2.5-flash',
+        temperature: data?.temperature ?? 0.4,
+        systemPrompt: data?.systemPrompt || '',
+        maxTokens: data?.maxTokens || 2048,
+        emergencyKeywords: data?.emergencyKeywords || ['máu', 'co giật', 'khó thở', 'bất tỉnh'],
+        geminiApiKey: data?.geminiApiKey || '',
+        backupGeminiApiKey: data?.backupGeminiApiKey || '',
+        renderServiceUrl: data?.renderServiceUrl || 'https://pet-chatbot-ai.onrender.com',
+        openaiApiKey: data?.openaiApiKey || '',
+        customApiBaseUrl: data?.customApiBaseUrl || '',
+        customModelName: data?.customModelName || '',
+        apiProvider: data?.apiProvider || 'gemini',
+        autoKeepAliveIntervalMinutes: data?.autoKeepAliveIntervalMinutes || 10,
+        enableGeminiFallback: data?.enableGeminiFallback ?? localFallback.enableGeminiFallback ?? true,
+        fallbackGeminiApiKey: data?.fallbackGeminiApiKey || localFallback.fallbackGeminiApiKey || data?.backupGeminiApiKey || '',
+        fallbackModel: data?.fallbackModel || localFallback.fallbackModel || 'gemini-2.5-flash',
+        fallbackTimeoutMs: data?.fallbackTimeoutMs || localFallback.fallbackTimeoutMs || 20000
+      };
+
+      setConfig(merged);
     } catch (e) {
       showError('Không thể tải cấu hình từ máy chủ.');
     } finally {
@@ -79,6 +73,15 @@ export const AdminSystemConfigView: React.FC = () => {
     if (!config) return;
     setSaving(true);
     try {
+      // 1. Immediately cache in browser localStorage
+      localStorage.setItem('petcare_fallback_config', JSON.stringify({
+        enableGeminiFallback: config.enableGeminiFallback ?? true,
+        fallbackGeminiApiKey: config.fallbackGeminiApiKey || config.backupGeminiApiKey || '',
+        fallbackModel: config.fallbackModel || 'gemini-2.5-flash',
+        fallbackTimeoutMs: config.fallbackTimeoutMs || 20000
+      }));
+
+      // 2. Persist to server & Supabase
       await api.updateSystemConfig(config);
       showSuccess('✅ Đã lưu cấu hình AI & API Keys thành công!');
       setSaveSuccess(true);

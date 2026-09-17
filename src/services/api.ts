@@ -275,8 +275,29 @@ export const api = {
   },
 
   getSystemConfig: async (): Promise<SystemConfig> => {
-    const res = await fetch('/api/config');
-    return res.json();
+    let serverConfig: any = null;
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        serverConfig = await res.json();
+      }
+    } catch {}
+
+    const localStr = typeof window !== 'undefined' ? localStorage.getItem('petcare_fallback_config') : null;
+    let local: any = {};
+    if (localStr) {
+      try { local = JSON.parse(localStr); } catch {}
+    }
+
+    const merged: SystemConfig = {
+      ...(serverConfig || {}),
+      enableGeminiFallback: serverConfig?.enableGeminiFallback ?? local.enableGeminiFallback ?? true,
+      fallbackGeminiApiKey: serverConfig?.fallbackGeminiApiKey || local.fallbackGeminiApiKey || serverConfig?.backupGeminiApiKey || '',
+      fallbackModel: serverConfig?.fallbackModel || local.fallbackModel || 'gemini-2.5-flash',
+      fallbackTimeoutMs: serverConfig?.fallbackTimeoutMs || local.fallbackTimeoutMs || 20000
+    };
+
+    return merged;
   },
 
   updateConfig: async (config: Partial<SystemConfig>): Promise<SystemConfig> => {
