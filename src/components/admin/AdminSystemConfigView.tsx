@@ -642,7 +642,9 @@ export const AdminSystemConfigView: React.FC = () => {
                 onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
               >
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Mặc định — Nhanh & Mới nhất)</option>
+                <option value="gemini-3.8-flash">Gemini 3.8 Flash (Mới nhất)</option>
+                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Siêu tiết kiệm)</option>
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Mặc định — Nhanh & Ổn định)</option>
                 <option value="gemini-2.0-flash">Gemini 2.0 Flash (Tốc độ phản hồi cao)</option>
                 <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite (Tiết kiệm Token)</option>
                 <option value="gemini-1.5-flash">Gemini 1.5 Flash (Ổn định)</option>
@@ -835,8 +837,11 @@ export const AdminSystemConfigView: React.FC = () => {
                     onChange={(e) => setConfig({ ...config, fallbackModel: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
                   >
+                    <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
                     <option value="gemini-2.5-flash">gemini-2.5-flash (nhanh nhất)</option>
                     <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                    <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
                     <option value="gemini-1.5-flash">gemini-1.5-flash</option>
                     <option value="gemini-pro">gemini-pro (chất lượng cao)</option>
                   </select>
