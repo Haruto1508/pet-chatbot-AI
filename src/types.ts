@@ -116,6 +116,7 @@ export interface SystemConfig {
   // Fallback config
   enableGeminiFallback?: boolean;
   fallbackGeminiApiKey?: string;
+  geminiApiKeysPool?: string[];
   fallbackModel?: string;
   fallbackTimeoutMs?: number;
 }

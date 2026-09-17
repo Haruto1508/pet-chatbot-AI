@@ -8,6 +8,7 @@ import {
 import { SystemConfig } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { parseApiKeys, maskApiKey } from '../../utils/apiKeys';
 
 export const AdminSystemConfigView: React.FC = () => {
   const { showError, showSuccess, showInfo } = useNotification();
@@ -25,6 +26,10 @@ export const AdminSystemConfigView: React.FC = () => {
   // API Key Testing states
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string; latencyMs?: number } | null>(null);
+
+  // Multi-Key Pool testing states
+  const [testingPool, setTestingPool] = useState(false);
+  const [poolResults, setPoolResults] = useState<Array<{ key: string; maskedKey: string; ok: boolean; latencyMs?: number; error?: string }> | null>(null);
 
   const loadConfig = async () => {
     setLoading(true);
@@ -129,6 +134,32 @@ export const AdminSystemConfigView: React.FC = () => {
       showError(err.message || 'Không thể kết nối để kiểm tra.');
     } finally {
       setTestingKey(false);
+    }
+  };
+
+  const handleTestBackupPool = async () => {
+    const rawVal = config?.backupGeminiApiKey || config?.fallbackGeminiApiKey || '';
+    const keys = parseApiKeys(rawVal);
+    if (keys.length === 0) {
+      showInfo('Vui lòng nhập ít nhất 1 API Key dự phòng để kiểm tra.');
+      return;
+    }
+
+    setTestingPool(true);
+    setPoolResults(null);
+    try {
+      const results = await api.testGeminiKeyPool(keys, config?.fallbackModel || config?.aiModel || 'gemini-2.5-flash');
+      setPoolResults(results);
+      const passedCount = results.filter(r => r.ok).length;
+      if (passedCount === results.length) {
+        showSuccess(`Tất cả ${results.length} API Key trong Pool đều sẵn sàng hoạt động!`);
+      } else {
+        showInfo(`Đã kiểm tra xong: ${passedCount}/${results.length} API Key hợp lệ.`);
+      }
+    } catch (err: any) {
+      showError(err?.message || 'Lỗi khi kiểm tra danh sách API Key');
+    } finally {
+      setTestingPool(false);
     }
   };
 
@@ -283,34 +314,102 @@ export const AdminSystemConfigView: React.FC = () => {
               )}
             </div>
 
-            {/* Backup Gemini API Key */}
+            {/* Backup Gemini API Key Pool */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                   <ShieldAlert className="w-3.5 h-3.5 text-blue-500" />
-                  Gemini API Key Dự Phòng (Backup Key)
+                  Gemini API Key Dự Phòng (Backup Keys Pool)
                 </label>
-                <span className="text-[11px] text-slate-400">Tùy chọn</span>
+                {(() => {
+                  const detected = parseApiKeys(config.backupGeminiApiKey || config.fallbackGeminiApiKey);
+                  return detected.length > 0 ? (
+                    <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                      Đã nhận diện {detected.length} Keys
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400">Tùy chọn</span>
+                  );
+                })()}
               </div>
               <div className="relative">
-                <input
-                  type={showBackupKey ? 'text' : 'password'}
-                  value={config.backupGeminiApiKey || ''}
-                  onChange={(e) => setConfig({ ...config, backupGeminiApiKey: e.target.value })}
-                  placeholder="AIzaSy... (Tự động chuyển khi key chính chạm quota limit 429)"
-                  className="w-full pl-3 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
-                />
+                {showBackupKey ? (
+                  <textarea
+                    rows={3}
+                    value={config.backupGeminiApiKey || ''}
+                    onChange={(e) => setConfig({ ...config, backupGeminiApiKey: e.target.value, fallbackGeminiApiKey: e.target.value })}
+                    placeholder="Nhập 1 hoặc nhiều API Key phân cách bằng dấu phẩy hoặc xuống dòng:&#10;AIzaSyKey1...&#10;AIzaSyKey2..."
+                    className="w-full pl-3 pr-10 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
+                  />
+                ) : (
+                  <input
+                    type="password"
+                    value={config.backupGeminiApiKey || ''}
+                    onChange={(e) => setConfig({ ...config, backupGeminiApiKey: e.target.value, fallbackGeminiApiKey: e.target.value })}
+                    placeholder="AIzaSy1..., AIzaSy2... (Nhập nhiều key phân cách bằng dấu phẩy)"
+                    className="w-full pl-3 pr-10 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => setShowBackupKey(!showBackupKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+                  className="absolute right-2 top-2.5 p-1.5 text-slate-400 hover:text-slate-600 rounded-lg"
+                  title={showBackupKey ? 'Ẩn key' : 'Hiện key'}
                 >
                   {showBackupKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Khi Key chính hết hạn mức ngày (Free quota 15 RPM), hệ thống tự chuyển sang Backup Key.
-              </p>
+
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-[11px] text-slate-400">
+                  Hỗ trợ nhập <b>nhiều key</b> (dấu phẩy hoặc xuống dòng). Tự động luân phiên khi key chạm quota 429.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleTestBackupPool}
+                  disabled={testingPool || !parseApiKeys(config.backupGeminiApiKey || config.fallbackGeminiApiKey).length}
+                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-lg text-[11px] font-bold transition-all disabled:opacity-40 flex items-center gap-1 flex-shrink-0 cursor-pointer"
+                >
+                  <Zap className="w-3 h-3" />
+                  {testingPool ? 'Đang test...' : 'Kiểm tra Pool'}
+                </button>
+              </div>
+
+              {/* Pool Test Results List */}
+              {poolResults && poolResults.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  {poolResults.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between text-[11px] px-3 py-1.5 rounded-lg border ${
+                        item.ok
+                          ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
+                          : 'bg-red-50/70 border-red-200 text-red-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {item.ok ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                        )}
+                        <span className="font-mono font-bold">Key #{idx + 1} ({item.maskedKey})</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.ok ? (
+                          <span className="font-mono text-[10px] font-semibold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                            {item.latencyMs}ms - Sẵn sàng
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium text-red-700 max-w-[180px] truncate" title={item.error}>
+                            {item.error || 'Lỗi'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Render Python AI Service URL */}
@@ -560,15 +659,25 @@ export const AdminSystemConfigView: React.FC = () => {
             <div className="space-y-4">
               {/* Fallback API Key */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Gemini API Key (Fallback)
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Danh Sách Gemini API Key (Fallback Pool)
+                  </label>
+                  {(() => {
+                    const detected = parseApiKeys(config.fallbackGeminiApiKey || config.backupGeminiApiKey);
+                    return detected.length > 0 ? (
+                      <span className="text-[11px] font-bold text-orange-700 bg-orange-100/70 px-2 py-0.5 rounded-md">
+                        {detected.length} Keys dự phòng
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
                 <div className="relative">
                   <input
                     type={showBackupKey ? 'text' : 'password'}
                     value={config.fallbackGeminiApiKey ?? ''}
-                    onChange={(e) => setConfig({ ...config, fallbackGeminiApiKey: e.target.value })}
-                    placeholder="AIza..."
+                    onChange={(e) => setConfig({ ...config, fallbackGeminiApiKey: e.target.value, backupGeminiApiKey: e.target.value })}
+                    placeholder="AIzaSy1..., AIzaSy2... (Nhập 1 hoặc nhiều API Key phân cách bằng dấu phẩy)"
                     className="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 text-sm font-mono bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
                   />
                   <button
@@ -580,8 +689,7 @@ export const AdminSystemConfigView: React.FC = () => {
                   </button>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Key này sẽ được dùng gọi trực tiếp Gemini REST API khi Render không phản hồi.
-                  Key sẽ visible trong browser network tab khi fallback xảy ra.
+                  Hỗ trợ nhiều key (cách nhau dấu phẩy hoặc xuống dòng). Hệ thống sẽ tự động chuyển sang Key tiếp theo nếu Key trước bị lỗi hoặc chạm giới hạn quota 429.
                 </p>
               </div>
 

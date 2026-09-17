@@ -14,6 +14,7 @@ import {
   ApiLogLevel
 } from '../types';
 import { supabase } from './supabaseClient';
+import { parseApiKeys, maskApiKey } from '../utils/apiKeys';
 
 export const api = {
   // Stats
@@ -557,6 +558,7 @@ export const api = {
     customFallbackConfig?: {
       enabled?: boolean;
       apiKey?: string;
+      apiKeys?: string[];
       model?: string;
       timeoutMs?: number;
     },
@@ -564,32 +566,37 @@ export const api = {
   ): Promise<void> => {
     const startTime = Date.now();
 
-    // 1. Resolve fallback API key and configuration
-    let fallbackApiKey = customFallbackConfig?.apiKey || process.env.GEMINI_API_KEY || '';
+    // 1. Resolve fallback configuration and gather prioritized API Key pool
     let fallbackModel = customFallbackConfig?.model || 'gemini-2.5-flash';
     let fallbackEnabled = customFallbackConfig?.enabled ?? true;
     const timeoutMs = customFallbackConfig?.timeoutMs ?? (payload.imageBase64 ? 35000 : 20000);
 
-    if (!fallbackApiKey) {
-      try {
-        const cfg = await api.getSystemConfig();
-        if (cfg?.fallbackGeminiApiKey) {
-          fallbackApiKey = cfg.fallbackGeminiApiKey;
-        } else if (cfg?.backupGeminiApiKey) {
-          fallbackApiKey = cfg.backupGeminiApiKey;
-        } else if (cfg?.geminiApiKey) {
-          fallbackApiKey = cfg.geminiApiKey;
-        }
-        if (cfg?.fallbackModel) {
-          fallbackModel = cfg.fallbackModel;
-        } else if (cfg?.aiModel) {
-          fallbackModel = cfg.aiModel;
-        }
-        if (cfg?.enableGeminiFallback !== undefined) {
-          fallbackEnabled = cfg.enableGeminiFallback;
-        }
-      } catch {}
-    }
+    const keyCandidates: (string | string[] | undefined | null)[] = [
+      customFallbackConfig?.apiKeys,
+      customFallbackConfig?.apiKey,
+    ];
+
+    try {
+      const cfg = await api.getSystemConfig();
+      if (cfg?.enableGeminiFallback !== undefined) {
+        fallbackEnabled = cfg.enableGeminiFallback;
+      }
+      if (cfg?.fallbackModel) {
+        fallbackModel = cfg.fallbackModel;
+      } else if (cfg?.aiModel) {
+        fallbackModel = cfg.aiModel;
+      }
+
+      keyCandidates.push(cfg?.geminiApiKeysPool);
+      keyCandidates.push(cfg?.fallbackGeminiApiKey);
+      keyCandidates.push(cfg?.backupGeminiApiKey);
+      keyCandidates.push(cfg?.geminiApiKey);
+    } catch {}
+
+    keyCandidates.push((process.env as any).GEMINI_API_KEYS);
+    keyCandidates.push(process.env.GEMINI_API_KEY);
+
+    const fallbackApiKeys = parseApiKeys(keyCandidates.flat());
 
     const callPrimary = async (attemptNum: number): Promise<void> => {
       const controller = new AbortController();
@@ -685,31 +692,30 @@ export const api = {
         api.writeLog({
           log_type: 'render',
           level: 'warn',
-          message: `Máy chủ AI chính thất bại lần 2: ${retryErr?.message || 'unknown'}. ${fallbackApiKey ? 'Tự động chuyển sang Gemini Direct Backup...' : 'Không có Gemini Backup key.'}`,
+          message: `Máy chủ AI chính thất bại lần 2: ${retryErr?.message || 'unknown'}. ${fallbackApiKeys.length > 0 ? `Tự động chuyển sang Gemini Direct Backup (Pool: ${fallbackApiKeys.length} keys)...` : 'Không có Gemini Backup key.'}`,
           latency_ms: Date.now() - startTime,
-          metadata: { error: retryErr?.message, attempt: 2, hasFallbackKey: !!fallbackApiKey }
+          metadata: { error: retryErr?.message, attempt: 2, totalKeys: fallbackApiKeys.length }
         }).catch(() => {});
 
-        if (!fallbackEnabled || !fallbackApiKey) {
+        if (!fallbackEnabled || fallbackApiKeys.length === 0) {
           throw new Error('Server đang quá tải, vui lòng tải lại trang.');
         }
       }
     }
 
-    // ── GEMINI DIRECT FALLBACK ──
+    // ── GEMINI DIRECT FALLBACK WITH MULTI-KEY ROTATION ──
     if (onFallback) onFallback(true);
     const fallbackStart = Date.now();
 
-    try {
-      // Build history for Gemini
-      const geminiHistory = (payload.history ?? [])
-        .filter(m => m.id !== 'msg_welcome' && !m.text.startsWith('⚠️'))
-        .map(m => ({
-          role: m.sender === 'user' ? 'user' : 'model',
-          parts: [{ text: m.text }]
-        }));
+    // Prepare history and system prompt
+    const geminiHistory = (payload.history ?? [])
+      .filter(m => m.id !== 'msg_welcome' && !m.text.startsWith('⚠️'))
+      .map(m => ({
+        role: m.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+      }));
 
-      const systemPrompt = `Bạn là Bác sĩ Thú y AI PetCare hỗ trợ 24/7. Trả lời súc tích, thân thiện và chuyên nghiệp bằng tiếng Việt.
+    const systemPrompt = `Bạn là Bác sĩ Thú y AI PetCare hỗ trợ 24/7. Trả lời súc tích, thân thiện và chuyên nghiệp bằng tiếng Việt.
 LƯU Ý QUAN TRỌNG VỀ ĐỊNH DẠNG:
 1. BẮT BUỘC chèn khối Triage Alert ngay đầu phản hồi (tuyệt đối không dùng markdown block xung quanh, viết liền trên 1 dòng):
 [[TRIAGE_ALERT]]{"level": "RED" | "YELLOW" | "GREEN", "title": "Tên bệnh hoặc triệu chứng tóm tắt", "urgency": "Mức độ khẩn cấp", "actions": ["Hành động 1", "Hành động 2"]}[[/TRIAGE_ALERT]]
@@ -729,132 +735,206 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 ### 🚨 Dấu hiệu cần đi thú y gấp
 - [3-4 triệu chứng cảnh báo đỏ nguy kịch cần cấp cứu ngay]`;
 
-      const currentParts: any[] = [];
-      if (payload.imageBase64) {
-        let mimeType = 'image/jpeg';
-        const matchMime = payload.imageBase64.match(/^data:(image\/[a-zA-Z0-9.+_-]+);base64,/);
-        if (matchMime) {
-          mimeType = matchMime[1];
+    const currentParts: any[] = [];
+    if (payload.imageBase64) {
+      let mimeType = 'image/jpeg';
+      const matchMime = payload.imageBase64.match(/^data:(image\/[a-zA-Z0-9.+_-]+);base64,/);
+      if (matchMime) {
+        mimeType = matchMime[1];
+      }
+      currentParts.push({
+        inlineData: {
+          mimeType,
+          data: payload.imageBase64.replace(/^data:image\/\w+;base64,/, '')
         }
-        currentParts.push({
-          inlineData: {
-            mimeType,
-            data: payload.imageBase64.replace(/^data:image\/\w+;base64,/, '')
+      });
+    }
+    currentParts.push({ text: `${systemPrompt}\n\nCâu hỏi của chủ thú cưng: "${payload.message}"` });
+
+    const body = {
+      contents: [...geminiHistory, { role: 'user', parts: currentParts }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
+    };
+
+    let lastFallbackError: any = null;
+
+    // Try each key sequentially
+    for (let keyIdx = 0; keyIdx < fallbackApiKeys.length; keyIdx++) {
+      const activeKey = fallbackApiKeys[keyIdx];
+      const masked = maskApiKey(activeKey);
+      const keyStart = Date.now();
+
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:streamGenerateContent?alt=sse&key=${activeKey}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }
+        );
+
+        if (!res.ok || !res.body) {
+          const errText = await res.text().catch(() => '');
+          throw new Error(`HTTP ${res.status}: ${errText.slice(0, 120)}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+        let triageSent = false;
+        let fullFallbackText = '';
+        let isInsideTriage = false;
+        let triageBuffer = '';
+
+        const handleFallbackChunk = (chunkText: string) => {
+          if (!chunkText) return;
+          fullFallbackText += chunkText;
+
+          if (!triageSent) {
+            if (!isInsideTriage && fullFallbackText.includes('[[TRIAGE_ALERT]]')) {
+              isInsideTriage = true;
+            }
+            if (isInsideTriage) {
+              triageBuffer = fullFallbackText;
+              if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
+                isInsideTriage = false;
+                triageSent = true;
+                const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
+                if (alertMatch && alertMatch[1]) {
+                  try {
+                    const parsed = JSON.parse(alertMatch[1].trim());
+                    const level: TriageLevel = (parsed.level === 'RED' || parsed.level === 'YELLOW' || parsed.level === 'GREEN')
+                      ? parsed.level
+                      : 'YELLOW';
+                    onTriage(level, {
+                      riskTitle: parsed.title || 'Đánh giá sức khỏe',
+                      urgency: parsed.urgency || '',
+                      immediateActions: Array.isArray(parsed.actions) ? parsed.actions : []
+                    });
+                  } catch (e) {
+                    console.error('Error parsing Triage Alert from Gemini fallback:', e);
+                  }
+                }
+                const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
+                if (afterTriage && afterTriage.length > 0) {
+                  const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
+                  if (cleanAfterTriage.length > 0) {
+                    onChunk(cleanAfterTriage);
+                  }
+                }
+              }
+              return;
+            }
           }
-        });
-      }
-      currentParts.push({ text: `${systemPrompt}\n\nCâu hỏi của chủ thú cưng: "${payload.message}"` });
+          onChunk(chunkText);
+        };
 
-      const body = {
-        contents: [...geminiHistory, { role: 'user', parts: currentParts }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
-      };
-
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:streamGenerateContent?alt=sse&key=${fallbackApiKey}`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }
-      );
-
-      if (!res.ok || !res.body) {
-        const errText = await res.text().catch(() => '');
-        throw new Error(`Gemini direct backup HTTP ${res.status}: ${errText.slice(0, 100)}`);
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-      let triageSent = false;
-      let fullFallbackText = '';
-      let isInsideTriage = false;
-      let triageBuffer = '';
-
-      const handleFallbackChunk = (chunkText: string) => {
-        if (!chunkText) return;
-        fullFallbackText += chunkText;
+        while (true) {
+          if (signal?.aborted) { try { await reader.cancel(); } catch {} break; }
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const lines = buf.split('\n');
+          buf = lines.pop() ?? '';
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const json = JSON.parse(line.slice(6));
+              const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) handleFallbackChunk(text);
+            } catch {}
+          }
+        }
 
         if (!triageSent) {
-          if (!isInsideTriage && fullFallbackText.includes('[[TRIAGE_ALERT]]')) {
-            isInsideTriage = true;
-          }
-          if (isInsideTriage) {
-            triageBuffer = fullFallbackText;
-            if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
-              isInsideTriage = false;
-              triageSent = true;
-              const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
-              if (alertMatch && alertMatch[1]) {
-                try {
-                  const parsed = JSON.parse(alertMatch[1].trim());
-                  const level: TriageLevel = (parsed.level === 'RED' || parsed.level === 'YELLOW' || parsed.level === 'GREEN')
-                    ? parsed.level
-                    : 'YELLOW';
-                  onTriage(level, {
-                    riskTitle: parsed.title || 'Đánh giá sức khỏe',
-                    urgency: parsed.urgency || '',
-                    immediateActions: Array.isArray(parsed.actions) ? parsed.actions : []
-                  });
-                } catch (e) {
-                  console.error('Error parsing Triage Alert from Gemini fallback:', e);
-                }
-              }
-              const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
-              if (afterTriage && afterTriage.length > 0) {
-                const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
-                if (cleanAfterTriage.length > 0) {
-                  onChunk(cleanAfterTriage);
-                }
-              }
-            }
-            return;
-          }
+          onTriage('GREEN', {
+            riskTitle: 'Tư vấn sức khỏe',
+            urgency: 'Theo dõi thường xuyên',
+            immediateActions: ['Theo dõi sát các triệu chứng của thú cưng']
+          });
         }
-        onChunk(chunkText);
-      };
 
-      while (true) {
-        if (signal?.aborted) { try { await reader.cancel(); } catch {} break; }
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const json = JSON.parse(line.slice(6));
-            const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) handleFallbackChunk(text);
-          } catch {}
-        }
+        api.writeLog({
+          log_type: 'fallback',
+          level: 'info',
+          message: `Gemini Fallback thành công bằng Key #${keyIdx + 1}/${fallbackApiKeys.length} (${masked}) (${Date.now() - keyStart}ms, model=${fallbackModel})`,
+          latency_ms: Date.now() - fallbackStart,
+          status_code: 200,
+          metadata: { keyIndex: keyIdx + 1, totalKeys: fallbackApiKeys.length, model: fallbackModel }
+        }).catch(() => {});
+
+        return; // Success, exit function
+      } catch (err: any) {
+        if (signal?.aborted) throw err;
+        lastFallbackError = err;
+
+        const hasNextKey = keyIdx + 1 < fallbackApiKeys.length;
+        console.warn(`[GEMINI FALLBACK] Key #${keyIdx + 1} (${masked}) thất bại:`, err?.message);
+
+        api.writeLog({
+          log_type: 'fallback',
+          level: 'warn',
+          message: `Gemini Fallback Key #${keyIdx + 1}/${fallbackApiKeys.length} (${masked}) lỗi: ${err?.message || 'unknown'}. ${hasNextKey ? `Đang tự động chuyển sang Key #${keyIdx + 2}...` : 'Đã thử hết toàn bộ danh sách Key dự phòng.'}`,
+          latency_ms: Date.now() - keyStart,
+          metadata: { keyIndex: keyIdx + 1, totalKeys: fallbackApiKeys.length, error: err?.message }
+        }).catch(() => {});
       }
-
-      if (!triageSent) {
-        onTriage('GREEN', {
-          riskTitle: 'Tư vấn sức khỏe',
-          urgency: 'Theo dõi thường xuyên',
-          immediateActions: ['Theo dõi sát các triệu chứng của thú cưng']
-        });
-      }
-
-      api.writeLog({
-        log_type: 'fallback',
-        level: 'info',
-        message: `Gemini direct backup thành công (${Date.now() - fallbackStart}ms, model=${fallbackModel})`,
-        latency_ms: Date.now() - fallbackStart,
-        status_code: 200,
-        metadata: { model: fallbackModel }
-      }).catch(() => {});
-
-    } catch (err: any) {
-      if (signal?.aborted) throw err;
-      api.writeLog({
-        log_type: 'fallback',
-        level: 'error',
-        message: `Gemini direct backup thất bại: ${err?.message}`,
-        latency_ms: Date.now() - fallbackStart,
-        metadata: { error: err?.message }
-      }).catch(() => {});
-      throw new Error('Server đang quá tải, vui lòng tải lại trang.');
     }
+
+    // All fallback keys failed
+    api.writeLog({
+      log_type: 'fallback',
+      level: 'error',
+      message: `Tất cả ${fallbackApiKeys.length} Gemini Backup Key đều không phản hồi. Lỗi cuối: ${lastFallbackError?.message}`,
+      latency_ms: Date.now() - fallbackStart,
+      metadata: { totalKeys: fallbackApiKeys.length, lastError: lastFallbackError?.message }
+    }).catch(() => {});
+
+    throw new Error('Server đang quá tải, vui lòng tải lại trang.');
+  },
+
+  // Test individual Gemini API Key
+  testGeminiKey: async (apiKey: string, model: string = 'gemini-2.5-flash'): Promise<{ ok: boolean; latencyMs?: number; error?: string; message?: string }> => {
+    const t0 = Date.now();
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Trả lời đúng 1 từ: OK' }] }] }),
+          signal: AbortSignal.timeout(10000)
+        }
+      );
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '');
+        let errorMsg = `HTTP ${res.status}`;
+        try {
+          const json = JSON.parse(errText);
+          if (json?.error?.message) errorMsg += `: ${json.error.message}`;
+        } catch {
+          if (errText) errorMsg += `: ${errText.slice(0, 80)}`;
+        }
+        return { ok: false, latencyMs: Date.now() - t0, error: errorMsg };
+      }
+      return { ok: true, latencyMs: Date.now() - t0, message: 'Hoạt động tốt' };
+    } catch (e: any) {
+      return { ok: false, latencyMs: Date.now() - t0, error: e?.message || 'Không thể kết nối tới Google' };
+    }
+  },
+
+  // Test all keys in an API Key pool
+  testGeminiKeyPool: async (keys: string[] | string, model: string = 'gemini-2.5-flash'): Promise<Array<{ key: string; maskedKey: string; ok: boolean; latencyMs?: number; error?: string }>> => {
+    const uniqueKeys = parseApiKeys(keys);
+    const results = await Promise.all(
+      uniqueKeys.map(async (k) => {
+        const testRes = await api.testGeminiKey(k, model);
+        return {
+          key: k,
+          maskedKey: maskApiKey(k),
+          ok: testRes.ok,
+          latencyMs: testRes.latencyMs,
+          error: testRes.error
+        };
+      })
+    );
+    return results;
   }
 };
