@@ -593,7 +593,11 @@ export const api = {
 
     const callPrimary = async (attemptNum: number): Promise<void> => {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      let timedOut = false;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, timeoutMs);
 
       const onAbort = () => controller.abort();
       if (signal) {
@@ -602,6 +606,11 @@ export const api = {
 
       try {
         await api.sendChatStream(payload, onChunk, onTriage, controller.signal);
+      } catch (err: any) {
+        if (timedOut && !signal?.aborted) {
+          throw new Error(`Máy chủ AI phản hồi quá thời gian (${Math.round(timeoutMs / 1000)}s)`);
+        }
+        throw err;
       } finally {
         clearTimeout(timeout);
         if (signal) {

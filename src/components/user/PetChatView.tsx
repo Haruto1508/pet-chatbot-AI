@@ -347,8 +347,9 @@ export const PetChatView: React.FC<Props> = ({
       }
     }
 
+    const aiMessageId = `ai_${Date.now()}`;
+
     try {
-      const aiMessageId = `ai_${Date.now()}`;
       let finalText = '';
       let finalTriageLevel: TriageLevel | undefined = undefined;
       let finalTriageDetails: any = null;
@@ -435,7 +436,8 @@ export const PetChatView: React.FC<Props> = ({
         });
       }
     } catch (err: any) {
-      if (err.name === 'AbortError' || abortController.signal.aborted) {
+      // ONLY treat as voluntary stop if the user explicitly clicked Stop button
+      if (abortController.signal.aborted) {
         // User voluntarily stopped response - preserve partial response in chat history
         if (activeSessionId) {
           setMessages(prev => {
@@ -448,7 +450,11 @@ export const PetChatView: React.FC<Props> = ({
           });
         }
       } else {
-        const errorText = err?.message || 'Lưu lượng truy cập quá lớn, vui lòng tải lại trang.';
+        const isTimeout = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('timeout') || err?.message?.toLowerCase().includes('quá thời gian');
+        const errorText = isTimeout
+          ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại hoặc tải lại trang.'
+          : (err?.message || 'Lưu lượng truy cập quá lớn, vui lòng tải lại trang.');
+
         const errMsg: ChatMessage = {
           id: `err_${Date.now()}`,
           sender: 'ai',
@@ -456,7 +462,20 @@ export const PetChatView: React.FC<Props> = ({
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           triageLevel: 'YELLOW'
         };
-        setMessages(prev => [...prev, errMsg]);
+
+        // Ensure error message is added and persisted into the active chat session
+        setMessages(prev => {
+          const cleaned = prev.filter(m => m.id !== aiMessageId);
+          const updatedWithErr = [...cleaned, errMsg];
+          if (activeSessionId) {
+            api.updateChatSession(activeSessionId, { messages: updatedWithErr }).catch(console.error);
+            setSessions(currentSessions => 
+              currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: updatedWithErr } : s)
+            );
+          }
+          return updatedWithErr;
+        });
+
         showError(errorText);
 
         // Always log this to api_logs so Admin Log Viewer displays it!
@@ -464,7 +483,7 @@ export const PetChatView: React.FC<Props> = ({
           log_type: 'chat',
           level: 'error',
           message: errorText,
-          metadata: { query: queryText.slice(0, 80), error: err?.message }
+          metadata: { query: queryText.slice(0, 80), error: err?.message || err?.name }
         }).catch(() => {});
       }
     } finally {
