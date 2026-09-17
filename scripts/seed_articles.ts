@@ -49,7 +49,7 @@ const articles = [
     ],
     doctorAdvice: 'Cần làm xét nghiệm soi da dưới kính hiển vi để xác định chính xác nguyên nhân (nấm bào tử, ghẻ Demodex/Sarcoptes hay vi khuẩn) để dùng đúng thuốc. Luôn giữ môi trường sạch sẽ, khô ráo.',
     urgencyLevel: 'YELLOW',
-    imageUrl: 'https://images.unsplash.com/photo-1537151608804-ea2f1fa3f3cc?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?auto=format&fit=crop&q=80&w=800',
     content: 'Việc điều trị viêm da đòi hỏi sự kiên nhẫn, thường mất từ 4 - 8 tuần. Ngoài thuốc uống và thuốc bôi, cần kết hợp sử dụng sữa tắm đặc trị (chứa Chlorhexidine hoặc Ketoconazole) 1-2 lần/tuần. Đặc biệt cần tuân thủ lịch nhỏ gáy hoặc uống thuốc phòng ngừa ve rận, giun sán định kỳ để cắt đứt nguồn lây lan ký sinh trùng.'
   },
   {
@@ -66,7 +66,7 @@ const articles = [
     ],
     doctorAdvice: 'Việc cố tình cho nuốt thức ăn cứng để đẩy dị vật xuống có thể khiến xương cắm sâu hơn vào niêm mạc, gây áp xe hoặc thủng thực quản, dẫn đến nhiễm trùng máu rất nguy hiểm. Cần chụp X-quang để xác định vị trí dị vật.',
     urgencyLevel: 'RED',
-    imageUrl: 'https://images.unsplash.com/photo-1548802673-38020d20d43a?auto=format&fit=crop&q=80&w=800',
+    imageUrl: 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&q=80&w=800',
     content: 'Phòng ngừa hóc xương luôn là biện pháp tốt nhất. Không nên cho chó mèo ăn các loại xương dăm, xương gà, cổ vịt, hoặc cá có nhiều xương nhỏ cứng. Nếu muốn bổ sung canxi hoặc thỏa mãn nhu cầu nhai cắn, nên dùng các loại xương gặm chuyên dụng bằng da bò tảng, đồ chơi nhai, hoặc xay nhuyễn xương thật kỹ trước khi cho ăn.'
   },
   {

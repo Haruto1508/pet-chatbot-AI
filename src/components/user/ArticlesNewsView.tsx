@@ -4,6 +4,8 @@ import { KnowledgeArticle } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
 
+const DEFAULT_ARTICLE_IMAGE = 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&q=80&w=800';
+
 export const ArticlesNewsView: React.FC = () => {
   const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -56,8 +58,14 @@ export const ArticlesNewsView: React.FC = () => {
           <div className="bg-white rounded-3xl shadow-xs border border-slate-200 overflow-hidden">
             <div className="relative h-64 sm:h-80 w-full bg-slate-100">
               <img
-                src={activeArticle.imageUrl}
+                src={activeArticle.imageUrl || DEFAULT_ARTICLE_IMAGE}
                 alt={activeArticle.title}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src !== DEFAULT_ARTICLE_IMAGE) {
+                    target.src = DEFAULT_ARTICLE_IMAGE;
+                  }
+                }}
                 className="w-full h-full object-cover"
               />
               <div className="absolute top-4 left-4 flex gap-2">
@@ -190,8 +198,14 @@ export const ArticlesNewsView: React.FC = () => {
                   <div>
                     <div className="relative h-44 overflow-hidden bg-slate-100">
                       <img
-                        src={art.imageUrl}
+                        src={art.imageUrl || DEFAULT_ARTICLE_IMAGE}
                         alt={art.title}
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          if (target.src !== DEFAULT_ARTICLE_IMAGE) {
+                            target.src = DEFAULT_ARTICLE_IMAGE;
+                          }
+                        }}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <div className="absolute top-3 left-3 flex gap-1.5">
