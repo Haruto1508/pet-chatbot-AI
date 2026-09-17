@@ -605,13 +605,20 @@ export const PetChatView: React.FC<Props> = ({
       {isSidebarOpen && (
         <div className="w-64 flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm hidden md:flex flex-col overflow-hidden">
           {/* Sidebar Header */}
-          <div className="px-3 pt-3 pb-2 border-b border-slate-100">
+          <div className="px-3 pt-3 pb-2 border-b border-slate-100 flex items-center gap-2">
             <button
               onClick={startNewChat}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-all text-xs shadow-sm active:scale-[0.98]"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-all text-xs shadow-sm active:scale-[0.98]"
             >
               <Plus className="w-3.5 h-3.5" />
               Chat Mới
+            </button>
+            <button
+              onClick={() => setIsSidebarOpen(false)}
+              title="Đóng lịch sử"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all flex-shrink-0"
+            >
+              <PanelLeftClose className="w-4 h-4" />
             </button>
           </div>
 
