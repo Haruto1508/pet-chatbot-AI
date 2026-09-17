@@ -9,6 +9,7 @@ export default defineConfig(() => {
       'process.env.GOOGLE_MAPS_PLATFORM_KEY': JSON.stringify(process.env.GOOGLE_MAPS_PLATFORM_KEY || ''),
       'process.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL || ''),
       'process.env.SUPABASE_ANON_KEY': JSON.stringify(process.env.SUPABASE_ANON_KEY || ''),
+      'process.env.GEMINI_API_KEY': JSON.stringify(process.env.GEMINI_API_KEY || ''),
     },
     plugins: [react(), tailwindcss()],
     resolve: {

@@ -393,15 +393,43 @@ export const api = {
     onTriage: (triageLevel: TriageLevel, triageDetails: any) => void,
     signal?: AbortSignal
   ): Promise<void> => {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal
-    });
+    const t0 = Date.now();
+    let res: Response;
+    try {
+      res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal
+      });
+    } catch (fetchErr: any) {
+      const msg = fetchErr?.message || 'Không thể kết nối tới máy chủ AI';
+      api.writeLog({
+        log_type: 'render',
+        level: 'error',
+        message: `Lỗi fetch /api/chat: ${msg}`,
+        status_code: 0,
+        latency_ms: Date.now() - t0,
+        metadata: { error: msg }
+      }).catch(() => {});
+      throw new Error(`Lỗi kết nối máy chủ AI: ${msg}`);
+    }
 
     if (!res.ok || !res.body) {
-      throw new Error('Lỗi kết nối máy chủ AI');
+      let errMsg = `Lỗi máy chủ (${res.status})`;
+      try {
+        const errJson = await res.json();
+        errMsg = errJson.message || errJson.error || errJson.details || errMsg;
+      } catch {}
+      api.writeLog({
+        log_type: 'render',
+        level: 'error',
+        message: `HTTP ${res.status} từ /api/chat: ${errMsg}`,
+        status_code: res.status,
+        latency_ms: Date.now() - t0,
+        metadata: { status: res.status, error: errMsg }
+      }).catch(() => {});
+      throw new Error(errMsg);
     }
 
     const reader = res.body.getReader();
@@ -503,35 +531,62 @@ export const api = {
     },
     onChunk: (text: string) => void,
     onTriage: (triageLevel: TriageLevel, triageDetails: any) => void,
-    onFallback: (used: boolean) => void,
+    onFallback?: (used: boolean) => void,
     signal?: AbortSignal,
-    fallbackConfig?: {
+    customFallbackConfig?: {
       enabled: boolean;
-      apiKey: string;
-      model: string;
-      timeoutMs: number;
+      apiKey?: string;
+      model?: string;
+      timeoutMs?: number;
     }
   ): Promise<void> => {
     const startTime = Date.now();
 
-    // Try primary Render backend first
+    // 1. Resolve fallback API key and configuration
+    let fallbackApiKey = customFallbackConfig?.apiKey || process.env.GEMINI_API_KEY || '';
+    let fallbackModel = customFallbackConfig?.model || 'gemini-2.5-flash';
+    let fallbackEnabled = customFallbackConfig?.enabled ?? true;
+    const timeoutMs = customFallbackConfig?.timeoutMs ?? 15000;
+
+    if (!fallbackApiKey) {
+      try {
+        const cfg = await api.getSystemConfig();
+        if (cfg?.fallbackGeminiApiKey) {
+          fallbackApiKey = cfg.fallbackGeminiApiKey;
+        } else if (cfg?.backupGeminiApiKey) {
+          fallbackApiKey = cfg.backupGeminiApiKey;
+        } else if (cfg?.geminiApiKey) {
+          fallbackApiKey = cfg.geminiApiKey;
+        }
+        if (cfg?.fallbackModel) {
+          fallbackModel = cfg.fallbackModel;
+        } else if (cfg?.aiModel) {
+          fallbackModel = cfg.aiModel;
+        }
+        if (cfg?.enableGeminiFallback !== undefined) {
+          fallbackEnabled = cfg.enableGeminiFallback;
+        }
+      } catch {}
+    }
+
+    // Try primary backend first
     try {
       const controller = new AbortController();
-      const timeout = fallbackConfig?.enabled
-        ? setTimeout(() => controller.abort(), fallbackConfig.timeoutMs ?? 12000)
-        : null;
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-      const combinedSignal = signal ?? controller.signal;
+      if (signal) {
+        signal.addEventListener('abort', () => controller.abort(), { once: true });
+      }
 
-      await api.sendChatStream(payload, onChunk, onTriage, combinedSignal);
-      if (timeout) clearTimeout(timeout);
-      onFallback(false);
+      await api.sendChatStream(payload, onChunk, onTriage, controller.signal);
+      clearTimeout(timeout);
+      if (onFallback) onFallback(false);
 
       // Log successful chat
       api.writeLog({
         log_type: 'chat',
         level: 'info',
-        message: `Chat OK via Render (${Date.now() - startTime}ms)`,
+        message: `Chat OK qua Máy Chủ AI chính (${Date.now() - startTime}ms)`,
         latency_ms: Date.now() - startTime,
         status_code: 200,
         metadata: { messagePreview: payload.message.slice(0, 80) }
@@ -539,57 +594,51 @@ export const api = {
 
       return;
     } catch (err: any) {
-      // If aborted by user (not timeout), rethrow
       if (signal?.aborted) throw err;
 
-      const isTimeout = err?.name === 'AbortError' || err?.message?.includes('timeout');
-      const isNetworkErr = err?.message?.includes('fetch') || err?.message?.includes('connect') || err?.message?.includes('Lỗi');
-
-      if (!fallbackConfig?.enabled || !fallbackConfig.apiKey || (!isTimeout && !isNetworkErr)) {
-        // Log the error
-        api.writeLog({
-          log_type: 'render',
-          level: 'error',
-          message: `Render error: ${err?.message ?? 'unknown'}`,
-          latency_ms: Date.now() - startTime,
-          metadata: { error: err?.message }
-        }).catch(() => {});
-        throw err;
-      }
-
-      // Log render failure before fallback
+      // Log primary failure to api_logs
       api.writeLog({
         log_type: 'render',
         level: 'warn',
-        message: `Render failed (${err?.message}), switching to Gemini fallback`,
+        message: `Máy chủ AI chính phản hồi lỗi: ${err?.message || 'unknown'}. ${fallbackApiKey ? 'Tự động chuyển sang Gemini Direct Backup...' : 'Chưa cấu hình Gemini Backup key.'}`,
         latency_ms: Date.now() - startTime,
-        metadata: { error: err?.message, fallbackModel: fallbackConfig.model }
+        metadata: { error: err?.message, hasFallbackKey: !!fallbackApiKey }
       }).catch(() => {});
+
+      if (!fallbackEnabled || !fallbackApiKey) {
+        throw err;
+      }
     }
 
     // ── GEMINI DIRECT FALLBACK ──
-    onFallback(true);
+    if (onFallback) onFallback(true);
     const fallbackStart = Date.now();
 
     try {
-      const model = fallbackConfig!.model || 'gemini-2.5-flash';
-      const apiKey = fallbackConfig!.apiKey;
-
       // Build history for Gemini
       const geminiHistory = (payload.history ?? [])
-        .filter(m => m.id !== 'msg_welcome')
+        .filter(m => m.id !== 'msg_welcome' && !m.text.startsWith('⚠️'))
         .map(m => ({
           role: m.sender === 'user' ? 'user' : 'model',
           parts: [{ text: m.text }]
         }));
 
+      const systemPrompt = `Bạn là Bác sĩ Thú y AI PetCare hỗ trợ 24/7. Trả lời súc tích, thân thiện và chuyên nghiệp bằng tiếng Việt.
+Khi người dùng mô tả triệu chứng bệnh của thú cưng, hãy trình bày rõ ràng:
+- **Chẩn đoán sơ bộ**: Nguyên nhân và mức độ nguy hiểm
+- **Xử lý & Sơ cứu tại nhà**: Việc nên làm ngay và việc tuyệt đối tránh
+- **Dấu hiệu nguy hiểm**: Khi nào cần đưa đi bệnh viện thú y cấp cứu ngay`;
+
       const currentParts: any[] = [];
       if (payload.imageBase64) {
         currentParts.push({
-          inlineData: { mimeType: 'image/jpeg', data: payload.imageBase64.split(',')[1] ?? payload.imageBase64 }
+          inlineData: {
+            mimeType: 'image/jpeg',
+            data: payload.imageBase64.replace(/^data:image\/\w+;base64,/, '')
+          }
         });
       }
-      currentParts.push({ text: payload.message });
+      currentParts.push({ text: `${systemPrompt}\n\nCâu hỏi của chủ thú cưng: "${payload.message}"` });
 
       const body = {
         contents: [...geminiHistory, { role: 'user', parts: currentParts }],
@@ -597,12 +646,13 @@ export const api = {
       };
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:streamGenerateContent?alt=sse&key=${fallbackApiKey}`,
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }
       );
 
       if (!res.ok || !res.body) {
-        throw new Error(`Gemini fallback error: ${res.status}`);
+        const errText = await res.text().catch(() => '');
+        throw new Error(`Gemini direct backup HTTP ${res.status}: ${errText.slice(0, 100)}`);
       }
 
       const reader = res.body.getReader();
@@ -626,16 +676,15 @@ export const api = {
         }
       }
 
-      // Default triage for fallback
-      onTriage('GREEN', { riskTitle: 'Bình thường', urgency: 'Không cấp bách', immediateActions: [] });
+      onTriage('GREEN', { riskTitle: 'Tư vấn AI Backup', urgency: 'Theo dõi thường xuyên', immediateActions: ['Theo dõi sát các triệu chứng của thú cưng'] });
 
       api.writeLog({
         log_type: 'fallback',
         level: 'info',
-        message: `Gemini fallback OK (${Date.now() - fallbackStart}ms) model=${model}`,
+        message: `Gemini direct backup thành công (${Date.now() - fallbackStart}ms, model=${fallbackModel})`,
         latency_ms: Date.now() - fallbackStart,
         status_code: 200,
-        metadata: { model }
+        metadata: { model: fallbackModel }
       }).catch(() => {});
 
     } catch (err: any) {
@@ -643,7 +692,7 @@ export const api = {
       api.writeLog({
         log_type: 'fallback',
         level: 'error',
-        message: `Gemini fallback also failed: ${err?.message}`,
+        message: `Gemini direct backup thất bại: ${err?.message}`,
         latency_ms: Date.now() - fallbackStart,
         metadata: { error: err?.message }
       }).catch(() => {});

@@ -332,7 +332,7 @@ export const PetChatView: React.FC<Props> = ({
       let finalTriageLevel: TriageLevel | undefined = undefined;
       let finalTriageDetails: any = null;
 
-      await api.sendChatStream(
+      await api.sendChatStreamWithFallback(
         {
           message: queryText,
           petId: selectedPet?.id,
@@ -384,6 +384,11 @@ export const PetChatView: React.FC<Props> = ({
             );
           });
         },
+        (usedFallback) => {
+          if (usedFallback) {
+            console.info('Using Gemini Direct Backup');
+          }
+        },
         abortController.signal
       );
 
@@ -420,6 +425,14 @@ export const PetChatView: React.FC<Props> = ({
           triageLevel: 'YELLOW'
         };
         setMessages(prev => [...prev, errMsg]);
+
+        // Always log this to api_logs so Admin Log Viewer displays it!
+        api.writeLog({
+          log_type: 'chat',
+          level: 'error',
+          message: `Lỗi chat: ${err?.message || 'Không rõ'}`,
+          metadata: { query: queryText.slice(0, 80), error: err?.message }
+        }).catch(() => {});
       }
     } finally {
       setIsLoading(false);

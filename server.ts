@@ -61,6 +61,32 @@ function serverLog(
   const detStr   = detail ? ` ${COLORS.gray}→ ${detail}${COLORS.reset}` : '';
 
   console.log(`${COLORS.gray}[${ts}]${COLORS.reset} ${catStr} ${lvlStr} ${action}${detStr} ${latStr}`);
+
+  // Also sync to Supabase api_logs for Admin Log Viewer
+  (async () => {
+    try {
+      const logTypeMap: Record<LogCategory, string> = {
+        SUPABASE: 'supabase',
+        RENDER_AI: 'render',
+        GEMINI: 'gemini',
+        SYSTEM: 'chat'
+      };
+      const levelMap: Record<LogLevel, string> = {
+        OK: 'info',
+        INFO: 'info',
+        WARN: 'warn',
+        ERROR: 'error'
+      };
+      await supabase.from('api_logs').insert([{
+        log_type: logTypeMap[category] || 'chat',
+        level: levelMap[level] || 'info',
+        message: `[${category}] ${action}${detail ? ' - ' + detail : ''}`,
+        status_code: level === 'ERROR' ? 500 : 200,
+        latency_ms: latencyMs != null ? Math.round(latencyMs) : null,
+        metadata: { action, detail, source: 'server' }
+      }]);
+    } catch {}
+  })().catch(() => {});
 }
 // ─────────────────────────────────────────
 
