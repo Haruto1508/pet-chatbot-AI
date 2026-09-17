@@ -1,0 +1,25 @@
+{
+  "aiModel": "gemini-2.5-flash",
+  "temperature": 0.4,
+  "systemPrompt": "Bạn là Bác Sĩ Thú Y AI chuyên nghiệp của hệ thống PetCare AI. Hãy tư vấn ngắn gọn, chính xác.",
+  "maxTokens": 2048,
+  "emergencyKeywords": [
+    "máu",
+    "co giật",
+    "khó thở",
+    "bất tỉnh",
+    "ngộ độc"
+  ],
+  "geminiApiKey": "AQ.Ab8RN6LUuTAw109p-13-lgAY4THXbYufOuo0XbhmfD5FL1hOnw",
+  "backupGeminiApiKey": "",
+  "renderServiceUrl": "https://pet-chatbot-ai.onrender.com",
+  "openaiApiKey": "",
+  "customApiBaseUrl": "",
+  "customModelName": "",
+  "apiProvider": "gemini",
+  "autoKeepAliveIntervalMinutes": 10,
+  "enableGeminiFallback": true,
+  "fallbackGeminiApiKey": "AQ.Ab8RN6LUuTAw109p-13-lgAY4THXbYufOuo0XbhmfD5FL1hOnw",
+  "fallbackModel": "gemini-2.5-flash",
+  "fallbackTimeoutMs": 20000
+}
