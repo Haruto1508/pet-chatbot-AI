@@ -120,12 +120,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
                 <p className="text-[10px] text-slate-400 truncate">{currentUser.email}</p>
               </div>
+              <button
+                onClick={() => setShowLogoutModal(true)}
+                title="Đăng xuất quản trị"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-slate-800/80 transition-all flex items-center justify-center shrink-0"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </aside>
         <LogoutConfirmModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}
           userName={currentUser.name} userEmail={currentUser.email}
-          onConfirm={async () => { await supabase.auth.signOut(); }} />
+          onConfirm={async () => {
+            await supabase.auth.signOut();
+            setCurrentTab("chat");
+          }} />
       </>
     );
   }

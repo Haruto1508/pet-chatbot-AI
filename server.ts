@@ -6,6 +6,7 @@ import path from 'path';
 import { GoogleGenAI } from '@google/genai';
 import { supabase } from './src/services/supabaseClient.js';
 import { parseApiKeys, maskApiKey } from './src/utils/apiKeys.js';
+import { encryptPayload, secureResponse } from './src/utils/cryptoPayload.js';
 import { TriageLevel } from './src/types.js';
 
 let appInstance: express.Express | null = null;
@@ -994,12 +995,12 @@ async function startServer(isVercel = false) {
     const totalLatencyMs = Date.now() - startTime;
     const allOk = Object.values(servicesObj).every(s => s.status === 'ok');
 
-    res.json({
+    res.json(secureResponse({
       status: allOk ? 'ok' : 'partial',
       totalLatencyMs,
       timestamp: new Date().toISOString(),
       services: servicesObj
-    });
+    }));
   });
 
   // Test API Key Endpoint (Admin Only)
@@ -1428,7 +1429,7 @@ async function startServer(isVercel = false) {
       }
 
       if (!userId || !userEmail) {
-        return res.status(400).json({ error: 'Missing id or email' });
+        return res.status(400).json(secureResponse({ error: 'Missing id or email' }));
       }
 
       // Determine role: ONLY verified tokens or existing DB roles can get 'admin'
@@ -1448,7 +1449,7 @@ async function startServer(isVercel = false) {
         .single();
 
       if (checkError && checkError.code !== 'PGRST116') {
-        return res.status(500).json({ error: checkError.message });
+        return res.status(500).json(secureResponse({ error: checkError.message }));
       }
 
       if (existingUser) {
@@ -1465,7 +1466,7 @@ async function startServer(isVercel = false) {
           .select()
           .single();
         if (updateError) throw updateError;
-        return res.json({ ...data, createdAt: data.created_at });
+        return res.json(secureResponse({ ...data, createdAt: data.created_at }));
       } else {
         // Insert new user
         const { data, error: insertError } = await supabase
@@ -1474,10 +1475,10 @@ async function startServer(isVercel = false) {
           .select()
           .single();
         if (insertError) throw insertError;
-        return res.json({ ...data, createdAt: data.created_at });
+        return res.json(secureResponse({ ...data, createdAt: data.created_at }));
       }
     } catch (e: any) {
-      return res.status(500).json({ error: e.message });
+      return res.status(500).json(secureResponse({ error: e.message }));
     }
   });
 
@@ -1543,6 +1544,44 @@ async function startServer(isVercel = false) {
     const { error } = await supabase.from('unlock_requests').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
+  });
+
+  // System & API Logs (Admin Only — Secure Server-Side DB Access)
+  app.get('/api/logs', requireAdminAuth, async (req: Request, res: Response) => {
+    try {
+      const { log_type, level, limit } = req.query;
+      let query = supabase
+        .from('api_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit ? parseInt(limit as string, 10) : 200);
+
+      if (log_type) query = query.eq('log_type', log_type as string);
+      if (level) query = query.eq('level', level as string);
+
+      const { data, error } = await query;
+      if (error) return res.status(500).json(secureResponse({ error: error.message }));
+      return res.json(secureResponse(data || []));
+    } catch (e: any) {
+      return res.status(500).json(secureResponse({ error: e.message }));
+    }
+  });
+
+  app.delete('/api/logs', requireAdminAuth, async (req: Request, res: Response) => {
+    try {
+      const { log_type } = req.query;
+      let query = supabase.from('api_logs').delete();
+      if (log_type) {
+        query = query.eq('log_type', log_type as string) as any;
+      } else {
+        query = query.neq('id', '00000000-0000-0000-0000-000000000000') as any;
+      }
+      const { error } = await query;
+      if (error) return res.status(500).json(secureResponse({ error: error.message }));
+      return res.json(secureResponse({ success: true }));
+    } catch (e: any) {
+      return res.status(500).json(secureResponse({ error: e.message }));
+    }
   });
 
   // Pets Management
@@ -1920,7 +1959,7 @@ async function startServer(isVercel = false) {
       const openaiApiKey = rawOpenAiKey ? maskApiKey(rawOpenAiKey) : '';
       const fallbackGeminiApiKey = rawFallbackKey ? maskApiKey(rawFallbackKey) : '';
 
-      res.json({
+      res.json(secureResponse({
         aiModel,
         temperature: dbData?.temperature ?? local.temperature ?? 0.4,
         systemPrompt: dbData?.system_prompt || local.systemPrompt || '',
@@ -1938,9 +1977,9 @@ async function startServer(isVercel = false) {
         fallbackGeminiApiKey,
         fallbackModel,
         fallbackTimeoutMs: dbData?.fallback_timeout_ms || local.fallbackTimeoutMs || 20000
-      });
+      }));
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json(secureResponse({ error: e.message }));
     }
   });
 
@@ -1968,56 +2007,50 @@ async function startServer(isVercel = false) {
         geminiApiKey: cleanGeminiKey,
         backupGeminiApiKey: cleanBackupKey,
         openaiApiKey: cleanOpenAiKey,
-        fallbackGeminiApiKey: cleanFallbackKey,
-        updatedAt: new Date().toISOString()
+        fallbackGeminiApiKey: cleanFallbackKey
       };
+
       saveLocalConfig(updated);
 
-      // 1. Core payload (always supported by basic system_config table)
-      const corePayload: Record<string, any> = {
-        id: 1,
-        ai_model: updated.aiModel || 'gemini-3.6-flash',
-        temperature: updated.temperature ?? 0.4,
-        system_prompt: updated.systemPrompt || '',
-        max_tokens: updated.maxTokens ?? 2048,
-        emergency_keywords: updated.emergencyKeywords || ['máu', 'co giật', 'khó thở'],
-        updated_at: new Date().toISOString()
-      };
-
-      // 2. Extended payload (includes optional/custom columns if migrated)
-      const extendedPayload: Record<string, any> = {
-        ...corePayload,
-        gemini_api_key: cleanGeminiKey,
-        backup_gemini_api_key: cleanBackupKey || cleanFallbackKey,
-        render_service_url: updated.renderServiceUrl || 'https://pet-chatbot-ai.onrender.com',
-        openai_api_key: cleanOpenAiKey,
-        custom_api_base_url: updated.customApiBaseUrl || '',
-        custom_model_name: updated.customModelName || '',
-        api_provider: updated.apiProvider || 'gemini',
-        auto_keep_alive_interval: updated.autoKeepAliveIntervalMinutes ?? 10
-      };
-
       try {
-        const { error: extErr } = await supabase.from('system_config').upsert(extendedPayload);
-        if (extErr) {
-          await supabase.from('system_config').upsert(corePayload);
+        const { error: upsertErr } = await supabase.from('system_config').upsert({
+          id: 1,
+          ai_model: updated.aiModel,
+          temperature: updated.temperature,
+          system_prompt: updated.systemPrompt,
+          max_tokens: updated.maxTokens,
+          emergency_keywords: updated.emergencyKeywords,
+          gemini_api_key: cleanGeminiKey,
+          backup_gemini_api_key: cleanBackupKey,
+          render_service_url: updated.renderServiceUrl,
+          openai_api_key: cleanOpenAiKey,
+          custom_api_base_url: updated.customApiBaseUrl,
+          custom_model_name: updated.customModelName,
+          api_provider: updated.apiProvider,
+          auto_keep_alive_interval: updated.autoKeepAliveIntervalMinutes,
+          enable_gemini_fallback: updated.enableGeminiFallback,
+          fallback_gemini_api_key: cleanFallbackKey,
+          fallback_model: updated.fallbackModel,
+          fallback_timeout_ms: updated.fallbackTimeoutMs,
+          updated_at: new Date().toISOString()
+        });
+        if (upsertErr) {
+          console.warn('Supabase system_config upsert warning:', upsertErr.message);
         }
-      } catch {
-        try {
-          await supabase.from('system_config').upsert(corePayload);
-        } catch {}
+      } catch (dbErr) {
+        console.warn('Failed to persist config to Supabase:', dbErr);
       }
 
-      // Return strictly masked response to browser
-      res.json({
+      // Return strictly masked and encrypted response to browser
+      res.json(secureResponse({
         ...updated,
         geminiApiKey: cleanGeminiKey ? maskApiKey(cleanGeminiKey) : '',
         backupGeminiApiKey: cleanBackupKey ? maskApiKey(cleanBackupKey) : '',
         openaiApiKey: cleanOpenAiKey ? maskApiKey(cleanOpenAiKey) : '',
         fallbackGeminiApiKey: cleanFallbackKey ? maskApiKey(cleanFallbackKey) : ''
-      });
+      }));
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json(secureResponse({ error: e.message }));
     }
   });
 
@@ -2156,9 +2189,9 @@ async function startServer(isVercel = false) {
           updatedAt: s.updated_at
         };
       });
-      res.json(mapped);
+      res.json(secureResponse(mapped));
     } catch (e: any) {
-      res.status(500).json({ error: e.message });
+      res.status(500).json(secureResponse({ error: e.message }));
     }
   });
 
@@ -2169,20 +2202,20 @@ async function startServer(isVercel = false) {
     const callerUserId = auth?.user?.id;
 
     const { data, error } = await supabase.from('chat_sessions').select('*').eq('id', id).single();
-    if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: 'Session not found' });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    if (!data) return res.status(404).json(secureResponse({ error: 'Session not found' }));
 
     if (!isAdmin && callerUserId && data.user_id !== callerUserId && data.user_id !== 'guest') {
-      return res.status(403).json({ error: 'Không có quyền truy cập phiên chat này' });
+      return res.status(403).json(secureResponse({ error: 'Không có quyền truy cập phiên chat này' }));
     }
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       userId: data.user_id,
       petId: data.pet_id,
       createdAt: data.created_at,
       updatedAt: data.updated_at
-    });
+    }));
   });
 
   app.post('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
@@ -2212,15 +2245,15 @@ async function startServer(isVercel = false) {
     }
 
     const { data, error } = await supabase.from('chat_sessions').insert([payload]).select().single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       userId: data.user_id,
       petId: data.pet_id,
       createdAt: data.created_at,
       updatedAt: data.updated_at
-    });
+    }));
   });
 
   app.put('/api/chat-sessions/:id', optionalAuth, async (req: Request, res: Response) => {
@@ -2232,7 +2265,7 @@ async function startServer(isVercel = false) {
     if (!isAdmin && callerUserId) {
       const { data: session } = await supabase.from('chat_sessions').select('user_id').eq('id', id).single();
       if (session && session.user_id !== callerUserId && session.user_id !== 'guest') {
-        return res.status(403).json({ error: 'Không có quyền chỉnh sửa phiên chat này' });
+        return res.status(403).json(secureResponse({ error: 'Không có quyền chỉnh sửa phiên chat này' }));
       }
     }
 
@@ -2241,15 +2274,15 @@ async function startServer(isVercel = false) {
     if (req.body.messages) payload.messages = req.body.messages;
 
     const { data, error } = await supabase.from('chat_sessions').update(payload).eq('id', id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       userId: data.user_id,
       petId: data.pet_id,
       createdAt: data.created_at,
       updatedAt: data.updated_at
-    });
+    }));
   });
 
   app.delete('/api/chat-sessions/:id', optionalAuth, async (req: Request, res: Response) => {
@@ -2261,13 +2294,13 @@ async function startServer(isVercel = false) {
     if (!isAdmin && callerUserId) {
       const { data: session } = await supabase.from('chat_sessions').select('user_id').eq('id', id).single();
       if (session && session.user_id !== callerUserId && session.user_id !== 'guest') {
-        return res.status(403).json({ error: 'Không có quyền xóa phiên chat này' });
+        return res.status(403).json(secureResponse({ error: 'Không có quyền xóa phiên chat này' }));
       }
     }
 
     const { error } = await supabase.from('chat_sessions').delete().eq('id', id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true, id });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({ success: true, id }));
   });
 
   app.delete('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
@@ -2275,17 +2308,17 @@ async function startServer(isVercel = false) {
     const isAdmin = auth?.profile?.role === 'admin';
     const callerUserId = auth?.user?.id;
     const targetUserId = (isAdmin && req.query.userId) ? (req.query.userId as string) : (callerUserId || (req.query.userId === 'guest' ? 'guest' : ''));
-    if (!targetUserId) return res.status(400).json({ error: 'Missing target user or unauthenticated' });
+    if (!targetUserId) return res.status(400).json(secureResponse({ error: 'Missing target user or unauthenticated' }));
     const { error } = await supabase.from('chat_sessions').delete().eq('user_id', targetUserId);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({ success: true }));
   });
 
   app.post('/api/generate-title', chatRateLimiter, async (req: Request, res: Response) => {
     try {
       const { message } = req.body;
       const cleanMessage = (message || '').trim().substring(0, 500);
-      if (!cleanMessage) return res.json({ title: 'Phiên khám thú cưng' });
+      if (!cleanMessage) return res.json(secureResponse({ title: 'Phiên khám thú cưng' }));
       
       const prompt = `Tạo một tiêu đề SIÊU NGẮN (tối đa 4-6 chữ) tóm tắt nội dung sau (nếu là chào hỏi thì ghi "Trò chuyện chung", không dùng ngoặc kép): "${cleanMessage}"`;
       const keyPool = getGeminiKeyPool();
@@ -2308,10 +2341,10 @@ async function startServer(isVercel = false) {
           if (isQuota) continue;
         }
       }
-      res.json({ title });
+      res.json(secureResponse({ title }));
     } catch (e) {
       console.error(e);
-      res.json({ title: 'Phiên khám thú cưng' });
+      res.json(secureResponse({ title: 'Phiên khám thú cưng' }));
     }
   });
 
@@ -2323,7 +2356,7 @@ async function startServer(isVercel = false) {
     // 0. CHAR LIMIT CHECK
     const cleanMessage = (message || '').trim();
     if (cleanMessage.length > 2000) {
-      return res.status(400).json({ error: 'Tin nhắn quá dài. Giới hạn tối đa là 2000 ký tự.' });
+      return res.status(400).json(secureResponse({ error: 'Tin nhắn quá dài. Giới hạn tối đa là 2000 ký tự.' }));
     }
 
     try {
@@ -2342,7 +2375,7 @@ async function startServer(isVercel = false) {
               const currentCount = limitData?.message_count || 0;
               if (currentCount >= 8) {
                 serverLog('SYSTEM', 'WARN', '/api/chat', `Guest IP ${clientIp} exceeded limit`);
-                return res.status(429).json({ error: 'Bạn đã đạt giới hạn 8 tin nhắn miễn phí.' });
+                return res.status(429).json(secureResponse({ error: 'Bạn đã đạt giới hạn 8 tin nhắn miễn phí.' }));
               }
               await supabase.from('guest_rate_limits').upsert({
                 ip_address: clientIp,
@@ -2570,9 +2603,10 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       ].filter(Boolean);
       const fallbackModels = [...new Set(modelCandidates)];
 
-      // Helper to send SSE formatted chunk
+      // Helper to send SSE formatted chunk (Encrypted payload)
       const sendEvent = (type: string, data: any) => {
-        res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`);
+        const payload = encryptPayload({ type, ...data });
+        res.write(`data: ${JSON.stringify({ __enc: true, payload })}\n\n`);
       };
 
       keyLoop: for (let keyIdx = 0; keyIdx < keyPool.length; keyIdx++) {
@@ -2717,7 +2751,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
     } catch (err: any) {
       console.error('Gemini API Error:', err);
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Lỗi kết nối Gemini AI', details: err.message });
+        res.status(500).json(secureResponse({ error: 'Lỗi kết nối Gemini AI', details: err.message }));
       } else {
         res.write(`data: ${JSON.stringify({
           type: 'error',

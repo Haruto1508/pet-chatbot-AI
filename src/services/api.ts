@@ -16,11 +16,13 @@ import {
 } from '../types';
 import { supabase } from './supabaseClient';
 import { parseApiKeys, maskApiKey } from '../utils/apiKeys';
+import { decryptPayload } from '../utils/cryptoPayload';
 
 /**
  * Secure Authenticated Fetch Helper
  * Automatically injects the active Supabase JWT Bearer token into internal API requests
  * without leaking it to external services.
+ * Automatically decrypts any encrypted payload ({ __enc: true, payload: "..." }).
  */
 export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
@@ -37,7 +39,18 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
       // Session fetch error - proceed without token
     }
   }
-  return fetch(input, { ...init, headers });
+  const res = await fetch(input, { ...init, headers });
+  if (isInternal) {
+    const originalJson = res.json.bind(res);
+    res.json = async () => {
+      const body = await originalJson();
+      if (body && typeof body === 'object' && (body as any).__enc && (body as any).payload) {
+        return decryptPayload((body as any).payload);
+      }
+      return body;
+    };
+  }
+  return res;
 }
 
 // test
@@ -543,7 +556,8 @@ export const api = {
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.slice(6));
+              const raw = JSON.parse(line.slice(6));
+              const data = (raw && raw.__enc && raw.payload) ? decryptPayload(raw.payload) : raw;
               if (data.type === 'triage') {
                 onTriage(data.triageLevel, data.triageDetails);
               } else if (data.type === 'chunk') {
@@ -571,7 +585,7 @@ export const api = {
   },
 
   // ─────────────────────────────────────────────
-  // API LOGS (via Supabase)
+  // API LOGS (via Backend API — Client Supabase REST calls suppressed)
   // ─────────────────────────────────────────────
 
   getLogs: async (filters?: {
@@ -579,32 +593,26 @@ export const api = {
     level?: ApiLogLevel;
     limit?: number;
   }): Promise<ApiLog[]> => {
-    let query = supabase
-      .from('api_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(filters?.limit ?? 200);
-
-    if (filters?.log_type) query = query.eq('log_type', filters.log_type);
-    if (filters?.level) query = query.eq('level', filters.level);
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    return (data ?? []) as ApiLog[];
+    const params = new URLSearchParams();
+    if (filters?.log_type) params.set('log_type', filters.log_type);
+    if (filters?.level) params.set('level', filters.level);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    const qs = params.toString();
+    const res = await authFetch(`/api/logs${qs ? `?${qs}` : ''}`);
+    if (!res.ok) throw new Error('Không thể tải nhật ký');
+    return res.json();
   },
 
-  writeLog: async (log: Omit<ApiLog, 'id' | 'created_at'>): Promise<void> => {
-    await supabase.from('api_logs').insert([log]);
+  writeLog: async (_log?: Omit<ApiLog, 'id' | 'created_at'>): Promise<void> => {
+    // Client-side direct logging to Supabase REST disabled to avoid exposing Supabase anon key in network requests.
+    // Server-side logging is handled automatically by serverLog() in server.ts.
+    return;
   },
 
   clearLogs: async (log_type?: ApiLogType): Promise<void> => {
-    let query = supabase.from('api_logs').delete();
-    if (log_type) {
-      query = query.eq('log_type', log_type) as any;
-    } else {
-      query = query.neq('id', '00000000-0000-0000-0000-000000000000') as any;
-    }
-    await query;
+    const qs = log_type ? `?log_type=${encodeURIComponent(log_type)}` : '';
+    const res = await authFetch(`/api/logs${qs}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Không thể xóa nhật ký');
   },
 
   // ─────────────────────────────────────────────

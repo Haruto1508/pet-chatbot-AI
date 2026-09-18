@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { UserProfile, PetProfile, MedicalRecord } from './types';
 import { initialUsers, initialPets } from './data/initialData';
-import { api } from './services/api';
+import { api, authFetch } from './services/api';
 import { supabase } from './services/supabaseClient';
 
 import { Sidebar } from './components/common/Sidebar';
@@ -122,7 +122,7 @@ export function App() {
   // Proactively warm up Render Python AI service in background
   useEffect(() => {
     const warmUp = () => {
-      fetch('/api/keep-alive?service=render').catch(() => {});
+      authFetch('/api/keep-alive?service=render').catch(() => {});
     };
     warmUp();
     const interval = setInterval(warmUp, 10 * 60 * 1000);
