@@ -83,6 +83,27 @@ export const TAB_TITLES: Record<string, string> = {
   not_found: '404 Không Tìm Thấy Trang | Vethic AI',
 };
 
+export const TAB_DESCRIPTIONS: Record<string, string> = {
+  chat: 'Tư vấn sức khỏe, chẩn đoán triệu chứng chó mèo trực tuyến 24/7 với Bác sĩ Thú y AI Vethic.',
+  records: 'Theo dõi lịch sử khám bệnh, chẩn đoán, điều trị và phác đồ y tế thú cưng của bạn.',
+  record_detail: 'Xem chi tiết bệnh án điện tử, phân loại Triage y tế và hướng dẫn điều trị thú cưng.',
+  news: 'Cẩm nang dinh dưỡng, phòng bệnh và hướng dẫn chăm sóc sức khỏe toàn diện cho chó mèo.',
+  emergency: 'Hướng dẫn các bước sơ cứu khẩn cấp 24/7 khi thú cưng bị ngộ độc, co giật, khó thở, sốc nhiệt.',
+  clinics: 'Tìm kiếm phòng khám thú y, bệnh viện thú y cấp cứu 24/7 gần nhất có chỉ đường trên bản đồ.',
+  pets: 'Quản lý hồ sơ sức khỏe, cân nặng, tiền sử tiêm phòng vắc-xin và dị ứng của thú cưng.',
+  account: 'Cài đặt thông tin tài khoản, tùy chỉnh cấu hình và đồng bộ dữ liệu Vethic AI.',
+  admin_dashboard: 'Trung tâm báo cáo thống kê, số lượng ca cấp cứu và biểu đồ tăng trưởng người dùng.',
+  admin_users: 'Quản lý danh sách người dùng, phân quyền Admin và kiểm soát trạng thái tài khoản.',
+  admin_records: 'Quản lý toàn bộ hồ sơ bệnh án thú cưng và lịch sử phân loại Triage trên hệ thống.',
+  admin_clinics: 'Cập nhật danh bạ phòng khám thú y đối tác và tọa độ Google Maps trên toàn quốc.',
+  admin_rag: 'Cơ sở tri thức RAG thú y chuyên sâu, vector search và tài liệu hướng dẫn sơ cứu.',
+  admin_eval: 'Trung tâm kiểm định chất lượng AI toàn diện theo chuẩn TorchMetrics, Cleanlab, Ragas và DeepEval.',
+  admin_config: 'Tùy biến tham số mô hình AI, API Key pool, nhiệt độ và cơ chế dự phòng tự động.',
+  admin_health: 'Kiểm tra trạng thái kết nối máy chủ Supabase, Render Python AI và Google Gemini Studio.',
+  admin_logs: 'Theo dõi nhật ký hệ thống, lỗi mạng, thời gian phản hồi API và audit bảo mật.',
+  not_found: 'Trang bạn tìm kiếm không tồn tại trên hệ thống Vethic AI.'
+};
+
 /**
  * Converts pathname into matching tab ID
  */

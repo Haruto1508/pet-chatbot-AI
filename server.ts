@@ -101,6 +101,100 @@ async function startServer(isVercel = false) {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+  // ============================================================
+  // ENTERPRISE SLIDING-WINDOW RATE LIMITER & ANTI-SPAM DEFENSE
+  // ============================================================
+  interface RateLimitRecord {
+    count: number;
+    resetTime: number;
+  }
+
+  function createSlidingRateLimiter(options: {
+    windowMs: number;
+    maxRequests: number | ((req: Request) => number);
+    message: string;
+    keyGenerator?: (req: Request) => string;
+  }) {
+    const hits = new Map<string, RateLimitRecord>();
+
+    // Background garbage collection every 2 minutes
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [key, record] of hits.entries()) {
+        if (now > record.resetTime) {
+          hits.delete(key);
+        }
+      }
+    }, 120000);
+    if ((cleanupInterval as any).unref) (cleanupInterval as any).unref();
+
+    return (req: Request, res: Response, next: express.NextFunction) => {
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+      const key = options.keyGenerator ? options.keyGenerator(req) : `${clientIp}:${req.baseUrl || req.path}`;
+      const now = Date.now();
+      
+      const max = typeof options.maxRequests === 'function' ? options.maxRequests(req) : options.maxRequests;
+      let record = hits.get(key);
+
+      if (!record || now > record.resetTime) {
+        record = { count: 1, resetTime: now + options.windowMs };
+        hits.set(key, record);
+      } else {
+        record.count++;
+      }
+
+      const remaining = Math.max(0, max - record.count);
+      const resetSeconds = Math.ceil((record.resetTime - now) / 1000);
+
+      res.setHeader('X-RateLimit-Limit', max);
+      res.setHeader('X-RateLimit-Remaining', remaining);
+      res.setHeader('X-RateLimit-Reset', Math.ceil(record.resetTime / 1000));
+
+      if (record.count > max) {
+        res.setHeader('Retry-After', resetSeconds);
+        serverLog('SYSTEM', 'WARN', 'RATE_LIMIT_EXCEEDED', `[ANTI-SPAM] IP ${clientIp} vượt hạn mức ${max} req/${options.windowMs / 1000}s. Chặn trong ${resetSeconds}s.`);
+        return res.status(429).json({
+          error: options.message,
+          retryAfter: resetSeconds,
+          limit: max,
+          remaining: 0
+        });
+      }
+
+      next();
+    };
+  }
+
+  // 1. Global API Protection: Max 120 reqs/min per IP
+  const globalApiLimiter = createSlidingRateLimiter({
+    windowMs: 60 * 1000,
+    maxRequests: 120,
+    message: 'Hệ thống phát hiện quá nhiều yêu cầu từ thiết bị của bạn. Vui lòng thử lại sau 1 phút.'
+  });
+  app.use('/api/', globalApiLimiter);
+
+  // 2. AI Chat & Generate Title Protection: Max 8 reqs/min for guests, 25 reqs/min for logged-in users
+  const chatRateLimiter = createSlidingRateLimiter({
+    windowMs: 60 * 1000,
+    maxRequests: (req: Request) => {
+      const isGuest = !req.body?.userId || req.body.userId === 'guest';
+      return isGuest ? 8 : 25;
+    },
+    keyGenerator: (req: Request) => {
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+      const uid = req.body?.userId && req.body.userId !== 'guest' ? req.body.userId : `guest:${clientIp}`;
+      return `chat_rate:${uid}`;
+    },
+    message: 'Bạn đang gửi tin nhắn quá nhanh. Vui lòng chờ ít giây để máy chủ AI xử lý trước khi gửi tiếp.'
+  });
+
+  // 3. Heavy AI Test & Evaluation Limiter: Max 10 reqs/min per IP
+  const heavyTestRateLimiter = createSlidingRateLimiter({
+    windowMs: 60 * 1000,
+    maxRequests: 10,
+    message: 'Thao tác kiểm tra mô hình AI bị giới hạn tối đa 10 lần/phút để tránh cạn kiệt Quota.'
+  });
+
   // System Config File & Local Persistence Helper
   const CONFIG_FILE = path.join(process.cwd(), 'system_config.json');
 
@@ -597,7 +691,7 @@ async function startServer(isVercel = false) {
   });
 
   // Test API Key Endpoint
-  app.post('/api/test-api-key', async (req: Request, res: Response) => {
+  app.post('/api/test-api-key', heavyTestRateLimiter, async (req: Request, res: Response) => {
     const { apiKey, model = 'gemini-3.6-flash', provider = 'gemini', customBaseUrl } = req.body;
     if (!apiKey) {
       return res.status(400).json({ ok: false, error: 'Vui lòng nhập API Key để kiểm tra.' });
@@ -828,7 +922,7 @@ async function startServer(isVercel = false) {
   });
 
   // Run dynamic interactive test for Admin AI Evaluation
-  app.post('/api/admin/ai-evaluation/run-test', async (req: Request, res: Response) => {
+  app.post('/api/admin/ai-evaluation/run-test', heavyTestRateLimiter, async (req: Request, res: Response) => {
     const { testType, inputMessage, imageBase64 } = req.body;
     const t0 = Date.now();
 
@@ -1666,7 +1760,7 @@ async function startServer(isVercel = false) {
     res.json({ success: true });
   });
 
-  app.post('/api/generate-title', async (req: Request, res: Response) => {
+  app.post('/api/generate-title', chatRateLimiter, async (req: Request, res: Response) => {
     try {
       const { message } = req.body;
       const cleanMessage = (message || '').trim().substring(0, 500);
@@ -1701,7 +1795,7 @@ async function startServer(isVercel = false) {
   });
 
   // --- AI CHAT ENDPOINT (Server-Side Gemini API) ---
-  app.post('/api/chat', async (req: Request, res: Response) => {
+  app.post('/api/chat', chatRateLimiter, async (req: Request, res: Response) => {
 
     const { message, petId, petInfo, imageBase64, history, userId } = req.body;
 

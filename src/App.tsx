@@ -12,7 +12,7 @@ import { SpotlightTour } from './components/common/SpotlightTour';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { NotFoundView } from './components/common/NotFoundView';
 import { AdminAccessDeniedView } from './components/common/AdminAccessDeniedView';
-import { getTabFromPath, getPathFromTab, TAB_TITLES } from './utils/routes';
+import { getTabFromPath, getPathFromTab, TAB_TITLES, TAB_DESCRIPTIONS } from './utils/routes';
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -84,8 +84,12 @@ export function App() {
       window.history.pushState(null, '', currentPath);
     }
 
-    // Update document title dynamically
+    // Update document title & meta description dynamically
     document.title = TAB_TITLES[currentTab] || 'Vethic AI — Tư Vấn Bệnh Lý & Sơ Cứu Thú Cưng';
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc && TAB_DESCRIPTIONS[currentTab]) {
+      metaDesc.setAttribute('content', TAB_DESCRIPTIONS[currentTab]);
+    }
   }, [currentTab, selectedRecord]);
 
   // Load record from URL query param if present

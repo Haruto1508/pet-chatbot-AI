@@ -1,0 +1,15 @@
+# Robots.txt for Vethic AI
+User-agent: *
+Allow: /
+Allow: /chat
+Allow: /news
+Allow: /emergency
+Allow: /clinics
+Disallow: /admin/
+Disallow: /admin*
+Disallow: /account
+Disallow: /pets
+Disallow: /records
+Disallow: /api/
+
+Sitemap: https://vethic.ai/sitemap.xml
