@@ -32,13 +32,15 @@ export const AdminKnowledgeRAGView: React.FC = () => {
     setLoading(true);
     try {
       const data = await api.getArticles();
-      setArticles(data);
+      setArticles(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Error loading articles:', e);
+      setArticles([]);
     } finally {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     loadArticles();
@@ -123,18 +125,19 @@ export const AdminKnowledgeRAGView: React.FC = () => {
     if (!articleToDelete) return;
     try {
       await api.deleteArticle(articleToDelete);
-      showSuccess('Đã xóa bài viết kiến thức!');
-      loadArticles();
+      setArticles(prev => (Array.isArray(prev) ? prev : []).filter(a => a.id !== articleToDelete));
+      showSuccess('Đã xóa tài liệu bệnh lý thành công!');
     } catch (e) {
-      showError('Lỗi khi xóa bài viết.');
+      showError('Lỗi khi xóa tài liệu.');
     } finally {
       setArticleToDelete(null);
     }
   };
 
-  const filtered = articles.filter(a =>
-    a.title.toLowerCase().includes(search.toLowerCase()) ||
-    a.summary.toLowerCase().includes(search.toLowerCase())
+  const safeArticles = Array.isArray(articles) ? articles : [];
+  const filtered = safeArticles.filter(a =>
+    (a.title || '').toLowerCase().includes(search.toLowerCase()) ||
+    (a.summary || '').toLowerCase().includes(search.toLowerCase())
   );
 
   return (

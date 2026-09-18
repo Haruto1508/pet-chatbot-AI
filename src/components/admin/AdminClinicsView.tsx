@@ -29,13 +29,15 @@ export const AdminClinicsView: React.FC = () => {
     setLoading(true);
     try {
       const data = await api.getClinics();
-      setClinics(data);
+      setClinics(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Error loading clinics:', e);
+      setClinics([]);
     } finally {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     loadClinics();

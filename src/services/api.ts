@@ -112,8 +112,15 @@ export const api = {
   },
 
   getUsers: async (): Promise<UserProfile[]> => {
-    const res = await authFetch('/api/users');
-    return res.json();
+    try {
+      const res = await authFetch('/api/users');
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('getUsers error:', e);
+      return [];
+    }
   },
 
   updateUserStatus: async (id: string, status: 'active' | 'suspended'): Promise<UserProfile> => {
@@ -131,8 +138,15 @@ export const api = {
 
   // Unlock Requests
   getUnlockRequests: async (): Promise<any[]> => {
-    const res = await authFetch('/api/unlock-requests');
-    return res.json();
+    try {
+      const res = await authFetch('/api/unlock-requests');
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('getUnlockRequests error:', e);
+      return [];
+    }
   },
 
   createUnlockRequest: async (payload: { userId: string; userEmail: string; reason: string }): Promise<any> => {
@@ -150,9 +164,16 @@ export const api = {
 
   // Pets
   getPets: async (userId?: string): Promise<PetProfile[]> => {
-    const url = userId ? `/api/pets?userId=${userId}` : '/api/pets';
-    const res = await authFetch(url);
-    return res.json();
+    try {
+      const url = userId ? `/api/pets?userId=${encodeURIComponent(userId)}` : '/api/pets';
+      const res = await authFetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('getPets error:', e);
+      return [];
+    }
   },
 
   createPet: async (pet: Partial<PetProfile>): Promise<PetProfile> => {
@@ -179,14 +200,21 @@ export const api = {
 
   // Medical Records
   getMedicalRecords: async (petId?: string, userId?: string): Promise<MedicalRecord[]> => {
-    let url = '/api/medical-records';
-    const params = new URLSearchParams();
-    if (petId) params.append('petId', petId);
-    if (userId) params.append('userId', userId);
-    if (params.toString()) url += `?${params.toString()}`;
+    try {
+      let url = '/api/medical-records';
+      const params = new URLSearchParams();
+      if (petId) params.append('petId', petId);
+      if (userId) params.append('userId', userId);
+      if (params.toString()) url += `?${params.toString()}`;
 
-    const res = await authFetch(url);
-    return res.json();
+      const res = await authFetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('getMedicalRecords error:', e);
+      return [];
+    }
   },
 
   createMedicalRecord: async (record: Partial<MedicalRecord>): Promise<MedicalRecord> => {
@@ -223,12 +251,19 @@ export const api = {
 
   // Articles (RAG Knowledge)
   getArticles: async (search?: string, category?: string): Promise<KnowledgeArticle[]> => {
-    const params = new URLSearchParams();
-    if (search) params.append('search', search);
-    if (category) params.append('category', category);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (category) params.append('category', category);
 
-    const res = await authFetch(`/api/articles?${params.toString()}`);
-    return res.json();
+      const res = await authFetch(`/api/articles?${params.toString()}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('getArticles error:', e);
+      return [];
+    }
   },
 
   createArticle: async (article: Partial<KnowledgeArticle>): Promise<KnowledgeArticle> => {
@@ -255,14 +290,18 @@ export const api = {
 
   // Vet Clinics
   getClinics: async (search?: string): Promise<VetClinic[]> => {
-    const url = search ? `/api/clinics?search=${encodeURIComponent(search)}` : '/api/clinics';
-    const res = await authFetch(url);
-    if (!res.ok) {
-      console.error(await res.text());
+    try {
+      const url = search ? `/api/clinics?search=${encodeURIComponent(search)}` : '/api/clinics';
+      const res = await authFetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('getClinics error:', e);
       return [];
     }
-    return res.json();
   },
+
 
   createClinic: async (clinic: Partial<VetClinic>): Promise<VetClinic> => {
     const res = await authFetch('/api/clinics', {
@@ -346,14 +385,22 @@ export const api = {
 
   // Chat Sessions (History)
   getChatSessions: async (userId?: string, petId?: string): Promise<ChatSession[]> => {
-    let url = '/api/chat-sessions';
-    const params = new URLSearchParams();
-    if (userId) params.append('userId', userId);
-    if (petId) params.append('petId', petId);
-    if (params.toString()) url += `?${params.toString()}`;
-    const res = await authFetch(url);
-    return res.json();
+    try {
+      let url = '/api/chat-sessions';
+      const params = new URLSearchParams();
+      if (userId) params.append('userId', userId);
+      if (petId) params.append('petId', petId);
+      if (params.toString()) url += `?${params.toString()}`;
+      const res = await authFetch(url);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn('getChatSessions error:', e);
+      return [];
+    }
   },
+
 
   getChatSessionById: async (id: string): Promise<ChatSession> => {
     const res = await authFetch(`/api/chat-sessions/${id}`);

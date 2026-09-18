@@ -76,6 +76,7 @@ const THINKING_STEPS = [
 
 // Helper to group sessions by date
 function groupSessionsByDate(sessions: ChatSession[]): { label: string; sessions: ChatSession[] }[] {
+  const safeSessions = Array.isArray(sessions) ? sessions : [];
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today);
@@ -92,7 +93,8 @@ function groupSessionsByDate(sessions: ChatSession[]): { label: string; sessions
     'Trước đó': [],
   };
 
-  for (const session of sessions) {
+  for (const session of safeSessions) {
+    if (!session) continue;
     const sessionDate = new Date(session.updatedAt || session.createdAt);
     if (sessionDate >= today) {
       groups['Hôm nay'].push(session);
@@ -111,6 +113,7 @@ function groupSessionsByDate(sessions: ChatSession[]): { label: string; sessions
     .filter(([, items]) => items.length > 0)
     .map(([label, items]) => ({ label, sessions: items }));
 }
+
 
 // Helper to format relative time
 function formatRelativeTime(dateStr: string): string {
@@ -306,15 +309,17 @@ export const PetChatView: React.FC<Props> = ({
     setIsLoadingSessions(true);
     try {
       const data = await api.getChatSessions(currentUser.id, selectedPet?.id);
-      setSessions(data);
-      if (data.length > 0) {
-        setCurrentSessionId(data[0].id);
-        setMessages(data[0].messages);
+      const safeData = Array.isArray(data) ? data : [];
+      setSessions(safeData);
+      if (safeData.length > 0) {
+        setCurrentSessionId(safeData[0].id);
+        setMessages(Array.isArray(safeData[0].messages) ? safeData[0].messages : [getWelcomeMsg()]);
       } else {
         startNewChat();
       }
     } catch (e) {
       console.error("Failed to load sessions", e);
+      setSessions([]);
       startNewChat();
     } finally {
       setIsLoadingSessions(false);
@@ -335,10 +340,12 @@ export const PetChatView: React.FC<Props> = ({
 
   // Filter sessions by search query
   const filteredSessions = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
+    const safe = Array.isArray(sessions) ? sessions : [];
+    if (!searchQuery.trim()) return safe;
     const q = searchQuery.toLowerCase();
-    return sessions.filter(s => s.title.toLowerCase().includes(q));
+    return safe.filter(s => (s.title || '').toLowerCase().includes(q));
   }, [sessions, searchQuery]);
+
 
   // Group filtered sessions by date
   const groupedSessions = useMemo(() => groupSessionsByDate(filteredSessions), [filteredSessions]);
@@ -382,8 +389,9 @@ export const PetChatView: React.FC<Props> = ({
     if (!sessionToDelete) return;
     try {
       await api.deleteChatSession(sessionToDelete);
-      setSessions(prev => prev.filter(s => s.id !== sessionToDelete));
+      setSessions(prev => (Array.isArray(prev) ? prev : []).filter(s => s.id !== sessionToDelete));
       if (currentSessionId === sessionToDelete) {
+
         startNewChat();
       }
     } catch (e) {

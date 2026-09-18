@@ -160,9 +160,10 @@ export const NearestClinicsView: React.FC = () => {
     setLoading(true);
     try {
       const data = await api.getClinics(searchTerm);
-      setClinics(data);
+      setClinics(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Error loading clinics:', e);
+      setClinics([]);
       showError('Lỗi tải danh sách phòng khám');
     } finally {
       setLoading(false);
@@ -185,8 +186,11 @@ export const NearestClinicsView: React.FC = () => {
     return R * c; 
   };
 
-  const processedClinics = clinics
+  const safeClinics = Array.isArray(clinics) ? clinics : [];
+
+  const processedClinics = safeClinics
     .filter(c => (emergencyOnly ? c.isEmergency247 : true))
+
     .map(c => ({
       ...c,
       distanceKm: userLocation ? getDistance(userLocation.lat, userLocation.lng, c.lat, c.lng) : undefined

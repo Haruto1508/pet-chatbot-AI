@@ -18,11 +18,10 @@ export const ArticlesNewsView: React.FC = () => {
     setLoading(true);
     try {
       const data = await api.getArticles();
-      if (data) {
-        setArticles(data);
-      }
+      setArticles(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Error loading articles:', e);
+      setArticles([]);
     } finally {
       setLoading(false);
     }
@@ -32,16 +31,19 @@ export const ArticlesNewsView: React.FC = () => {
     loadArticles();
   }, []);
 
-  const filtered = articles.filter(art => {
+  const safeArticles = Array.isArray(articles) ? articles : [];
+
+  const filtered = safeArticles.filter(art => {
     const matchesCategory = selectedCategory === 'all' || art.category === selectedCategory;
     const matchesSpecies = selectedSpecies === 'all' || art.species === selectedSpecies || art.species === 'Cả hai';
     const matchesSearch =
-      art.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      art.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      art.symptoms.some(s => s.toLowerCase().includes(searchTerm.toLowerCase()));
+      (art.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (art.summary || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (art.symptoms || []).some(s => (s || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
     return matchesCategory && matchesSpecies && matchesSearch;
   });
+
 
   return (
     <div className="space-y-6">

@@ -60,15 +60,16 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
       setUsers(prev => prev.map(u => u.id === userToToggleStatus.id ? { ...u, status: newStatus } : u));
       
       if (newStatus === 'active') {
-        const reqsToDelete = unlockRequests.filter(r => r.userId === userToToggleStatus.id || r.userEmail === userToToggleStatus.email);
+        const safeReqs = Array.isArray(unlockRequests) ? unlockRequests : [];
+        const reqsToDelete = safeReqs.filter(r => r.userId === userToToggleStatus.id || r.userEmail === userToToggleStatus.email);
         if (reqsToDelete.length > 0) {
           await Promise.all(reqsToDelete.map(r => api.deleteUnlockRequest(r.id)));
-          setUnlockRequests(prev => prev.filter(r => r.userId !== userToToggleStatus.id && r.userEmail !== userToToggleStatus.email));
+          setUnlockRequests(prev => (Array.isArray(prev) ? prev : []).filter(r => r.userId !== userToToggleStatus.id && r.userEmail !== userToToggleStatus.email));
           window.dispatchEvent(new Event('petcare_notifications_updated'));
         }
       }
 
-      showSuccess(`Đã ${newStatus === 'active' ? 'mở khóa' : 'khóa'} tài khoản ${userToToggleStatus.name}`);
+      showSuccess(`Đã cập nhật trạng thái của ${userToToggleStatus.name}`);
     } catch (e) {
       console.error(e);
       showError('Cập nhật trạng thái thất bại');
@@ -86,7 +87,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
     if (!userToDelete) return;
     try {
       await api.deleteUser(userToDelete);
-      setUsers(prev => prev.filter(u => u.id !== userToDelete));
+      setUsers(prev => (Array.isArray(prev) ? prev : []).filter(u => u.id !== userToDelete));
       showSuccess('Đã xóa người dùng thành công');
     } catch (e) {
       console.error(e);
@@ -94,10 +95,11 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
     }
   };
 
-  const filteredUsers = users.filter(u =>
+  const safeUsers = Array.isArray(users) ? users : [];
+  const filteredUsers = safeUsers.filter(u =>
     u.id !== currentUser.id && // Hide current user
-    (u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()))
+    ((u.name || '').toLowerCase().includes(search.toLowerCase()) ||
+    (u.email || '').toLowerCase().includes(search.toLowerCase()))
   );
 
   return (

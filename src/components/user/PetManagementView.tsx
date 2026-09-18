@@ -48,6 +48,8 @@ export const PetManagementView: React.FC<Props> = ({ pets, currentUser, onRefres
 
   const openEditModal = (pet: PetProfile) => {
     setEditingPet(pet);
+    const vaccineStr = Array.isArray(pet.vaccineStatus) ? pet.vaccineStatus.join(', ') : (pet.vaccineStatus || '');
+    const allergiesStr = Array.isArray(pet.allergies) ? pet.allergies.join(', ') : (pet.allergies || '');
     setFormData({
       name: pet.name,
       species: pet.species,
@@ -55,12 +57,13 @@ export const PetManagementView: React.FC<Props> = ({ pets, currentUser, onRefres
       age: pet.age,
       weight: pet.weight,
       gender: pet.gender,
-      vaccineStatus: pet.vaccineStatus.join(', '),
-      allergies: pet.allergies.join(', '),
+      vaccineStatus: vaccineStr,
+      allergies: allergiesStr,
       avatarUrl: pet.avatarUrl
     });
     setIsModalOpen(true);
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,7 +142,7 @@ export const PetManagementView: React.FC<Props> = ({ pets, currentUser, onRefres
 
       {/* Pet Cards List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {pets.map((pet) => (
+        {(Array.isArray(pets) ? pets : []).map((pet) => (
           <div
             key={pet.id}
             className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs hover:shadow-md transition-all space-y-4 flex flex-col justify-between"
@@ -171,7 +174,7 @@ export const PetManagementView: React.FC<Props> = ({ pets, currentUser, onRefres
                     <Shield className="w-3.5 h-3.5 text-emerald-600" /> Vắc xin đã tiêm:
                   </span>
                   <div className="flex flex-wrap gap-1 mt-1">
-                    {pet.vaccineStatus.map((v, i) => (
+                    {(Array.isArray(pet.vaccineStatus) ? pet.vaccineStatus : []).map((v, i) => (
                       <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-medium">
                         ✓ {v}
                       </span>
@@ -183,10 +186,13 @@ export const PetManagementView: React.FC<Props> = ({ pets, currentUser, onRefres
                   <span className="font-bold text-slate-700 block flex items-center gap-1">
                     <AlertCircle className="w-3.5 h-3.5 text-amber-600" /> Tiền sử dị ứng:
                   </span>
-                  <p className="text-slate-600 mt-0.5">{pet.allergies.join(', ') || 'Không có'}</p>
+                  <p className="text-slate-600 mt-0.5">
+                    {(Array.isArray(pet.allergies) ? pet.allergies.join(', ') : pet.allergies) || 'Không có'}
+                  </p>
                 </div>
               </div>
             </div>
+
 
             <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 text-xs">
               <button

@@ -1540,10 +1540,11 @@ async function startServer(isVercel = false) {
     const auth = (req as any).auth;
     const isAdmin = auth?.profile?.role === 'admin';
 
-    // Must provide userId unless caller is verified Admin
+    // Return empty list if no userId and not verified Admin (e.g. guest or initial state)
     if (!userId && !isAdmin) {
-      return res.status(400).json({ error: 'Vui lòng cung cấp tham số userId' });
+      return res.json([]);
     }
+
 
     let query = supabase.from('pets').select('*').order('created_at', { ascending: false });
     if (userId) query = query.eq('user_id', userId);
@@ -1623,10 +1624,11 @@ async function startServer(isVercel = false) {
     const auth = (req as any).auth;
     const isAdmin = auth?.profile?.role === 'admin';
 
-    // Must provide petId or userId unless caller is verified Admin
+    // Return empty list if neither petId nor userId is specified and caller is not admin
     if (!petId && !userId && !isAdmin) {
-      return res.status(400).json({ error: 'Vui lòng cung cấp tham số userId hoặc petId' });
+      return res.json([]);
     }
+
 
     let query = supabase.from('medical_records').select('*').order('created_at', { ascending: false });
     
@@ -2011,10 +2013,11 @@ async function startServer(isVercel = false) {
       const auth = (req as any).auth;
       const isAdmin = auth?.profile?.role === 'admin';
 
-      // Must provide userId or petId unless caller is verified Admin
+      // Return empty list if neither userId nor petId is provided and caller is not admin
       if (!userId && !petId && !isAdmin) {
-        return res.status(400).json({ error: 'Vui lòng cung cấp tham số userId' });
+        return res.json([]);
       }
+
 
       let query = supabase.from('chat_sessions').select('*').order('updated_at', { ascending: false });
       

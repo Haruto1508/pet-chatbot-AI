@@ -209,14 +209,17 @@ export function App() {
   const refreshPets = async () => {
     try {
       const userPets = await api.getPets(currentUser.id);
-      setPets(userPets);
-      if (userPets.length > 0 && !selectedPet) {
-        setSelectedPet(userPets[0]);
+      const safePets = Array.isArray(userPets) ? userPets : [];
+      setPets(safePets);
+      if (safePets.length > 0 && !selectedPet) {
+        setSelectedPet(safePets[0]);
       }
     } catch (e) {
       console.error('Error refreshing pets:', e);
+      setPets([]);
     }
   };
+
 
   const handleUpdateUser = (updates: Partial<UserProfile>) => {
     setCurrentUser(prev => ({ ...prev, ...updates }));

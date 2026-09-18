@@ -17,9 +17,10 @@ export const AdminPetsRecordsView: React.FC = () => {
     setLoading(true);
     try {
       const data = await api.getMedicalRecords();
-      setRecords(data);
+      setRecords(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Error loading records:', e);
+      setRecords([]);
     } finally {
       setLoading(false);
     }
@@ -37,7 +38,7 @@ export const AdminPetsRecordsView: React.FC = () => {
     if (!recordToDelete) return;
     try {
       await api.deleteMedicalRecord(recordToDelete);
-      setRecords(prev => prev.filter(r => r.id !== recordToDelete));
+      setRecords(prev => (Array.isArray(prev) ? prev : []).filter(r => r.id !== recordToDelete));
       showSuccess('Đã xóa hồ sơ bệnh án thành công!');
     } catch (e) {
       showError('Lỗi khi xóa bệnh án.');
@@ -46,14 +47,16 @@ export const AdminPetsRecordsView: React.FC = () => {
     }
   };
 
-  const filtered = records.filter(rec => {
+  const safeRecords = Array.isArray(records) ? records : [];
+  const filtered = safeRecords.filter(rec => {
     const matchesTriage = triageFilter === 'all' || rec.triageLevel === triageFilter;
     const matchesSearch =
-      rec.petName.toLowerCase().includes(search.toLowerCase()) ||
-      rec.diagnosis.toLowerCase().includes(search.toLowerCase()) ||
-      rec.symptomSummary.toLowerCase().includes(search.toLowerCase());
+      (rec.petName || '').toLowerCase().includes(search.toLowerCase()) ||
+      (rec.diagnosis || '').toLowerCase().includes(search.toLowerCase()) ||
+      (rec.symptomSummary || '').toLowerCase().includes(search.toLowerCase());
     return matchesTriage && matchesSearch;
   });
+
 
   return (
     <div className="space-y-6">

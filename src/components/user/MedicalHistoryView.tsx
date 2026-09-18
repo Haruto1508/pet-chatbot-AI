@@ -37,9 +37,10 @@ export const MedicalHistoryView: React.FC<Props> = ({ pets, currentUser, onViewR
     setLoading(true);
     try {
       const data = await api.getMedicalRecords(undefined, currentUser.id);
-      setRecords(data);
+      setRecords(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error('Error loading medical records:', e);
+      setRecords([]);
     } finally {
       setLoading(false);
     }
@@ -58,7 +59,7 @@ export const MedicalHistoryView: React.FC<Props> = ({ pets, currentUser, onViewR
     if (!recordToDelete) return;
     try {
       await api.deleteMedicalRecord(recordToDelete);
-      setRecords(prev => prev.filter(r => r.id !== recordToDelete));
+      setRecords(prev => (Array.isArray(prev) ? prev : []).filter(r => r.id !== recordToDelete));
       if (activeRecordModal?.id === recordToDelete) setActiveRecordModal(null);
       showSuccess('Đã xóa hồ sơ bệnh án thành công!');
     } catch (e) {
@@ -68,13 +69,16 @@ export const MedicalHistoryView: React.FC<Props> = ({ pets, currentUser, onViewR
     }
   };
 
-  const filteredRecords = records.filter(rec => {
+  const safeRecords = Array.isArray(records) ? records : [];
+  const safePets = Array.isArray(pets) ? pets : [];
+
+  const filteredRecords = safeRecords.filter(rec => {
     const matchesPet = selectedPetFilter === 'all' || rec.petId === selectedPetFilter;
     const matchesTriage = selectedTriageFilter === 'all' || rec.triageLevel === selectedTriageFilter;
     const matchesSearch =
-      rec.petName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rec.diagnosis.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rec.symptomSummary.toLowerCase().includes(searchTerm.toLowerCase());
+      (rec.petName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (rec.symptomSummary || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (rec.diagnosis || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesPet && matchesTriage && matchesSearch;
   });
 
@@ -129,11 +133,12 @@ export const MedicalHistoryView: React.FC<Props> = ({ pets, currentUser, onViewR
             className="w-full text-xs px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-semibold text-slate-700"
           >
             <option value="all">🐾 Tất cả thú cưng</option>
-            {pets.map(p => (
+            {safePets.map(p => (
               <option key={p.id} value={p.id}>
                 {p.name} ({p.species})
               </option>
             ))}
+
           </select>
         </div>
 
