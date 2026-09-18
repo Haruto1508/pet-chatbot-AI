@@ -165,7 +165,11 @@ export const api = {
   // Pets
   getPets: async (userId?: string): Promise<PetProfile[]> => {
     try {
-      const url = userId ? `/api/pets?userId=${encodeURIComponent(userId)}` : '/api/pets';
+      if (userId === 'guest') return [];
+      // Clean query: Do not leak userId in URL for authenticated user
+      const url = (userId && userId !== 'guest' && userId !== 'user_01') 
+        ? `/api/pets?userId=${encodeURIComponent(userId)}` 
+        : '/api/pets';
       const res = await authFetch(url);
       if (!res.ok) return [];
       const data = await res.json();
@@ -201,10 +205,11 @@ export const api = {
   // Medical Records
   getMedicalRecords: async (petId?: string, userId?: string): Promise<MedicalRecord[]> => {
     try {
+      if (userId === 'guest') return [];
       let url = '/api/medical-records';
       const params = new URLSearchParams();
       if (petId) params.append('petId', petId);
-      if (userId) params.append('userId', userId);
+      if (userId && userId !== 'guest' && userId !== 'user_01') params.append('userId', userId);
       if (params.toString()) url += `?${params.toString()}`;
 
       const res = await authFetch(url);
@@ -228,7 +233,6 @@ export const api = {
 
   getMedicalRecordById: async (id: string): Promise<MedicalRecord> => {
     const res = await authFetch(`/api/medical-records/${id}`);
-    if (!res.ok) throw new Error('Không tìm thấy bệnh án');
     return res.json();
   },
 
@@ -309,10 +313,6 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(clinic)
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Lỗi thêm phòng khám');
-    }
     return res.json();
   },
 
@@ -322,10 +322,6 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(clinic)
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Lỗi cập nhật phòng khám');
-    }
     return res.json();
   },
 
@@ -348,18 +344,12 @@ export const api = {
       }
     } catch {}
 
-    const localStr = typeof window !== 'undefined' ? localStorage.getItem('petcare_fallback_config') : null;
-    let local: any = {};
-    if (localStr) {
-      try { local = JSON.parse(localStr); } catch {}
-    }
-
     const merged: SystemConfig = {
       ...(serverConfig || {}),
-      enableGeminiFallback: serverConfig?.enableGeminiFallback ?? local.enableGeminiFallback ?? true,
-      fallbackGeminiApiKey: serverConfig?.fallbackGeminiApiKey || local.fallbackGeminiApiKey || serverConfig?.backupGeminiApiKey || '',
-      fallbackModel: serverConfig?.fallbackModel || local.fallbackModel || 'gemini-3.6-flash',
-      fallbackTimeoutMs: serverConfig?.fallbackTimeoutMs || local.fallbackTimeoutMs || 20000
+      enableGeminiFallback: serverConfig?.enableGeminiFallback ?? true,
+      fallbackGeminiApiKey: serverConfig?.fallbackGeminiApiKey || '',
+      fallbackModel: serverConfig?.fallbackModel || 'gemini-3.6-flash',
+      fallbackTimeoutMs: serverConfig?.fallbackTimeoutMs || 20000
     };
 
     return merged;
@@ -388,7 +378,7 @@ export const api = {
     try {
       let url = '/api/chat-sessions';
       const params = new URLSearchParams();
-      if (userId) params.append('userId', userId);
+      if (userId === 'guest') params.append('userId', 'guest');
       if (petId) params.append('petId', petId);
       if (params.toString()) url += `?${params.toString()}`;
       const res = await authFetch(url);
@@ -435,8 +425,9 @@ export const api = {
     return res.json();
   },
 
-  deleteAllChatSessions: async (userId: string): Promise<{ success: boolean }> => {
-    const res = await authFetch(`/api/chat-sessions?userId=${userId}`, { method: 'DELETE' });
+  deleteAllChatSessions: async (userId?: string): Promise<{ success: boolean }> => {
+    const url = (userId === 'guest') ? '/api/chat-sessions?userId=guest' : '/api/chat-sessions';
+    const res = await authFetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error('Lỗi xóa tất cả lịch sử');
     return res.json();
   },
@@ -774,262 +765,22 @@ export const api = {
 
         api.writeLog({
           log_type: 'render',
-          level: 'warn',
-          message: `Máy chủ AI chính thất bại lần 2: ${retryErr?.message || 'unknown'}. ${fallbackApiKeys.length > 0 ? `Tự động chuyển sang Gemini Direct Backup (Pool: ${fallbackApiKeys.length} keys)...` : 'Không có Gemini Backup key.'}`,
+          level: 'error',
+          message: `Máy chủ AI chính thất bại lần 2: ${retryErr?.message || 'unknown'}.`,
           latency_ms: Date.now() - startTime,
-          metadata: { error: retryErr?.message, attempt: 2, totalKeys: fallbackApiKeys.length }
+          metadata: { error: retryErr?.message, attempt: 2 }
         }).catch(() => {});
 
-        if (!fallbackEnabled || fallbackApiKeys.length === 0) {
-          throw new Error('Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
-        }
+        throw new Error('Hệ thống AI đang có lượng lớn người truy cập hoặc đang cập nhật. Vui lòng thử lại sau ít phút.');
       }
     }
 
-    // ── GEMINI DIRECT FALLBACK WITH MULTI-KEY ROTATION ──
-    if (onFallback) onFallback(true);
-    const fallbackStart = Date.now();
-
-    // Prepare history and system prompt
-    const geminiHistory = (payload.history ?? [])
-      .filter(m => m.id !== 'msg_welcome' && !m.text.startsWith('⚠️'))
-      .map(m => ({
-        role: m.sender === 'user' ? 'user' : 'model',
-        parts: [{ text: m.text }]
-      }));
-
-    const systemPrompt = `Bạn là Bác sĩ Thú y AI Vethic hỗ trợ 24/7. Trả lời súc tích, thân thiện và chuyên nghiệp bằng tiếng Việt.
-LƯU Ý QUAN TRỌNG VỀ ĐỊNH DẠNG:
-1. BẮT BUỘC chèn khối Triage Alert ngay đầu phản hồi (tuyệt đối không dùng markdown block xung quanh, viết liền trên 1 dòng):
-[[TRIAGE_ALERT]]{"level": "RED" | "YELLOW" | "GREEN", "title": "Tên bệnh hoặc triệu chứng tóm tắt", "urgency": "Mức độ khẩn cấp", "actions": ["Hành động 1", "Hành động 2"]}[[/TRIAGE_ALERT]]
-Quy tắc phân loại:
-- RED: Cấp cứu nguy kịch, khó thở, xuất huyết, co giật, ngộ độc, chấn thương nặng, hôn mê, hoặc SUY KIỆT CƠ THỂ/GẦY TRƠ XƯƠNG (BCS 1/9).
-- YELLOW: Bệnh cần khám thú y sớm, viêm da, nấm, ghẻ, tiêu chảy, nôn mửa, sốt, ngứa, bỏ ăn, đau mắt, gầy ốm.
-- GREEN: Tư vấn dinh dưỡng, chăm sóc lông móng, sinh hoạt thường ngày, thể trạng hoàn toàn khỏe mạnh.
-
-NGUYÊN TẮC QUAN SÁT HÌNH ẢNH LÂM SÀNG:
-- BẮT BUỘC quan sát trực quan thể trạng toàn thân: Body Condition Score (BCS), độ lộ xương sườn/xương chậu, teo cơ.
-- TUYỆT ĐỐI KHÔNG a dua hoặc tin theo lời đùa/mỉa mai của người dùng nếu hình ảnh thực tế cho thấy thú cưng đang bị suy kiệt, gầy trơ xương hay bệnh tật!
-
-2. Sau khối trên, câu trả lời cần SÚC TÍCH, CÔ ĐỌNG (tối đa 200 - 250 từ), sử dụng cú pháp Markdown chuẩn (Heading 3 ###, gạch đầu dòng -, in đậm **...**) chia 3 phần rõ ràng:
-### 🩺 Chẩn đoán sơ bộ
-Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy hiểm.
-
-### 🩹 Xử lý & Sơ cứu tại nhà
-- **Việc nên làm ngay**: [2-3 bước hành động sơ cứu cấp tốc, an toàn]
-- **Tuyệt đối tránh**: [Không tự ý dùng thuốc người, không ép ăn uống dồn dập tránh hội chứng nuôi ăn lại...]
-
-### 🚨 Dấu hiệu cần đi thú y gấp
-- [3-4 triệu chứng cảnh báo đỏ nguy kịch cần cấp cứu ngay]`;
-
-    const currentParts: any[] = [];
-    if (payload.imageBase64) {
-      let mimeType = 'image/jpeg';
-      const matchMime = payload.imageBase64.match(/^data:(image\/[a-zA-Z0-9.+_-]+);base64,/);
-      if (matchMime) {
-        mimeType = matchMime[1];
-      }
-      currentParts.push({
-        inlineData: {
-          mimeType,
-          data: payload.imageBase64.replace(/^data:image\/\w+;base64,/, '')
-        }
-      });
-    }
-    currentParts.push({ text: `${systemPrompt}\n\nCâu hỏi của chủ thú cưng: "${payload.message}"` });
-
-    const body = {
-      contents: [...geminiHistory, { role: 'user', parts: currentParts }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
-    };
-
-    let lastFallbackError: any = null;
-
-    const fallbackCandidates = [...new Set([fallbackModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.6-flash'])];
-
-    // Try each key sequentially
-    for (let keyIdx = 0; keyIdx < fallbackApiKeys.length; keyIdx++) {
-      const activeKey = fallbackApiKeys[keyIdx];
-      const masked = maskApiKey(activeKey);
-      const keyStart = Date.now();
-
-      for (const targetModel of fallbackCandidates) {
-        try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:streamGenerateContent?alt=sse&key=${activeKey}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }
-          );
-
-          if (!res.ok || !res.body) {
-            const errText = await res.text().catch(() => '');
-            if (res.status === 503 || res.status === 404) {
-              console.warn(`Direct fallback model ${targetModel} hit ${res.status}, trying next model candidate...`);
-              continue;
-            }
-            throw new Error(`HTTP ${res.status}: ${errText.slice(0, 120)}`);
-          }
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buf = '';
-        let triageSent = false;
-        let fullFallbackText = '';
-        let isInsideTriage = false;
-        let triageBuffer = '';
-
-        const handleFallbackChunk = (chunkText: string) => {
-          if (!chunkText) return;
-          fullFallbackText += chunkText;
-
-          if (!triageSent) {
-            if (!isInsideTriage && fullFallbackText.includes('[[TRIAGE_ALERT]]')) {
-              isInsideTriage = true;
-            }
-            if (isInsideTriage) {
-              triageBuffer = fullFallbackText;
-              if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
-                isInsideTriage = false;
-                triageSent = true;
-                const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
-                if (alertMatch && alertMatch[1]) {
-                  try {
-                    const cleanJsonStr = (alertMatch[1] || '').trim();
-                    const parsed = JSON.parse(cleanJsonStr);
-                    const level: TriageLevel = (parsed.level === 'RED' || parsed.level === 'YELLOW' || parsed.level === 'GREEN')
-                      ? parsed.level
-                      : 'YELLOW';
-                    onTriage(level, {
-                      riskTitle: parsed.title || 'Đánh giá sức khỏe',
-                      urgency: parsed.urgency || '',
-                      immediateActions: Array.isArray(parsed.actions) ? parsed.actions : []
-                    });
-                  } catch (e) {
-                    console.error('Error parsing Triage Alert from Gemini fallback:', e);
-                  }
-                }
-                const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
-                if (afterTriage && afterTriage.length > 0) {
-                  const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
-                  if (cleanAfterTriage.length > 0) {
-                    onChunk(cleanAfterTriage);
-                  }
-                }
-              }
-              return;
-            }
-          }
-          onChunk(chunkText);
-        };
-
-        while (true) {
-          if (signal?.aborted) { try { await reader.cancel(); } catch {} break; }
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          const lines = buf.split('\n');
-          buf = lines.pop() ?? '';
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-              const json = JSON.parse(line.slice(6));
-              const text = json?.candidates?.[0]?.content?.parts?.[0]?.text;
-              if (text) handleFallbackChunk(text);
-            } catch {}
-          }
-        }
-
-        if (!triageSent) {
-          onTriage('GREEN', {
-            riskTitle: 'Tư vấn sức khỏe',
-            urgency: 'Theo dõi thường xuyên',
-            immediateActions: ['Theo dõi sát các triệu chứng của thú cưng']
-          });
-        }
-
-        api.writeLog({
-          log_type: 'fallback',
-          level: 'info',
-          message: `Gemini Fallback thành công bằng Key #${keyIdx + 1}/${fallbackApiKeys.length} (${masked}) (${Date.now() - keyStart}ms, model=${fallbackModel})`,
-          latency_ms: Date.now() - fallbackStart,
-          status_code: 200,
-          metadata: { keyIndex: keyIdx + 1, totalKeys: fallbackApiKeys.length, model: fallbackModel }
-        }).catch(() => {});
-
-        return; // Success, exit function
-      } catch (err: any) {
-        if (signal?.aborted) throw err;
-        lastFallbackError = err;
-
-        const hasNextKey = keyIdx + 1 < fallbackApiKeys.length;
-        console.warn(`[GEMINI FALLBACK] Key #${keyIdx + 1} (${masked}) thất bại:`, err?.message);
-
-        api.writeLog({
-          log_type: 'fallback',
-          level: 'warn',
-          message: `Gemini Fallback Key #${keyIdx + 1}/${fallbackApiKeys.length} (${masked}) lỗi: ${err?.message || 'unknown'}. ${hasNextKey ? `Đang tự động chuyển sang Key #${keyIdx + 2}...` : 'Đã thử hết toàn bộ danh sách Key dự phòng.'}`,
-          latency_ms: Date.now() - keyStart,
-          metadata: { keyIndex: keyIdx + 1, totalKeys: fallbackApiKeys.length, error: err?.message }
-        }).catch(() => {});
-      }
-    }
-  }
-
-    // All fallback keys failed
-    api.writeLog({
-      log_type: 'fallback',
-      level: 'error',
-      message: `Tất cả ${fallbackApiKeys.length} Gemini Backup Key đều không phản hồi. Lỗi cuối: ${lastFallbackError?.message}`,
-      latency_ms: Date.now() - fallbackStart,
-      metadata: { totalKeys: fallbackApiKeys.length, lastError: lastFallbackError?.message }
-    }).catch(() => {});
-
-    throw new Error('Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
+    throw new Error('Hệ thống AI đang có lượng lớn người truy cập. Vui lòng thử lại sau ít phút.');
   },
 
-  // Test individual Gemini API Key
+  // Test individual Gemini API Key via secure backend proxy
   testGeminiKey: async (apiKey: string, model: string = 'gemini-3.6-flash'): Promise<{ ok: boolean; latencyMs?: number; error?: string; message?: string }> => {
-    const t0 = Date.now();
-    try {
-      const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
-      let targetModel = model || 'gemini-3.6-flash';
-      if (legacyModels.includes(targetModel)) {
-        targetModel = 'gemini-3.6-flash';
-      }
-
-      const candidates = [...new Set([targetModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.6-flash'])];
-      let lastErrorMsg = '';
-
-      for (const m of candidates) {
-        try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Trả lời đúng 1 từ: OK' }] }] }),
-              signal: AbortSignal.timeout(10000)
-            }
-          );
-          if (res.ok) {
-            return { ok: true, latencyMs: Date.now() - t0, message: `Hoạt động tốt (${m})` };
-          }
-          const errText = await res.text().catch(() => '');
-          let errorMsg = `HTTP ${res.status}`;
-          try {
-            const json = JSON.parse(errText);
-            if (json?.error?.message) errorMsg += `: ${json.error.message}`;
-          } catch {
-            if (errText) errorMsg += `: ${errText.slice(0, 80)}`;
-          }
-          lastErrorMsg = errorMsg;
-        } catch (e: any) {
-          lastErrorMsg = e?.message || 'Không thể kết nối tới Google';
-        }
-      }
-      return { ok: false, latencyMs: Date.now() - t0, error: lastErrorMsg };
-    } catch (e: any) {
-      return { ok: false, latencyMs: Date.now() - t0, error: e?.message || 'Không thể kết nối tới Google' };
-    }
+    return api.testApiKey({ apiKey, model, provider: 'gemini' });
   },
 
   // Test all keys in an API Key pool

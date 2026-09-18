@@ -37,12 +37,12 @@ export const AdminSystemConfigView: React.FC = () => {
   const loadConfig = async () => {
     setLoading(true);
     try {
+      // Purge any legacy API keys stored in client localStorage for security
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('petcare_fallback_config');
+      }
+
       const data: any = await api.getSystemConfig();
-      const savedFallback = localStorage.getItem('petcare_fallback_config');
-      let localFallback: any = {};
-      try {
-        if (savedFallback) localFallback = JSON.parse(savedFallback);
-      } catch {}
 
       const merged = {
         aiModel: (data?.aiModel && !['gemini-2.5-flash', 'gemini-1.5-flash'].includes(data.aiModel)) ? data.aiModel : 'gemini-3.6-flash',
@@ -58,10 +58,10 @@ export const AdminSystemConfigView: React.FC = () => {
         customModelName: data?.customModelName || '',
         apiProvider: data?.apiProvider || 'gemini',
         autoKeepAliveIntervalMinutes: data?.autoKeepAliveIntervalMinutes || 10,
-        enableGeminiFallback: data?.enableGeminiFallback ?? localFallback.enableGeminiFallback ?? true,
-        fallbackGeminiApiKey: data?.fallbackGeminiApiKey || localFallback.fallbackGeminiApiKey || data?.backupGeminiApiKey || '',
-        fallbackModel: data?.fallbackModel || localFallback.fallbackModel || 'gemini-3.6-flash',
-        fallbackTimeoutMs: data?.fallbackTimeoutMs || localFallback.fallbackTimeoutMs || 20000
+        enableGeminiFallback: data?.enableGeminiFallback ?? true,
+        fallbackGeminiApiKey: data?.fallbackGeminiApiKey || data?.backupGeminiApiKey || '',
+        fallbackModel: data?.fallbackModel || 'gemini-3.6-flash',
+        fallbackTimeoutMs: data?.fallbackTimeoutMs || 20000
       };
 
       setConfig(merged);
@@ -81,15 +81,7 @@ export const AdminSystemConfigView: React.FC = () => {
     if (!config) return;
     setSaving(true);
     try {
-      // 1. Immediately cache in browser localStorage
-      localStorage.setItem('petcare_fallback_config', JSON.stringify({
-        enableGeminiFallback: config.enableGeminiFallback ?? true,
-        fallbackGeminiApiKey: config.fallbackGeminiApiKey || config.backupGeminiApiKey || '',
-        fallbackModel: config.fallbackModel || 'gemini-3.6-flash',
-        fallbackTimeoutMs: config.fallbackTimeoutMs || 20000
-      }));
-
-      // 2. Persist to server & Supabase
+      // Secure persistence to server & Supabase only (NEVER cache plaintext API keys in client localStorage)
       await api.updateSystemConfig(config);
       showSuccess('✅ Đã lưu cấu hình AI & API Keys thành công!');
       setSaveSuccess(true);

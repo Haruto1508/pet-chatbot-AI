@@ -1547,22 +1547,29 @@ async function startServer(isVercel = false) {
 
   // Pets Management
   app.get('/api/pets', optionalAuth, async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
     const auth = (req as any).auth;
     const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
 
-    // Return empty list if no userId and not verified Admin (e.g. guest or initial state)
-    if (!userId && !isAdmin) {
+    // Secure target userId resolution:
+    // Admin can query any userId or omit to see all
+    // Regular logged-in user can ONLY see their own pets (callerUserId)
+    // Guest or unauthenticated caller cannot see other users' pets
+    let targetUserId: string | undefined = undefined;
+    if (isAdmin) {
+      targetUserId = (req.query.userId as string) || undefined;
+    } else if (callerUserId) {
+      targetUserId = callerUserId;
+    } else {
       return res.json([]);
     }
 
-
     let query = supabase.from('pets').select('*').order('created_at', { ascending: false });
-    if (userId) query = query.eq('user_id', userId);
+    if (targetUserId) query = query.eq('user_id', targetUserId);
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     
-    const mapped = data.map(p => ({
+    const mapped = (data || []).map(p => ({
       ...p,
       userId: p.user_id,
       vaccineStatus: p.vaccine_status,
@@ -1573,11 +1580,12 @@ async function startServer(isVercel = false) {
     res.json(mapped);
   });
 
-  app.post('/api/pets', async (req: Request, res: Response) => {
-    // Generate UUID if not provided (Cache bust: 1)
+  app.post('/api/pets', optionalAuth, async (req: Request, res: Response) => {
+    const auth = (req as any).auth;
+    const resolvedUserId = auth?.user?.id || req.body.userId || 'guest';
     const payload = {
       id: req.body.id || crypto.randomUUID(),
-      user_id: req.body.userId || 'user_01',
+      user_id: resolvedUserId,
       name: req.body.name || 'Thú cưng',
       species: req.body.species || 'Chó',
       breed: req.body.breed || 'Chưa xác định',
@@ -1601,8 +1609,19 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.put('/api/pets/:id', async (req: Request, res: Response) => {
+  app.put('/api/pets/:id', optionalAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
+
+    if (!isAdmin && callerUserId) {
+      const { data: pet } = await supabase.from('pets').select('user_id').eq('id', id).single();
+      if (pet && pet.user_id !== callerUserId && pet.user_id !== 'guest') {
+        return res.status(403).json({ error: 'Không có quyền chỉnh sửa thú cưng này' });
+      }
+    }
+
     const payload: any = { ...req.body };
     if (payload.userId) { payload.user_id = payload.userId; delete payload.userId; }
     if (payload.vaccineStatus) { payload.vaccine_status = payload.vaccineStatus; delete payload.vaccineStatus; }
@@ -1621,8 +1640,19 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.delete('/api/pets/:id', async (req: Request, res: Response) => {
+  app.delete('/api/pets/:id', optionalAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
+
+    if (!isAdmin && callerUserId) {
+      const { data: pet } = await supabase.from('pets').select('user_id').eq('id', id).single();
+      if (pet && pet.user_id !== callerUserId && pet.user_id !== 'guest') {
+        return res.status(403).json({ error: 'Không có quyền xóa thú cưng này' });
+      }
+    }
+
     const { error } = await supabase.from('pets').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
@@ -1631,25 +1661,31 @@ async function startServer(isVercel = false) {
   // Medical Records
   app.get('/api/medical-records', optionalAuth, async (req: Request, res: Response) => {
     const petId = req.query.petId as string;
-    const userId = req.query.userId as string;
     const auth = (req as any).auth;
     const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
 
-    // Return empty list if neither petId nor userId is specified and caller is not admin
-    if (!petId && !userId && !isAdmin) {
+    // Secure target userId resolution:
+    // Admin can query any user or omit to see all
+    // Regular logged-in user can ONLY see their own records (callerUserId)
+    // Guest or unauthenticated caller cannot see other users' records
+    let targetUserId: string | undefined = undefined;
+    if (isAdmin) {
+      targetUserId = (req.query.userId as string) || undefined;
+    } else if (callerUserId) {
+      targetUserId = callerUserId;
+    } else {
       return res.json([]);
     }
 
-
     let query = supabase.from('medical_records').select('*').order('created_at', { ascending: false });
-    
     if (petId) query = query.eq('pet_id', petId);
-    if (userId) query = query.eq('user_id', userId);
+    if (targetUserId) query = query.eq('user_id', targetUserId);
     
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
     
-    const mapped = data.map(r => ({
+    const mapped = (data || []).map(r => ({
       ...r,
       petId: r.pet_id,
       petName: r.pet_name,
@@ -1665,12 +1701,14 @@ async function startServer(isVercel = false) {
     res.json(mapped);
   });
 
-  app.post('/api/medical-records', async (req: Request, res: Response) => {
+  app.post('/api/medical-records', optionalAuth, async (req: Request, res: Response) => {
+    const auth = (req as any).auth;
+    const resolvedUserId = auth?.user?.id || req.body.userId || 'guest';
     const payload = {
       pet_id: req.body.petId || 'pet_01',
       pet_name: req.body.petName || 'Thú cưng',
       pet_species: req.body.petSpecies || 'Chó',
-      user_id: req.body.userId || 'user_01',
+      user_id: resolvedUserId,
       date: new Date().toLocaleString('vi-VN'),
       symptom_summary: req.body.symptomSummary || '',
       diagnosis: req.body.diagnosis || 'Chẩn đoán',
@@ -1699,11 +1737,19 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.get('/api/medical-records/:id', async (req: Request, res: Response) => {
+  app.get('/api/medical-records/:id', optionalAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
+
     const { data, error } = await supabase.from('medical_records').select('*').eq('id', id).single();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Record not found' });
+
+    if (!isAdmin && callerUserId && data.user_id !== callerUserId && data.user_id !== 'guest') {
+      return res.status(403).json({ error: 'Không có quyền truy cập hồ sơ này' });
+    }
     
     res.json({
       ...data,
@@ -1720,8 +1766,19 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.delete('/api/medical-records/:id', async (req: Request, res: Response) => {
+  app.delete('/api/medical-records/:id', optionalAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
+
+    if (!isAdmin && callerUserId) {
+      const { data: rec } = await supabase.from('medical_records').select('user_id').eq('id', id).single();
+      if (rec && rec.user_id !== callerUserId && rec.user_id !== 'guest') {
+        return res.status(403).json({ error: 'Không có quyền xóa hồ sơ này' });
+      }
+    }
+
     const { error } = await supabase.from('medical_records').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
@@ -1839,9 +1896,6 @@ async function startServer(isVercel = false) {
 
   app.get('/api/config', optionalAuth, async (req: Request, res: Response) => {
     try {
-      const auth = (req as any).auth;
-      const isAdmin = auth?.profile?.role === 'admin';
-
       const local = getLocalConfig();
       let dbData: any = null;
       try {
@@ -1860,11 +1914,11 @@ async function startServer(isVercel = false) {
       const rawOpenAiKey = dbData?.openai_api_key || local.openaiApiKey || '';
       const rawFallbackKey = dbData?.fallback_gemini_api_key || local.fallbackGeminiApiKey || local.backupGeminiApiKey || (process.env.GEMINI_API_KEY || '');
 
-      // CRITICAL SECURITY HARDENING: Mask secret keys for non-admin callers
-      const geminiApiKey = isAdmin ? rawGeminiKey : (rawGeminiKey ? maskApiKey(rawGeminiKey) : '');
-      const backupGeminiApiKey = isAdmin ? rawBackupKey : (rawBackupKey ? maskApiKey(rawBackupKey) : '');
-      const openaiApiKey = isAdmin ? rawOpenAiKey : (rawOpenAiKey ? maskApiKey(rawOpenAiKey) : '');
-      const fallbackGeminiApiKey = isAdmin ? rawFallbackKey : (rawFallbackKey ? maskApiKey(rawFallbackKey) : '');
+      // CRITICAL SECURITY HARDENING: Never return raw unmasked API keys to browser DevTools
+      const geminiApiKey = rawGeminiKey ? maskApiKey(rawGeminiKey) : '';
+      const backupGeminiApiKey = rawBackupKey ? maskApiKey(rawBackupKey) : '';
+      const openaiApiKey = rawOpenAiKey ? maskApiKey(rawOpenAiKey) : '';
+      const fallbackGeminiApiKey = rawFallbackKey ? maskApiKey(rawFallbackKey) : '';
 
       res.json({
         aiModel,
@@ -1893,9 +1947,28 @@ async function startServer(isVercel = false) {
   app.post('/api/config', requireAdminAuth, async (req: Request, res: Response) => {
     try {
       const local = getLocalConfig();
+
+      // Only accept incoming keys if they don't contain mask characters (***)
+      const cleanGeminiKey = (req.body.geminiApiKey && !req.body.geminiApiKey.includes('***')) 
+        ? req.body.geminiApiKey 
+        : (local.geminiApiKey || process.env.GEMINI_API_KEY || '');
+      const cleanBackupKey = (req.body.backupGeminiApiKey && !req.body.backupGeminiApiKey.includes('***')) 
+        ? req.body.backupGeminiApiKey 
+        : (local.backupGeminiApiKey || '');
+      const cleanOpenAiKey = (req.body.openaiApiKey && !req.body.openaiApiKey.includes('***')) 
+        ? req.body.openaiApiKey 
+        : (local.openaiApiKey || '');
+      const cleanFallbackKey = (req.body.fallbackGeminiApiKey && !req.body.fallbackGeminiApiKey.includes('***')) 
+        ? req.body.fallbackGeminiApiKey 
+        : (local.fallbackGeminiApiKey || cleanBackupKey);
+
       const updated = {
         ...local,
         ...req.body,
+        geminiApiKey: cleanGeminiKey,
+        backupGeminiApiKey: cleanBackupKey,
+        openaiApiKey: cleanOpenAiKey,
+        fallbackGeminiApiKey: cleanFallbackKey,
         updatedAt: new Date().toISOString()
       };
       saveLocalConfig(updated);
@@ -1914,10 +1987,10 @@ async function startServer(isVercel = false) {
       // 2. Extended payload (includes optional/custom columns if migrated)
       const extendedPayload: Record<string, any> = {
         ...corePayload,
-        gemini_api_key: updated.geminiApiKey || '',
-        backup_gemini_api_key: updated.backupGeminiApiKey || updated.fallbackGeminiApiKey || '',
+        gemini_api_key: cleanGeminiKey,
+        backup_gemini_api_key: cleanBackupKey || cleanFallbackKey,
         render_service_url: updated.renderServiceUrl || 'https://pet-chatbot-ai.onrender.com',
-        openai_api_key: updated.openaiApiKey || '',
+        openai_api_key: cleanOpenAiKey,
         custom_api_base_url: updated.customApiBaseUrl || '',
         custom_model_name: updated.customModelName || '',
         api_provider: updated.apiProvider || 'gemini',
@@ -1927,7 +2000,6 @@ async function startServer(isVercel = false) {
       try {
         const { error: extErr } = await supabase.from('system_config').upsert(extendedPayload);
         if (extErr) {
-          // If custom columns don't exist in Supabase schema cache, gracefully upsert core fields
           await supabase.from('system_config').upsert(corePayload);
         }
       } catch {
@@ -1936,7 +2008,14 @@ async function startServer(isVercel = false) {
         } catch {}
       }
 
-      res.json(updated);
+      // Return strictly masked response to browser
+      res.json({
+        ...updated,
+        geminiApiKey: cleanGeminiKey ? maskApiKey(cleanGeminiKey) : '',
+        backupGeminiApiKey: cleanBackupKey ? maskApiKey(cleanBackupKey) : '',
+        openaiApiKey: cleanOpenAiKey ? maskApiKey(cleanOpenAiKey) : '',
+        fallbackGeminiApiKey: cleanFallbackKey ? maskApiKey(cleanFallbackKey) : ''
+      });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
@@ -2019,20 +2098,28 @@ async function startServer(isVercel = false) {
   // --- CHAT SESSIONS (History) ---
   app.get('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
     try {
-      const userId = req.query.userId as string;
       const petId = req.query.petId as string;
       const auth = (req as any).auth;
       const isAdmin = auth?.profile?.role === 'admin';
+      const callerUserId = auth?.user?.id;
 
-      // Return empty list if neither userId nor petId is provided and caller is not admin
-      if (!userId && !petId && !isAdmin) {
+      // Secure target userId resolution:
+      // Admin can query any userId or omit to see all
+      // Regular logged-in user can ONLY see their own chat sessions (callerUserId)
+      // Guest can query their guest sessions
+      let targetUserId: string | undefined = undefined;
+      if (isAdmin) {
+        targetUserId = (req.query.userId as string) || undefined;
+      } else if (callerUserId) {
+        targetUserId = callerUserId;
+      } else if (req.query.userId === 'guest') {
+        targetUserId = 'guest';
+      } else {
         return res.json([]);
       }
 
-
       let query = supabase.from('chat_sessions').select('*').order('updated_at', { ascending: false });
-      
-      if (userId) query = query.eq('user_id', userId);
+      if (targetUserId) query = query.eq('user_id', targetUserId);
       if (petId) query = query.eq('pet_id', petId);
       
       const { data, error } = await query;
@@ -2075,11 +2162,19 @@ async function startServer(isVercel = false) {
     }
   });
 
-  app.get('/api/chat-sessions/:id', async (req: Request, res: Response) => {
+  app.get('/api/chat-sessions/:id', optionalAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
+
     const { data, error } = await supabase.from('chat_sessions').select('*').eq('id', id).single();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Session not found' });
+
+    if (!isAdmin && callerUserId && data.user_id !== callerUserId && data.user_id !== 'guest') {
+      return res.status(403).json({ error: 'Không có quyền truy cập phiên chat này' });
+    }
     
     res.json({
       ...data,
@@ -2090,9 +2185,11 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.post('/api/chat-sessions', async (req: Request, res: Response) => {
+  app.post('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
+    const auth = (req as any).auth;
+    const resolvedUserId = auth?.user?.id || req.body.userId || 'guest';
     const payload = {
-      user_id: req.body.userId || 'guest',
+      user_id: resolvedUserId,
       pet_id: req.body.petId || null,
       title: req.body.title || 'Chat mới',
       messages: req.body.messages || []
@@ -2126,8 +2223,19 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.put('/api/chat-sessions/:id', async (req: Request, res: Response) => {
+  app.put('/api/chat-sessions/:id', optionalAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
+
+    if (!isAdmin && callerUserId) {
+      const { data: session } = await supabase.from('chat_sessions').select('user_id').eq('id', id).single();
+      if (session && session.user_id !== callerUserId && session.user_id !== 'guest') {
+        return res.status(403).json({ error: 'Không có quyền chỉnh sửa phiên chat này' });
+      }
+    }
+
     const payload: any = { updated_at: new Date().toISOString() };
     if (req.body.title) payload.title = req.body.title;
     if (req.body.messages) payload.messages = req.body.messages;
@@ -2144,22 +2252,31 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.delete('/api/chat-sessions/:id', async (req: Request, res: Response) => {
+  app.delete('/api/chat-sessions/:id', optionalAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+    const callerUserId = auth?.user?.id;
+
+    if (!isAdmin && callerUserId) {
+      const { data: session } = await supabase.from('chat_sessions').select('user_id').eq('id', id).single();
+      if (session && session.user_id !== callerUserId && session.user_id !== 'guest') {
+        return res.status(403).json({ error: 'Không có quyền xóa phiên chat này' });
+      }
+    }
+
     const { error } = await supabase.from('chat_sessions').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
   });
 
   app.delete('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
-    const userId = req.query.userId as string;
-    if (!userId) return res.status(400).json({ error: 'Missing userId' });
     const auth = (req as any).auth;
     const isAdmin = auth?.profile?.role === 'admin';
-    if (auth?.user && auth.user.id !== userId && !isAdmin) {
-      return res.status(403).json({ error: 'Bạn không có quyền xóa lịch sử của người dùng khác' });
-    }
-    const { error } = await supabase.from('chat_sessions').delete().eq('user_id', userId);
+    const callerUserId = auth?.user?.id;
+    const targetUserId = (isAdmin && req.query.userId) ? (req.query.userId as string) : (callerUserId || (req.query.userId === 'guest' ? 'guest' : ''));
+    if (!targetUserId) return res.status(400).json({ error: 'Missing target user or unauthenticated' });
+    const { error } = await supabase.from('chat_sessions').delete().eq('user_id', targetUserId);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   });
