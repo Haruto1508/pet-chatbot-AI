@@ -64,6 +64,12 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Cơ Sở Tri Thức RAG & Bệnh Lý AI', badge: 'Gemini Vector' };
       case 'admin_config':
         return { title: 'Cấu Hình Mô Hình AI & Tham Số', badge: 'System Config' };
+      case 'admin_eval':
+        return { title: 'Kiểm Định Chất Lượng AI', badge: 'TorchMetrics & Ragas' };
+      case 'admin_health':
+        return { title: 'Kiểm Tra Kết Nối & Giữ Sống', badge: 'Health Check' };
+      case 'admin_logs':
+        return { title: 'Nhật Ký Hệ Thống', badge: 'Audit Logs' };
       default:
         return { title: 'Vethic AI System', badge: 'Trực Tuyến' };
     }

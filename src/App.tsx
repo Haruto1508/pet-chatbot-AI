@@ -11,6 +11,8 @@ import { SuspendedAccountModal } from './components/common/SuspendedAccountModal
 import { SpotlightTour } from './components/common/SpotlightTour';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { NotFoundView } from './components/common/NotFoundView';
+import { AdminAccessDeniedView } from './components/common/AdminAccessDeniedView';
+import { getTabFromPath, getPathFromTab, TAB_TITLES } from './utils/routes';
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -58,12 +60,8 @@ const guestUser: UserProfile = {
 };
 
 export function App() {
-  const validTabs = ['chat', 'records', 'record_detail', 'news', 'emergency', 'clinics', 'pets', 'account', 'admin_dashboard', 'admin_users', 'admin_records', 'admin_clinics', 'admin_rag', 'admin_eval', 'admin_config', 'admin_health', 'admin_logs', 'not_found'];
-  
   const getInitialTab = () => {
-    const path = window.location.pathname.substring(1);
-    if (!path) return 'chat';
-    return validTabs.includes(path) ? path : 'not_found';
+    return getTabFromPath(window.location.pathname);
   };
 
   const [currentUser, setCurrentUser] = useState<UserProfile>(guestUser);
@@ -71,20 +69,23 @@ export function App() {
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   
-  // Sync tab with URL (including query parameters for record_detail)
+  // Sync tab with clean modern URL & Dynamic Document Title
   useEffect(() => {
     // Do not interfere if Supabase is processing an OAuth redirect
     if (window.location.hash && window.location.hash.includes('access_token')) {
       return;
     }
 
-    let currentPath = `/${currentTab}`;
+    let currentPath = getPathFromTab(currentTab);
     if (currentTab === 'record_detail' && selectedRecord) {
       currentPath += `?id=${selectedRecord.id}`;
     }
     if (window.location.pathname + window.location.search !== currentPath) {
       window.history.pushState(null, '', currentPath);
     }
+
+    // Update document title dynamically
+    document.title = TAB_TITLES[currentTab] || 'Vethic AI — Tư Vấn Bệnh Lý & Sơ Cứu Thú Cưng';
   }, [currentTab, selectedRecord]);
 
   // Load record from URL query param if present
@@ -105,12 +106,10 @@ export function App() {
     loadRecordFromUrl();
   }, [currentTab]);
 
-  // Handle back/forward buttons
+  // Handle back/forward browser navigation
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname.substring(1);
-      if (!path) setCurrentTab('chat');
-      else setCurrentTab(validTabs.includes(path) ? path : 'not_found');
+      setCurrentTab(getTabFromPath(window.location.pathname));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -256,7 +255,7 @@ export function App() {
         
         // If guest is on a protected route, redirect to chat
         const currentPath = window.location.pathname.substring(1);
-        if (currentPath.startsWith('admin_') || ['account', 'pets', 'records'].includes(currentPath)) {
+        if (currentPath.startsWith('admin') || ['account', 'pets', 'records'].includes(currentPath)) {
           setCurrentTab('chat');
         }
       }
@@ -279,7 +278,7 @@ export function App() {
       setCurrentUser(syncedUser);
       
       const currentPath = window.location.pathname.substring(1);
-      const isAdminRoute = currentPath.startsWith('admin_');
+      const isAdminRoute = currentPath.startsWith('admin') || currentTab.startsWith('admin_');
       
       if (syncedUser.role !== 'admin' && isAdminRoute) {
         // Kick non-admins out of admin routes
@@ -419,19 +418,29 @@ export function App() {
               />
             )}
 
-            {/* Admin Navigation Views */}
-            {currentUser.role === 'admin' && (
-              <>
-                {currentTab === 'admin_dashboard' && <AdminDashboardView />}
-                {currentTab === 'admin_users'     && <AdminUsersView currentUser={currentUser} />}
-                {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
-                {currentTab === 'admin_clinics'   && <AdminClinicsView />}
-                {currentTab === 'admin_rag'       && <AdminKnowledgeRAGView />}
-                {currentTab === 'admin_eval'      && <AdminAiEvaluationView />}
-                {currentTab === 'admin_config'    && <AdminSystemConfigView />}
-                {currentTab === 'admin_health'    && <AdminHealthCheckView />}
-                {currentTab === 'admin_logs'      && <AdminLogView />}
-              </>
+            {/* Admin Navigation Views - Protected by Strict Role Guard */}
+            {currentTab.startsWith('admin_') && (
+              isAuthLoading ? (
+                <PageLoader />
+              ) : currentUser.role === 'admin' ? (
+                <>
+                  {currentTab === 'admin_dashboard' && <AdminDashboardView />}
+                  {currentTab === 'admin_users'     && <AdminUsersView currentUser={currentUser} />}
+                  {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
+                  {currentTab === 'admin_clinics'   && <AdminClinicsView />}
+                  {currentTab === 'admin_rag'       && <AdminKnowledgeRAGView />}
+                  {currentTab === 'admin_eval'      && <AdminAiEvaluationView />}
+                  {currentTab === 'admin_config'    && <AdminSystemConfigView />}
+                  {currentTab === 'admin_health'    && <AdminHealthCheckView />}
+                  {currentTab === 'admin_logs'      && <AdminLogView />}
+                </>
+              ) : (
+                <AdminAccessDeniedView
+                  currentUser={currentUser}
+                  onOpenLoginModal={() => setIsLoginModalOpen(true)}
+                  onGoHome={() => setCurrentTab('chat')}
+                />
+              )
             )}
 
             {currentTab === 'not_found' && <NotFoundView />}
