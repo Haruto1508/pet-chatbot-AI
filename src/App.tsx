@@ -311,6 +311,7 @@ export function App() {
           name: payload.name,
           avatar: payload.avatar,
           role: isAdmin ? 'admin' : 'user',
+          status: 'active',
           createdAt: new Date().toISOString()
         };
       }
