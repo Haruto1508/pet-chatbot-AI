@@ -1600,13 +1600,13 @@ async function startServer(isVercel = false) {
     } else if (callerUserId) {
       targetUserId = callerUserId;
     } else {
-      return res.json([]);
+      return res.json(secureResponse([]));
     }
 
     let query = supabase.from('pets').select('*').order('created_at', { ascending: false });
     if (targetUserId) query = query.eq('user_id', targetUserId);
     const { data, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
     const mapped = (data || []).map(p => ({
       ...p,
@@ -1616,7 +1616,7 @@ async function startServer(isVercel = false) {
       avatarUrl: p.avatarurl || p.avatarUrl || p.avatar_url,
       createdAt: p.created_at
     }));
-    res.json(mapped);
+    res.json(secureResponse(mapped));
   });
 
   app.post('/api/pets', optionalAuth, async (req: Request, res: Response) => {
@@ -1637,15 +1637,15 @@ async function startServer(isVercel = false) {
     };
     
     const { data, error } = await supabase.from('pets').insert([payload]).select().single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       userId: data.user_id,
       vaccineStatus: data.vaccine_status,
       avatarUrl: data.avatarurl || data.avatarUrl || data.avatar_url,
       createdAt: data.created_at
-    });
+    }));
   });
 
   app.put('/api/pets/:id', optionalAuth, async (req: Request, res: Response) => {
@@ -1657,7 +1657,7 @@ async function startServer(isVercel = false) {
     if (!isAdmin && callerUserId) {
       const { data: pet } = await supabase.from('pets').select('user_id').eq('id', id).single();
       if (pet && pet.user_id !== callerUserId && pet.user_id !== 'guest') {
-        return res.status(403).json({ error: 'Không có quyền chỉnh sửa thú cưng này' });
+        return res.status(403).json(secureResponse({ error: 'Không có quyền chỉnh sửa thú cưng này' }));
       }
     }
 
@@ -1667,16 +1667,16 @@ async function startServer(isVercel = false) {
     if (payload.avatarUrl) { payload.avatarurl = payload.avatarUrl; delete payload.avatarUrl; }
 
     const { data, error } = await supabase.from('pets').update(payload).eq('id', id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: 'Pet not found' });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    if (!data) return res.status(404).json(secureResponse({ error: 'Pet not found' }));
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       userId: data.user_id,
       vaccineStatus: data.vaccine_status,
       avatarUrl: data.avatarurl || data.avatarUrl || data.avatar_url,
       createdAt: data.created_at
-    });
+    }));
   });
 
   app.delete('/api/pets/:id', optionalAuth, async (req: Request, res: Response) => {
@@ -1688,13 +1688,13 @@ async function startServer(isVercel = false) {
     if (!isAdmin && callerUserId) {
       const { data: pet } = await supabase.from('pets').select('user_id').eq('id', id).single();
       if (pet && pet.user_id !== callerUserId && pet.user_id !== 'guest') {
-        return res.status(403).json({ error: 'Không có quyền xóa thú cưng này' });
+        return res.status(403).json(secureResponse({ error: 'Không có quyền xóa thú cưng này' }));
       }
     }
 
     const { error } = await supabase.from('pets').delete().eq('id', id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true, id });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({ success: true, id }));
   });
 
   // Medical Records
@@ -1714,7 +1714,7 @@ async function startServer(isVercel = false) {
     } else if (callerUserId) {
       targetUserId = callerUserId;
     } else {
-      return res.json([]);
+      return res.json(secureResponse([]));
     }
 
     let query = supabase.from('medical_records').select('*').order('created_at', { ascending: false });
@@ -1722,7 +1722,7 @@ async function startServer(isVercel = false) {
     if (targetUserId) query = query.eq('user_id', targetUserId);
     
     const { data, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
     const mapped = (data || []).map(r => ({
       ...r,
@@ -1737,7 +1737,7 @@ async function startServer(isVercel = false) {
       followUpNotes: r.follow_up_notes,
       chatSnippet: r.chat_snippet
     }));
-    res.json(mapped);
+    res.json(secureResponse(mapped));
   });
 
   app.post('/api/medical-records', optionalAuth, async (req: Request, res: Response) => {
@@ -1759,9 +1759,9 @@ async function startServer(isVercel = false) {
     };
     
     const { data, error } = await supabase.from('medical_records').insert([payload]).select().single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       petId: data.pet_id,
       petName: data.pet_name,
@@ -1773,7 +1773,7 @@ async function startServer(isVercel = false) {
       dietaryAdvice: data.dietary_advice,
       followUpNotes: data.follow_up_notes,
       chatSnippet: data.chat_snippet
-    });
+    }));
   });
 
   app.get('/api/medical-records/:id', optionalAuth, async (req: Request, res: Response) => {
@@ -1783,14 +1783,14 @@ async function startServer(isVercel = false) {
     const callerUserId = auth?.user?.id;
 
     const { data, error } = await supabase.from('medical_records').select('*').eq('id', id).single();
-    if (error) return res.status(500).json({ error: error.message });
-    if (!data) return res.status(404).json({ error: 'Record not found' });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    if (!data) return res.status(404).json(secureResponse({ error: 'Record not found' }));
 
     if (!isAdmin && callerUserId && data.user_id !== callerUserId && data.user_id !== 'guest') {
-      return res.status(403).json({ error: 'Không có quyền truy cập hồ sơ này' });
+      return res.status(403).json(secureResponse({ error: 'Không có quyền truy cập hồ sơ này' }));
     }
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       petId: data.pet_id,
       petName: data.pet_name,
@@ -1802,7 +1802,7 @@ async function startServer(isVercel = false) {
       dietaryAdvice: data.dietary_advice,
       followUpNotes: data.follow_up_notes,
       chatSnippet: data.chat_snippet
-    });
+    }));
   });
 
   app.delete('/api/medical-records/:id', optionalAuth, async (req: Request, res: Response) => {
@@ -1814,13 +1814,13 @@ async function startServer(isVercel = false) {
     if (!isAdmin && callerUserId) {
       const { data: rec } = await supabase.from('medical_records').select('user_id').eq('id', id).single();
       if (rec && rec.user_id !== callerUserId && rec.user_id !== 'guest') {
-        return res.status(403).json({ error: 'Không có quyền xóa hồ sơ này' });
+        return res.status(403).json(secureResponse({ error: 'Không có quyền xóa hồ sơ này' }));
       }
     }
 
     const { error } = await supabase.from('medical_records').delete().eq('id', id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true, id });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({ success: true, id }));
   });
 
   // Articles (RAG)
@@ -1834,7 +1834,7 @@ async function startServer(isVercel = false) {
     }
     
     const { data, error } = await query;
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
     let filtered = data;
     if (search) {
@@ -1854,7 +1854,7 @@ async function startServer(isVercel = false) {
       imageUrl: a.image_url,
       updatedAt: a.updated_at
     }));
-    res.json(mapped);
+    res.json(secureResponse(mapped));
   });
 
   app.post('/api/articles', requireAdminAuth, async (req: Request, res: Response) => {
@@ -1879,16 +1879,16 @@ async function startServer(isVercel = false) {
     }
 
     const { data, error } = await supabase.from('articles').insert([payload]).select().single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       firstAidSteps: data.first_aid_steps,
       doctorAdvice: data.doctor_advice,
       urgencyLevel: data.urgency_level,
       imageUrl: data.image_url,
       updatedAt: data.updated_at
-    });
+    }));
   });
 
   app.put('/api/articles/:id', requireAdminAuth, async (req: Request, res: Response) => {
@@ -1911,23 +1911,23 @@ async function startServer(isVercel = false) {
     }
 
     const { data, error } = await supabase.from('articles').update(payload).eq('id', id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
-    res.json({
+    res.json(secureResponse({
       ...data,
       firstAidSteps: data.first_aid_steps,
       doctorAdvice: data.doctor_advice,
       urgencyLevel: data.urgency_level,
       imageUrl: data.image_url,
       updatedAt: data.updated_at
-    });
+    }));
   });
 
   app.delete('/api/articles/:id', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { error } = await supabase.from('articles').delete().eq('id', id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true, id });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({ success: true, id }));
   });
 
 
@@ -2058,7 +2058,7 @@ async function startServer(isVercel = false) {
   app.get('/api/clinics', async (req: Request, res: Response) => {
     const search = req.query.search as string;
     const { data, error } = await supabase.from('clinics').select('*');
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
     
     let result = data;
     if (search) {
@@ -2073,7 +2073,7 @@ async function startServer(isVercel = false) {
       openingHours: c.opening_hours,
       imageUrl: c.image_url
     }));
-    res.json(mapped);
+    res.json(secureResponse(mapped));
   });
 
   app.post('/api/clinics', requireAdminAuth, async (req: Request, res: Response) => {
@@ -2092,14 +2092,14 @@ async function startServer(isVercel = false) {
       image_url: req.body.imageUrl
     };
     const { data, error } = await supabase.from('clinics').insert([payload]).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({
       ...data,
       reviewsCount: data.reviews_count,
       isEmergency247: data.is_emergency_247,
       openingHours: data.opening_hours,
       imageUrl: data.image_url
-    });
+    }));
   });
 
   app.put('/api/clinics/:id', requireAdminAuth, async (req: Request, res: Response) => {
@@ -2111,21 +2111,21 @@ async function startServer(isVercel = false) {
     if (payload.imageUrl) { payload.image_url = payload.imageUrl; delete payload.imageUrl; }
 
     const { data, error } = await supabase.from('clinics').update(payload).eq('id', id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({
       ...data,
       reviewsCount: data.reviews_count,
       isEmergency247: data.is_emergency_247,
       openingHours: data.opening_hours,
       imageUrl: data.image_url
-    });
+    }));
   });
 
   app.delete('/api/clinics/:id', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { error } = await supabase.from('clinics').delete().eq('id', id);
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ success: true, id });
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({ success: true, id }));
   });
 
   // --- CHAT SESSIONS (History) ---

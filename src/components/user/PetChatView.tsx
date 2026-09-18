@@ -624,7 +624,7 @@ export const PetChatView: React.FC<Props> = ({
             : msg
         );
         if (activeSessionId && finalText.trim()) {
-          api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(console.error);
+          api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(() => {});
           if (!isGuest) {
             setSessions(currentSessions => 
               currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s)
@@ -643,7 +643,7 @@ export const PetChatView: React.FC<Props> = ({
                 ? { ...msg, status: 'success' as const, latencyMs: Date.now() - sendStartTime }
                 : msg
             );
-            api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(console.error);
+            api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(() => {});
             if (!isGuest) {
               setSessions(currentSessions => 
                 currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s)
@@ -687,7 +687,7 @@ export const PetChatView: React.FC<Props> = ({
           const cleaned = prev.filter(m => m.id !== aiMessageId);
           const updatedWithErr = [...cleaned, errMsg];
           if (activeSessionId) {
-            api.updateChatSession(activeSessionId, { messages: updatedWithErr }).catch(console.error);
+            api.updateChatSession(activeSessionId, { messages: updatedWithErr }).catch(() => {});
             if (!isGuest) {
               setSessions(currentSessions => 
                 currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: updatedWithErr } : s)

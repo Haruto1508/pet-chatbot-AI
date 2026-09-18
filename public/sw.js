@@ -105,17 +105,3 @@ const CLEAN_OFFLINE_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-self.addEventListener('fetch', (event) => {
-  // Only intercept HTML page navigation requests if the network fails completely
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return new Response(CLEAN_OFFLINE_HTML, {
-          status: 503,
-          statusText: 'Service Unavailable',
-          headers: { 'Content-Type': 'text/html; charset=utf-8' }
-        });
-      })
-    );
-  }
-});
