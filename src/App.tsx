@@ -33,6 +33,7 @@ const AdminKnowledgeRAGView = lazyWithRetry(() => import('./components/admin/Adm
 const AdminSystemConfigView = lazyWithRetry(() => import('./components/admin/AdminSystemConfigView').then(m => ({ default: m.AdminSystemConfigView })));
 const AdminHealthCheckView  = lazyWithRetry(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
 const AdminLogView          = lazyWithRetry(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
+const AdminAiEvaluationView = lazyWithRetry(() => import('./components/admin/AdminAiEvaluationView').then(m => ({ default: m.AdminAiEvaluationView })));
 
 // Loading spinner fallback for lazy-loaded components
 function PageLoader() {
@@ -57,7 +58,7 @@ const guestUser: UserProfile = {
 };
 
 export function App() {
-  const validTabs = ['chat', 'records', 'record_detail', 'news', 'emergency', 'clinics', 'pets', 'account', 'admin_dashboard', 'admin_users', 'admin_records', 'admin_clinics', 'admin_rag', 'admin_config', 'admin_health', 'not_found'];
+  const validTabs = ['chat', 'records', 'record_detail', 'news', 'emergency', 'clinics', 'pets', 'account', 'admin_dashboard', 'admin_users', 'admin_records', 'admin_clinics', 'admin_rag', 'admin_eval', 'admin_config', 'admin_health', 'admin_logs', 'not_found'];
   
   const getInitialTab = () => {
     const path = window.location.pathname.substring(1);
@@ -426,6 +427,7 @@ export function App() {
                 {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
                 {currentTab === 'admin_clinics'   && <AdminClinicsView />}
                 {currentTab === 'admin_rag'       && <AdminKnowledgeRAGView />}
+                {currentTab === 'admin_eval'      && <AdminAiEvaluationView />}
                 {currentTab === 'admin_config'    && <AdminSystemConfigView />}
                 {currentTab === 'admin_health'    && <AdminHealthCheckView />}
                 {currentTab === 'admin_logs'      && <AdminLogView />}

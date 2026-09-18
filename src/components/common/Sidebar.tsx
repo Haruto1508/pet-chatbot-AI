@@ -3,7 +3,7 @@ import {
   MessageSquare, FileText, Newspaper, ShieldAlert, MapPin,
   PawPrint, Settings, LayoutDashboard, Users, Database,
   Sliders, X, ShieldCheck, LogOut, LogIn, PawPrint as PawIcon,
-  Phone, ChevronLeft, ChevronRight, Menu, Activity, ScrollText, HelpCircle
+  Phone, ChevronLeft, ChevronRight, Menu, Activity, ScrollText, HelpCircle, Award
 } from "lucide-react";
 import { UserProfile } from "../../types";
 import { LogoutConfirmModal } from "./LogoutConfirmModal";
@@ -44,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "admin_records",   label: "Quản Lý Bệnh Án",         icon: FileText },
     { id: "admin_clinics",   label: "Danh Sách Phòng Khám",    icon: MapPin },
     { id: "admin_rag",       label: "Tri Thức RAG & AI",       icon: Database },
+    { id: "admin_eval",      label: "Kiểm Định Chất Lượng AI", icon: Award },
     { id: "admin_config",    label: "Cấu Hình AI & API",       icon: Sliders },
     { id: "admin_health",    label: "Kiểm Tra & Giữ Sống",     icon: Activity },
     { id: "admin_logs",      label: "Log Hệ Thống",            icon: ScrollText },

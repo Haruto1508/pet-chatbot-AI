@@ -167,3 +167,86 @@ export interface UnlockRequest {
   status: 'pending' | 'resolved';
   createdAt: string;
 }
+
+export interface GoldenTestCase {
+  id: string;
+  type: 'in_distribution' | 'out_of_distribution' | 'out_of_rag' | 'emergency_red';
+  title: string;
+  input: string;
+  expectedTriage: string;
+  expectedClass: string;
+  resultStatus: 'PASSED' | 'FAILED';
+  ragasScore: number;
+  oodTriggered: boolean;
+  notes: string;
+}
+
+export interface AiEvaluationReport {
+  timestamp: string;
+  overallHealth: string;
+  totalTestsPassed: string;
+  passRate: number;
+  benchmarks: {
+    vision: {
+      title: string;
+      frameworks: string[];
+      architecture: string;
+      metrics: {
+        accuracy: number;
+        macroF1: number;
+        precision: number;
+        recall: number;
+        oodAuroc: number;
+        cleanlabHealthScore: number;
+        noisySamplesDetected: number;
+        cleanDatasetRate: number;
+      };
+      classes: Array<{ key: string; label: string; samples: number; f1: number }>;
+      confusionMatrix: number[][];
+    };
+    rag: {
+      title: string;
+      frameworks: string[];
+      totalKnowledgeArticles: number;
+      metrics: {
+        faithfulness: number;
+        answerRelevance: number;
+        contextPrecision: number;
+        contextRecall: number;
+        semanticSimilarity: number;
+      };
+      ragTriad: {
+        contextRelevance: number;
+        groundedness: number;
+        answerRelevance: number;
+        triadScore: number;
+      };
+    };
+    output: {
+      title: string;
+      frameworks: string[];
+      metrics: {
+        triageAccuracyGEval: number;
+        hallucinationRate: number;
+        toxicityRate: number;
+        promptInjectionDefense: number;
+        medicalOverconfidencePrevention: number;
+        totalRecordsAudited: number;
+      };
+    };
+    unknownDiseaseProtocol: {
+      title: string;
+      methodology: string;
+      metrics: {
+        oodRejectionRate: number;
+        safeRefusalCompliance: number;
+        clinicalReferralAdherence: number;
+        corticoidWarningGiven: number;
+        zeroHarmGuarantee: string;
+      };
+      fourStepProtocol: string[];
+    };
+  };
+  goldenTestCases: GoldenTestCase[];
+}
+

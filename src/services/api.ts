@@ -11,7 +11,8 @@ import {
   ChatSession,
   ApiLog,
   ApiLogType,
-  ApiLogLevel
+  ApiLogLevel,
+  AiEvaluationReport
 } from '../types';
 import { supabase } from './supabaseClient';
 import { parseApiKeys, maskApiKey } from '../utils/apiKeys';
@@ -978,5 +979,31 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     return results;
+  },
+
+  // AI Quality Evaluation & Benchmarking
+  getAiEvaluationReport: async (): Promise<AiEvaluationReport> => {
+    const res = await fetch('/api/admin/ai-evaluation');
+    if (!res.ok) {
+      throw new Error(`Lỗi tải báo cáo kiểm định AI: ${res.statusText}`);
+    }
+    const json = await res.json();
+    return json.data;
+  },
+
+  runAiEvaluationTest: async (payload: {
+    testType: string;
+    inputMessage: string;
+    imageBase64?: string;
+  }): Promise<any> => {
+    const res = await fetch('/api/admin/ai-evaluation/run-test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      throw new Error(`Lỗi thực thi kiểm định: ${res.statusText}`);
+    }
+    return res.json();
   }
 };
