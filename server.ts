@@ -259,6 +259,49 @@ async function startServer(isVercel = false) {
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // ─────────────────────────────────────────
+  // 🛠️ SYSTEM MAINTENANCE & DOWNTIME GATEWAY
+  // ─────────────────────────────────────────
+  const isMaintenanceActive = () => process.env.MAINTENANCE_MODE === 'true' || process.env.MAINTENANCE_MODE === '1';
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (!isMaintenanceActive()) {
+      return next();
+    }
+
+    // Always permit assets needed by the maintenance page itself
+    const pathLower = (req.path || '').toLowerCase();
+    if (
+      pathLower === '/maintenance.html' ||
+      pathLower === '/logo.png' ||
+      pathLower === '/favicon.ico' ||
+      pathLower === '/manifest.json' ||
+      pathLower === '/sw.js' ||
+      pathLower === '/api/health'
+    ) {
+      return next();
+    }
+
+    // For API requests, return 503 JSON with maintenance status
+    if (pathLower.startsWith('/api/')) {
+      res.setHeader('Retry-After', '300');
+      return res.status(503).json({
+        error: 'Hệ thống Vethic AI đang nâng cấp & bảo trì định kỳ. Vui lòng quay lại sau ít phút.',
+        status: 'maintenance',
+        retryAfterSeconds: 300
+      });
+    }
+
+    // For web page navigation, serve the ultra-rich maintenance HTML page
+    const maintenancePath = path.join(process.cwd(), 'public', 'maintenance.html');
+    if (fs.existsSync(maintenancePath)) {
+      res.setHeader('Retry-After', '300');
+      return res.status(503).sendFile(maintenancePath);
+    }
+
+    res.status(503).send('Hệ thống đang bảo trì nâng cấp. Vui lòng thử lại sau.');
+  });
+
+  // ─────────────────────────────────────────
   // 🔐 SERVER-SIDE AUTHENTICATION & ADMIN GUARD
   // ─────────────────────────────────────────
   interface AuthContext {
@@ -2683,13 +2726,26 @@ YÊU CẦU:
   });
 
 
-  // Global Error Handler (Production-Hardened)
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  // Global Error Handler (Production-Hardened & Maintenance Recovery)
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     console.error('Unhandled Error:', err);
+
+    // If it's a browser page navigation request that failed, serve the beautiful maintenance page
+    const acceptsHtml = req.accepts && req.accepts('html');
+    const isApi = (req.path || '').startsWith('/api/');
+    if (acceptsHtml && !isApi) {
+      const maintenancePath = path.join(process.cwd(), 'public', 'maintenance.html');
+      if (fs.existsSync(maintenancePath)) {
+        res.setHeader('Retry-After', '120');
+        return res.status(503).sendFile(maintenancePath);
+      }
+    }
+
     const isProd = process.env.NODE_ENV === 'production';
     const message = isProd ? 'Đã xảy ra lỗi máy chủ nội bộ. Vui lòng thử lại sau.' : (err.message || 'Internal Server Error');
     res.status(err.status || 500).json({ error: message });
   });
+
 
   if (isVercel) {
     return app;

@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { ServerErrorView } from './ServerErrorView';
+import { MaintenanceView } from './MaintenanceView';
 
 interface Props {
   children: ReactNode;
@@ -21,7 +21,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    console.error('Uncaught error caught by ErrorBoundary:', error, errorInfo);
   }
 
   private handleReset = () => {
@@ -31,14 +31,15 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <div className="w-full h-full min-h-screen bg-slate-100/70 flex items-center justify-center p-4">
-          <div className="bg-white p-6 md:p-12 rounded-3xl shadow-xl border border-slate-200 max-w-2xl w-full">
-             <ServerErrorView error={this.state.error} resetError={this.handleReset} />
-          </div>
-        </div>
+        <MaintenanceView 
+          error={this.state.error} 
+          resetError={this.handleReset}
+          isCrash={true}
+        />
       );
     }
 
     return this.props.children;
   }
 }
+
