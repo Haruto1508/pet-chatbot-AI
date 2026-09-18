@@ -17,12 +17,35 @@ import {
 import { supabase } from './supabaseClient';
 import { parseApiKeys, maskApiKey } from '../utils/apiKeys';
 
+/**
+ * Secure Authenticated Fetch Helper
+ * Automatically injects the active Supabase JWT Bearer token into internal API requests
+ * without leaking it to external services.
+ */
+export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
+  const isInternal = url.startsWith('/') || (typeof window !== 'undefined' && url.startsWith(window.location.origin));
+  
+  const headers = new Headers(init?.headers);
+  if (isInternal) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${session.access_token}`);
+      }
+    } catch {
+      // Session fetch error - proceed without token
+    }
+  }
+  return fetch(input, { ...init, headers });
+}
+
 // test
 export const api = {
   // Stats
   getStats: async (timeRange?: string): Promise<SystemStats> => {
     const url = timeRange ? `/api/stats?timeRange=${timeRange}` : '/api/stats';
-    const res = await fetch(url);
+    const res = await authFetch(url);
     return res.json();
   },
 
@@ -36,7 +59,7 @@ export const api = {
     totalLatencyMs: number;
     checkedAt: string;
   }> => {
-    const res = await fetch('/api/health-check');
+    const res = await authFetch('/api/health-check');
     return res.json();
   },
 
@@ -54,7 +77,7 @@ export const api = {
       statusCode?: number;
     }>;
   }> => {
-    const res = await fetch(`/api/keep-alive?service=${encodeURIComponent(service)}`);
+    const res = await authFetch(`/api/keep-alive?service=${encodeURIComponent(service)}`);
     return res.json();
   },
 
@@ -67,7 +90,7 @@ export const api = {
     message?: string;
     error?: string;
   }> => {
-    const res = await fetch('/api/test-api-key', {
+    const res = await authFetch('/api/test-api-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -77,7 +100,7 @@ export const api = {
 
   // Users
   syncGoogleUser: async (payload: { id: string; email: string; name: string; avatar: string }): Promise<UserProfile> => {
-    const res = await fetch('/api/auth/sync', {
+    const res = await authFetch('/api/auth/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -89,12 +112,12 @@ export const api = {
   },
 
   getUsers: async (): Promise<UserProfile[]> => {
-    const res = await fetch('/api/users');
+    const res = await authFetch('/api/users');
     return res.json();
   },
 
   updateUserStatus: async (id: string, status: 'active' | 'suspended'): Promise<UserProfile> => {
-    const res = await fetch(`/api/users/${id}/status`, {
+    const res = await authFetch(`/api/users/${id}/status`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status })
@@ -103,17 +126,17 @@ export const api = {
   },
 
   deleteUser: async (id: string): Promise<void> => {
-    await fetch(`/api/users/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/users/${id}`, { method: 'DELETE' });
   },
 
   // Unlock Requests
   getUnlockRequests: async (): Promise<any[]> => {
-    const res = await fetch('/api/unlock-requests');
+    const res = await authFetch('/api/unlock-requests');
     return res.json();
   },
 
   createUnlockRequest: async (payload: { userId: string; userEmail: string; reason: string }): Promise<any> => {
-    const res = await fetch('/api/unlock-requests', {
+    const res = await authFetch('/api/unlock-requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -122,18 +145,18 @@ export const api = {
   },
 
   deleteUnlockRequest: async (id: string): Promise<void> => {
-    await fetch(`/api/unlock-requests/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/unlock-requests/${id}`, { method: 'DELETE' });
   },
 
   // Pets
   getPets: async (userId?: string): Promise<PetProfile[]> => {
     const url = userId ? `/api/pets?userId=${userId}` : '/api/pets';
-    const res = await fetch(url);
+    const res = await authFetch(url);
     return res.json();
   },
 
   createPet: async (pet: Partial<PetProfile>): Promise<PetProfile> => {
-    const res = await fetch('/api/pets', {
+    const res = await authFetch('/api/pets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(pet)
@@ -142,7 +165,7 @@ export const api = {
   },
 
   updatePet: async (id: string, pet: Partial<PetProfile>): Promise<PetProfile> => {
-    const res = await fetch(`/api/pets/${id}`, {
+    const res = await authFetch(`/api/pets/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(pet)
@@ -151,7 +174,7 @@ export const api = {
   },
 
   deletePet: async (id: string): Promise<void> => {
-    await fetch(`/api/pets/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/pets/${id}`, { method: 'DELETE' });
   },
 
   // Medical Records
@@ -162,12 +185,12 @@ export const api = {
     if (userId) params.append('userId', userId);
     if (params.toString()) url += `?${params.toString()}`;
 
-    const res = await fetch(url);
+    const res = await authFetch(url);
     return res.json();
   },
 
   createMedicalRecord: async (record: Partial<MedicalRecord>): Promise<MedicalRecord> => {
-    const res = await fetch('/api/medical-records', {
+    const res = await authFetch('/api/medical-records', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(record)
@@ -176,13 +199,13 @@ export const api = {
   },
 
   getMedicalRecordById: async (id: string): Promise<MedicalRecord> => {
-    const res = await fetch(`/api/medical-records/${id}`);
+    const res = await authFetch(`/api/medical-records/${id}`);
     if (!res.ok) throw new Error('Không tìm thấy bệnh án');
     return res.json();
   },
 
   deleteMedicalRecord: async (id: string): Promise<void> => {
-    await fetch(`/api/medical-records/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/medical-records/${id}`, { method: 'DELETE' });
   },
 
   summarizeMedicalRecordFromChat: async (
@@ -190,7 +213,7 @@ export const api = {
     chatHistory: ChatMessage[],
     userId?: string
   ): Promise<{ success: boolean; record: MedicalRecord }> => {
-    const res = await fetch('/api/summarize-medical-record', {
+    const res = await authFetch('/api/summarize-medical-record', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ petInfo, chatHistory, userId })
@@ -204,12 +227,12 @@ export const api = {
     if (search) params.append('search', search);
     if (category) params.append('category', category);
 
-    const res = await fetch(`/api/articles?${params.toString()}`);
+    const res = await authFetch(`/api/articles?${params.toString()}`);
     return res.json();
   },
 
   createArticle: async (article: Partial<KnowledgeArticle>): Promise<KnowledgeArticle> => {
-    const res = await fetch('/api/articles', {
+    const res = await authFetch('/api/articles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(article)
@@ -218,7 +241,7 @@ export const api = {
   },
 
   updateArticle: async (id: string, article: Partial<KnowledgeArticle>): Promise<KnowledgeArticle> => {
-    const res = await fetch(`/api/articles/${id}`, {
+    const res = await authFetch(`/api/articles/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(article)
@@ -227,13 +250,13 @@ export const api = {
   },
 
   deleteArticle: async (id: string): Promise<void> => {
-    await fetch(`/api/articles/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/articles/${id}`, { method: 'DELETE' });
   },
 
   // Vet Clinics
   getClinics: async (search?: string): Promise<VetClinic[]> => {
     const url = search ? `/api/clinics?search=${encodeURIComponent(search)}` : '/api/clinics';
-    const res = await fetch(url);
+    const res = await authFetch(url);
     if (!res.ok) {
       console.error(await res.text());
       return [];
@@ -242,7 +265,7 @@ export const api = {
   },
 
   createClinic: async (clinic: Partial<VetClinic>): Promise<VetClinic> => {
-    const res = await fetch('/api/clinics', {
+    const res = await authFetch('/api/clinics', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(clinic)
@@ -255,7 +278,7 @@ export const api = {
   },
 
   updateClinic: async (id: string, clinic: Partial<VetClinic>): Promise<VetClinic> => {
-    const res = await fetch(`/api/clinics/${id}`, {
+    const res = await authFetch(`/api/clinics/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(clinic)
@@ -268,19 +291,19 @@ export const api = {
   },
 
   deleteClinic: async (id: string): Promise<void> => {
-    await fetch(`/api/clinics/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/clinics/${id}`, { method: 'DELETE' });
   },
 
   // System Config
   getConfig: async (): Promise<SystemConfig> => {
-    const res = await fetch('/api/config');
+    const res = await authFetch('/api/config');
     return res.json();
   },
 
   getSystemConfig: async (): Promise<SystemConfig> => {
     let serverConfig: any = null;
     try {
-      const res = await fetch('/api/config');
+      const res = await authFetch('/api/config');
       if (res.ok) {
         serverConfig = await res.json();
       }
@@ -304,7 +327,7 @@ export const api = {
   },
 
   updateConfig: async (config: Partial<SystemConfig>): Promise<SystemConfig> => {
-    const res = await fetch('/api/config', {
+    const res = await authFetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config)
@@ -313,7 +336,7 @@ export const api = {
   },
 
   updateSystemConfig: async (config: Partial<SystemConfig>): Promise<SystemConfig> => {
-    const res = await fetch('/api/config', {
+    const res = await authFetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config)
@@ -328,17 +351,17 @@ export const api = {
     if (userId) params.append('userId', userId);
     if (petId) params.append('petId', petId);
     if (params.toString()) url += `?${params.toString()}`;
-    const res = await fetch(url);
+    const res = await authFetch(url);
     return res.json();
   },
 
   getChatSessionById: async (id: string): Promise<ChatSession> => {
-    const res = await fetch(`/api/chat-sessions/${id}`);
+    const res = await authFetch(`/api/chat-sessions/${id}`);
     return res.json();
   },
 
   createChatSession: async (session: Partial<ChatSession>): Promise<ChatSession> => {
-    const res = await fetch('/api/chat-sessions', {
+    const res = await authFetch('/api/chat-sessions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(session)
@@ -351,7 +374,7 @@ export const api = {
   },
 
   updateChatSession: async (id: string, session: Partial<ChatSession>): Promise<ChatSession> => {
-    const res = await fetch(`/api/chat-sessions/${id}`, {
+    const res = await authFetch(`/api/chat-sessions/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(session)
@@ -360,19 +383,19 @@ export const api = {
   },
 
   deleteChatSession: async (id: string): Promise<{ success: boolean }> => {
-    const res = await fetch(`/api/chat-sessions/${id}`, { method: 'DELETE' });
+    const res = await authFetch(`/api/chat-sessions/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Lỗi xóa lịch sử');
     return res.json();
   },
 
   deleteAllChatSessions: async (userId: string): Promise<{ success: boolean }> => {
-    const res = await fetch(`/api/chat-sessions?userId=${userId}`, { method: 'DELETE' });
+    const res = await authFetch(`/api/chat-sessions?userId=${userId}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Lỗi xóa tất cả lịch sử');
     return res.json();
   },
 
   generateTitle: async (message: string): Promise<{ title: string }> => {
-    const res = await fetch('/api/generate-title', {
+    const res = await authFetch('/api/generate-title', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })
@@ -395,7 +418,7 @@ export const api = {
     triageDetails: { riskTitle: string; urgency: string; immediateActions: string[] };
     rawText: string;
   }> => {
-    const res = await fetch('/api/chat', {
+    const res = await authFetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -425,7 +448,7 @@ export const api = {
     const t0 = Date.now();
     let res: Response;
     try {
-      res = await fetch('/api/chat', {
+      res = await authFetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -984,7 +1007,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 
   // AI Quality Evaluation & Benchmarking
   getAiEvaluationReport: async (): Promise<AiEvaluationReport> => {
-    const res = await fetch('/api/admin/ai-evaluation');
+    const res = await authFetch('/api/admin/ai-evaluation');
     if (!res.ok) {
       throw new Error(`Lỗi tải báo cáo kiểm định AI: ${res.statusText}`);
     }
@@ -997,7 +1020,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
     inputMessage: string;
     imageBase64?: string;
   }): Promise<any> => {
-    const res = await fetch('/api/admin/ai-evaluation/run-test', {
+    const res = await authFetch('/api/admin/ai-evaluation/run-test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

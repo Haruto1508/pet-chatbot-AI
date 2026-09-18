@@ -97,9 +97,162 @@ async function startServer(isVercel = false) {
   const app = express();
   const PORT = 3000;
 
+  // ─────────────────────────────────────────
+  // 🛡️ ENTERPRISE HTTP SECURITY HEADERS
+  // ─────────────────────────────────────────
+  app.disable('x-powered-by');
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (process.env.NODE_ENV === 'production' || req.headers['x-forwarded-proto'] === 'https') {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    }
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://cdn.jsdelivr.net; " +
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; " +
+      "font-src 'self' https://fonts.gstatic.com data:; " +
+      "img-src 'self' data: blob: https:; " +
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://generativelanguage.googleapis.com https://pet-chatbot-ai.onrender.com https://ipapi.co https://api.bigdatacloud.net https://*.tile.openstreetmap.org https://maps.googleapis.com; " +
+      "frame-ancestors 'self';"
+    );
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+    next();
+  });
+
+  // ─────────────────────────────────────────
+  // 🌐 CORS POLICY & ORIGIN ISOLATION
+  // ─────────────────────────────────────────
+  const ALLOWED_ORIGIN_PATTERNS = [
+    /^http:\/\/localhost(:\d+)?$/,
+    /^http:\/\/127\.0\.0\.1(:\d+)?$/,
+    /^https:\/\/.*\.vercel\.app$/,
+    /^https:\/\/.*\.onrender\.com$/,
+  ];
+  if (process.env.ALLOWED_ORIGINS) {
+    process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).forEach(o => {
+      if (o) ALLOWED_ORIGIN_PATTERNS.push(new RegExp('^' + o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'));
+    });
+  }
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.headers.origin;
+    if (origin) {
+      const isAllowed = ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin));
+      if (isAllowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      } else if (process.env.NODE_ENV === 'production') {
+        serverLog('SYSTEM', 'WARN', 'CORS_BLOCKED', `Yêu cầu từ Origin lạ bị chặn: ${origin}`);
+        return res.status(403).json({ error: 'CORS: Nguồn gốc yêu cầu bị từ chối bởi chính sách bảo mật' });
+      }
+    }
+
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end();
+    }
+    next();
+  });
+
   // Always register JSON body parser
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // ─────────────────────────────────────────
+  // 🔐 SERVER-SIDE AUTHENTICATION & ADMIN GUARD
+  // ─────────────────────────────────────────
+  interface AuthContext {
+    user: any;
+    profile: {
+      id: string;
+      name: string;
+      email: string;
+      role: 'user' | 'admin';
+      status: 'active' | 'suspended';
+    } | null;
+  }
+
+  async function resolveAuthContext(req: Request): Promise<AuthContext | null> {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return null;
+    }
+    const token = authHeader.substring(7).trim();
+    if (!token) return null;
+
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        return null;
+      }
+
+      const { data: profile } = await supabase
+        .from('users')
+        .select('id, name, email, role, status')
+        .eq('id', user.id)
+        .single();
+
+      const userEmail = (user.email || profile?.email || '').trim().toLowerCase();
+      const isAdminEmail = userEmail === 'thaivinh2344@gmail.com' ||
+        userEmail.endsWith('@vethic.ai') ||
+        userEmail.endsWith('@petcare.ai');
+
+      const effectiveRole: 'user' | 'admin' = (profile?.role === 'admin' || isAdminEmail) ? 'admin' : 'user';
+
+      return {
+        user,
+        profile: profile ? {
+          ...profile,
+          role: effectiveRole
+        } : {
+          id: user.id,
+          name: user.user_metadata?.full_name || userEmail.split('@')[0] || 'User',
+          email: userEmail,
+          role: effectiveRole,
+          status: 'active'
+        }
+      };
+    } catch (e: any) {
+      serverLog('SYSTEM', 'WARN', 'AUTH_TOKEN_ERROR', e.message);
+      return null;
+    }
+  }
+
+  async function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.user) {
+      return res.status(401).json({
+        error: 'Yêu cầu đăng nhập quản trị viên (Thiếu Bearer Token hợp lệ)'
+      });
+    }
+
+    if (auth.profile?.status === 'suspended') {
+      return res.status(403).json({
+        error: 'Tài khoản của bạn đang bị tạm khóa'
+      });
+    }
+
+    if (auth.profile?.role !== 'admin') {
+      serverLog('SYSTEM', 'WARN', 'ADMIN_ACCESS_DENIED', `User ${auth.profile?.email} (ID: ${auth.user.id}) cố gọi API Admin`);
+      return res.status(403).json({
+        error: 'Từ chối truy cập: Bạn không có quyền Quản trị viên (Admin)'
+      });
+    }
+
+    (req as any).auth = auth;
+    next();
+  }
+
+  async function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+    (req as any).auth = await resolveAuthContext(req);
+    next();
+  }
 
   // ============================================================
   // ENTERPRISE SLIDING-WINDOW RATE LIMITER & ANTI-SPAM DEFENSE
@@ -690,8 +843,8 @@ async function startServer(isVercel = false) {
     });
   });
 
-  // Test API Key Endpoint
-  app.post('/api/test-api-key', heavyTestRateLimiter, async (req: Request, res: Response) => {
+  // Test API Key Endpoint (Admin Only)
+  app.post('/api/test-api-key', requireAdminAuth, heavyTestRateLimiter, async (req: Request, res: Response) => {
     const { apiKey, model = 'gemini-3.6-flash', provider = 'gemini', customBaseUrl } = req.body;
     if (!apiKey) {
       return res.status(400).json({ ok: false, error: 'Vui lòng nhập API Key để kiểm tra.' });
@@ -772,7 +925,7 @@ async function startServer(isVercel = false) {
   });
 
   // --- AI QUALITY & EVALUATION BENCHMARK ENDPOINTS (TorchMetrics, Cleanlab, Ragas, DeepEval, Giskard) ---
-  app.get('/api/admin/ai-evaluation', async (_req: Request, res: Response) => {
+  app.get('/api/admin/ai-evaluation', requireAdminAuth, async (_req: Request, res: Response) => {
     try {
       // Dynamic query count check
       const { count: totalArticles } = await supabase.from('articles').select('*', { count: 'exact', head: true });
@@ -921,8 +1074,8 @@ async function startServer(isVercel = false) {
     }
   });
 
-  // Run dynamic interactive test for Admin AI Evaluation
-  app.post('/api/admin/ai-evaluation/run-test', heavyTestRateLimiter, async (req: Request, res: Response) => {
+  // Run dynamic interactive test for Admin AI Evaluation (Admin Only)
+  app.post('/api/admin/ai-evaluation/run-test', requireAdminAuth, heavyTestRateLimiter, async (req: Request, res: Response) => {
     const { testType, inputMessage, imageBase64 } = req.body;
     const t0 = Date.now();
 
@@ -989,7 +1142,16 @@ async function startServer(isVercel = false) {
   });
 
 
-  app.get('/api/debug', (_req: Request, res: Response) => {
+  app.get('/api/debug', async (req: Request, res: Response) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ error: 'Endpoint không tồn tại' });
+    }
+    const auth = await resolveAuthContext(req);
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress;
+    const isLocalhost = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost' || clientIp?.includes('127.0.0.1');
+    if (!isLocalhost && auth?.profile?.role !== 'admin') {
+      return res.status(403).json({ error: 'Truy cập bị từ chối' });
+    }
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_ANON_KEY;
     const geminiKey = process.env.GEMINI_API_KEY;
@@ -1005,7 +1167,7 @@ async function startServer(isVercel = false) {
   });
 
   // System Stats
-  app.get('/api/stats', async (_req: Request, res: Response) => {
+  app.get('/api/stats', optionalAuth, async (_req: Request, res: Response) => {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1069,41 +1231,56 @@ async function startServer(isVercel = false) {
     }
   });
 
-  // Auth Sync
+  // Auth Sync (Secured: Verifies Token & prevents privilege escalation)
   app.post('/api/auth/sync', async (req: Request, res: Response) => {
     try {
-      const { id, email, name, avatar } = req.body;
-      if (!id || !email) {
+      const auth = await resolveAuthContext(req);
+      let userId = req.body.id;
+      let userEmail = req.body.email;
+      const userName = req.body.name;
+      const userAvatar = req.body.avatar;
+
+      // Enforce verified token identity if present
+      if (auth?.user) {
+        userId = auth.user.id;
+        userEmail = auth.user.email || userEmail;
+      }
+
+      if (!userId || !userEmail) {
         return res.status(400).json({ error: 'Missing id or email' });
       }
 
-      // Determine role from email (Strict whitelist to prevent security issues)
-      let role = 'user';
-      const trimmedEmail = email.trim().toLowerCase();
-      
-      // Only exact emails get automatic admin rights. 
-      // Other users default to 'user' and can be upgraded manually in Supabase.
-      if (trimmedEmail === 'thaivinh2344@gmail.com' || trimmedEmail.endsWith('@vethic.ai') || trimmedEmail.endsWith('@petcare.ai')) {
-        role = 'admin';
+      // Determine role: ONLY verified tokens or existing DB roles can get 'admin'
+      let role: 'user' | 'admin' = 'user';
+      const trimmedEmail = userEmail.trim().toLowerCase();
+      if (auth?.user) {
+        if (trimmedEmail === 'thaivinh2344@gmail.com' || trimmedEmail.endsWith('@vethic.ai') || trimmedEmail.endsWith('@petcare.ai')) {
+          role = 'admin';
+        }
       }
 
-      // Check if user exists by email (to avoid unique constraint errors if ID differs from mock data)
+      // Check if user exists by id
       const { data: existingUser, error: checkError } = await supabase
         .from('users')
         .select('*')
-        .eq('email', email)
+        .eq('id', userId)
         .single();
 
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is not found
+      if (checkError && checkError.code !== 'PGRST116') {
         return res.status(500).json({ error: checkError.message });
       }
 
       if (existingUser) {
-        // Update user if they already exist
+        // Keep existing role if already admin in database
+        const finalRole = existingUser.role === 'admin' ? 'admin' : role;
         const { data, error: updateError } = await supabase
           .from('users')
-          .update({ name, avatar }) // Do not update email or id
-          .eq('email', email)
+          .update({
+            name: userName || existingUser.name,
+            avatar: userAvatar || existingUser.avatar,
+            role: finalRole
+          })
+          .eq('id', userId)
           .select()
           .single();
         if (updateError) throw updateError;
@@ -1112,7 +1289,7 @@ async function startServer(isVercel = false) {
         // Insert new user
         const { data, error: insertError } = await supabase
           .from('users')
-          .insert([{ id, name, email, avatar, role, status: 'active' }])
+          .insert([{ id: userId, name: userName || 'User', email: userEmail, avatar: userAvatar, role, status: 'active' }])
           .select()
           .single();
         if (insertError) throw insertError;
@@ -1123,8 +1300,8 @@ async function startServer(isVercel = false) {
     }
   });
 
-  // Users Management
-  app.get('/api/users', async (_req: Request, res: Response) => {
+  // Users Management (Admin Only)
+  app.get('/api/users', requireAdminAuth, async (_req: Request, res: Response) => {
     const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     const mapped = data.map(u => ({
@@ -1134,7 +1311,7 @@ async function startServer(isVercel = false) {
     res.json(mapped);
   });
 
-  app.put('/api/users/:id/status', async (req: Request, res: Response) => {
+  app.put('/api/users/:id/status', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status } = req.body;
     const { data, error } = await supabase.from('users').update({ status }).eq('id', id).select().single();
@@ -1143,15 +1320,15 @@ async function startServer(isVercel = false) {
     res.json({ ...data, createdAt: data.created_at });
   });
 
-  app.delete('/api/users/:id', async (req: Request, res: Response) => {
+  app.delete('/api/users/:id', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
   });
 
-  // Unlock Requests
-  app.get('/api/unlock-requests', async (_req: Request, res: Response) => {
+  // Unlock Requests (Admin Only for View/Delete)
+  app.get('/api/unlock-requests', requireAdminAuth, async (_req: Request, res: Response) => {
     const { data, error } = await supabase.from('unlock_requests').select('*').order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     const mapped = data.map(r => ({
@@ -1180,7 +1357,7 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.delete('/api/unlock-requests/:id', async (req: Request, res: Response) => {
+  app.delete('/api/unlock-requests/:id', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { error } = await supabase.from('unlock_requests').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
@@ -1188,8 +1365,16 @@ async function startServer(isVercel = false) {
   });
 
   // Pets Management
-  app.get('/api/pets', async (req: Request, res: Response) => {
+  app.get('/api/pets', optionalAuth, async (req: Request, res: Response) => {
     const userId = req.query.userId as string;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+
+    // Must provide userId unless caller is verified Admin
+    if (!userId && !isAdmin) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp tham số userId' });
+    }
+
     let query = supabase.from('pets').select('*').order('created_at', { ascending: false });
     if (userId) query = query.eq('user_id', userId);
     const { data, error } = await query;
@@ -1262,9 +1447,17 @@ async function startServer(isVercel = false) {
   });
 
   // Medical Records
-  app.get('/api/medical-records', async (req: Request, res: Response) => {
+  app.get('/api/medical-records', optionalAuth, async (req: Request, res: Response) => {
     const petId = req.query.petId as string;
     const userId = req.query.userId as string;
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+
+    // Must provide petId or userId unless caller is verified Admin
+    if (!petId && !userId && !isAdmin) {
+      return res.status(400).json({ error: 'Vui lòng cung cấp tham số userId hoặc petId' });
+    }
+
     let query = supabase.from('medical_records').select('*').order('created_at', { ascending: false });
     
     if (petId) query = query.eq('pet_id', petId);
@@ -1385,7 +1578,7 @@ async function startServer(isVercel = false) {
     res.json(mapped);
   });
 
-  app.post('/api/articles', async (req: Request, res: Response) => {
+  app.post('/api/articles', requireAdminAuth, async (req: Request, res: Response) => {
     const payload: any = {
       title: req.body.title || 'Bài viết mới',
       species: req.body.species || 'Cả hai',
@@ -1419,7 +1612,7 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.put('/api/articles/:id', async (req: Request, res: Response) => {
+  app.put('/api/articles/:id', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const payload: any = { ...req.body };
     if (payload.firstAidSteps) { payload.first_aid_steps = payload.firstAidSteps; delete payload.firstAidSteps; }
@@ -1451,7 +1644,7 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.delete('/api/articles/:id', async (req: Request, res: Response) => {
+  app.delete('/api/articles/:id', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { error } = await supabase.from('articles').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
@@ -1461,8 +1654,11 @@ async function startServer(isVercel = false) {
 
   // System Config Endpoints (Using CONFIG_FILE and local persistence declared above)
 
-  app.get('/api/config', async (_req: Request, res: Response) => {
+  app.get('/api/config', optionalAuth, async (req: Request, res: Response) => {
     try {
+      const auth = (req as any).auth;
+      const isAdmin = auth?.profile?.role === 'admin';
+
       const local = getLocalConfig();
       let dbData: any = null;
       try {
@@ -1476,22 +1672,33 @@ async function startServer(isVercel = false) {
       const rawFallbackModel = dbData?.fallback_model || local.fallbackModel || 'gemini-3.6-flash';
       const fallbackModel = legacyModels.includes(rawFallbackModel) ? 'gemini-3.6-flash' : rawFallbackModel;
 
+      const rawGeminiKey = dbData?.gemini_api_key || local.geminiApiKey || (process.env.GEMINI_API_KEY || '');
+      const rawBackupKey = dbData?.backup_gemini_api_key || local.backupGeminiApiKey || '';
+      const rawOpenAiKey = dbData?.openai_api_key || local.openaiApiKey || '';
+      const rawFallbackKey = dbData?.fallback_gemini_api_key || local.fallbackGeminiApiKey || local.backupGeminiApiKey || (process.env.GEMINI_API_KEY || '');
+
+      // CRITICAL SECURITY HARDENING: Mask secret keys for non-admin callers
+      const geminiApiKey = isAdmin ? rawGeminiKey : (rawGeminiKey ? maskApiKey(rawGeminiKey) : '');
+      const backupGeminiApiKey = isAdmin ? rawBackupKey : (rawBackupKey ? maskApiKey(rawBackupKey) : '');
+      const openaiApiKey = isAdmin ? rawOpenAiKey : (rawOpenAiKey ? maskApiKey(rawOpenAiKey) : '');
+      const fallbackGeminiApiKey = isAdmin ? rawFallbackKey : (rawFallbackKey ? maskApiKey(rawFallbackKey) : '');
+
       res.json({
         aiModel,
         temperature: dbData?.temperature ?? local.temperature ?? 0.4,
         systemPrompt: dbData?.system_prompt || local.systemPrompt || '',
         maxTokens: dbData?.max_tokens ?? local.maxTokens ?? 2048,
         emergencyKeywords: dbData?.emergency_keywords || local.emergencyKeywords || ['máu', 'co giật', 'khó thở'],
-        geminiApiKey: dbData?.gemini_api_key || local.geminiApiKey || (process.env.GEMINI_API_KEY || ''),
-        backupGeminiApiKey: dbData?.backup_gemini_api_key || local.backupGeminiApiKey || '',
+        geminiApiKey,
+        backupGeminiApiKey,
         renderServiceUrl: dbData?.render_service_url || local.renderServiceUrl || 'https://pet-chatbot-ai.onrender.com',
-        openaiApiKey: dbData?.openai_api_key || local.openaiApiKey || '',
+        openaiApiKey,
         customApiBaseUrl: dbData?.custom_api_base_url || local.customApiBaseUrl || '',
         customModelName: dbData?.custom_model_name || local.customModelName || '',
         apiProvider: dbData?.api_provider || local.apiProvider || 'gemini',
         autoKeepAliveIntervalMinutes: dbData?.auto_keep_alive_interval ?? local.autoKeepAliveIntervalMinutes ?? 10,
         enableGeminiFallback: dbData?.enable_gemini_fallback ?? local.enableGeminiFallback ?? true,
-        fallbackGeminiApiKey: dbData?.fallback_gemini_api_key || local.fallbackGeminiApiKey || local.backupGeminiApiKey || (process.env.GEMINI_API_KEY || ''),
+        fallbackGeminiApiKey,
         fallbackModel,
         fallbackTimeoutMs: dbData?.fallback_timeout_ms || local.fallbackTimeoutMs || 20000
       });
@@ -1500,7 +1707,7 @@ async function startServer(isVercel = false) {
     }
   });
 
-  app.post('/api/config', async (req: Request, res: Response) => {
+  app.post('/api/config', requireAdminAuth, async (req: Request, res: Response) => {
     try {
       const local = getLocalConfig();
       const updated = {
@@ -1574,7 +1781,7 @@ async function startServer(isVercel = false) {
     res.json(mapped);
   });
 
-  app.post('/api/clinics', async (req: Request, res: Response) => {
+  app.post('/api/clinics', requireAdminAuth, async (req: Request, res: Response) => {
     const payload = {
       id: crypto.randomUUID(),
       name: req.body.name,
@@ -1600,7 +1807,7 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.put('/api/clinics/:id', async (req: Request, res: Response) => {
+  app.put('/api/clinics/:id', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const payload: any = { ...req.body };
     if (payload.reviewsCount !== undefined) { payload.reviews_count = payload.reviewsCount; delete payload.reviewsCount; }
@@ -1619,7 +1826,7 @@ async function startServer(isVercel = false) {
     });
   });
 
-  app.delete('/api/clinics/:id', async (req: Request, res: Response) => {
+  app.delete('/api/clinics/:id', requireAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { error } = await supabase.from('clinics').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
@@ -1627,10 +1834,18 @@ async function startServer(isVercel = false) {
   });
 
   // --- CHAT SESSIONS (History) ---
-  app.get('/api/chat-sessions', async (req: Request, res: Response) => {
+  app.get('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
     try {
       const userId = req.query.userId as string;
       const petId = req.query.petId as string;
+      const auth = (req as any).auth;
+      const isAdmin = auth?.profile?.role === 'admin';
+
+      // Must provide userId or petId unless caller is verified Admin
+      if (!userId && !petId && !isAdmin) {
+        return res.status(400).json({ error: 'Vui lòng cung cấp tham số userId' });
+      }
+
       let query = supabase.from('chat_sessions').select('*').order('updated_at', { ascending: false });
       
       if (userId) query = query.eq('user_id', userId);
@@ -1752,9 +1967,14 @@ async function startServer(isVercel = false) {
     res.json({ success: true, id });
   });
 
-  app.delete('/api/chat-sessions', async (req: Request, res: Response) => {
+  app.delete('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
     const userId = req.query.userId as string;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
+    const auth = (req as any).auth;
+    const isAdmin = auth?.profile?.role === 'admin';
+    if (auth?.user && auth.user.id !== userId && !isAdmin) {
+      return res.status(403).json({ error: 'Bạn không có quyền xóa lịch sử của người dùng khác' });
+    }
     const { error } = await supabase.from('chat_sessions').delete().eq('user_id', userId);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
@@ -2336,10 +2556,12 @@ YÊU CẦU:
   });
 
 
-  // Global Error Handler
-  app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  // Global Error Handler (Production-Hardened)
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error('Unhandled Error:', err);
-    res.status(500).json({ error: err.message || 'Internal Server Error' });
+    const isProd = process.env.NODE_ENV === 'production';
+    const message = isProd ? 'Đã xảy ra lỗi máy chủ nội bộ. Vui lòng thử lại sau.' : (err.message || 'Internal Server Error');
+    res.status(err.status || 500).json({ error: message });
   });
 
   if (isVercel) {
