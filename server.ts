@@ -98,6 +98,100 @@ async function startServer(isVercel = false) {
   const PORT = 3000;
 
   // ─────────────────────────────────────────
+  // 🛡️ DDOS DEFENSE & IP JAIL ENGINE
+  // ─────────────────────────────────────────
+  interface BanRecord {
+    bannedUntil: number;
+    reason: string;
+    strikes: number;
+  }
+
+  const bannedIps = new Map<string, BanRecord>();
+  let totalDdosBlockedRequests = 0;
+
+  // Periodic garbage collection for expired bans (every 2 mins)
+  const banCleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [ip, record] of bannedIps.entries()) {
+      if (now > record.bannedUntil) {
+        bannedIps.delete(ip);
+      }
+    }
+  }, 120000);
+  if ((banCleanupInterval as any).unref) (banCleanupInterval as any).unref();
+
+  // Event Loop Lag Monitor (Detects server overload in real-time)
+  let eventLoopLagMs = 0;
+  let lastLagCheck = Date.now();
+  const lagInterval = setInterval(() => {
+    const now = Date.now();
+    const delta = now - lastLagCheck;
+    eventLoopLagMs = Math.max(0, delta - 500);
+    lastLagCheck = now;
+  }, 500);
+  if ((lagInterval as any).unref) (lagInterval as any).unref();
+
+  // 1. First Gatekeeper: DDoS Shield, IP Jail & Malicious Scanner Auto-Blocker
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+
+    // A. Check if IP is in DDoS Jail
+    const banRecord = bannedIps.get(clientIp);
+    if (banRecord) {
+      if (Date.now() < banRecord.bannedUntil) {
+        totalDdosBlockedRequests++;
+        const remainingSeconds = Math.ceil((banRecord.bannedUntil - Date.now()) / 1000);
+        res.setHeader('Retry-After', remainingSeconds);
+        return res.status(403).json({
+          error: 'IP của bạn tạm thời bị khóa do phát hiện hành vi tấn công hoặc spam hệ thống (DDoS Defense)',
+          retryAfterSeconds: remainingSeconds
+        });
+      } else {
+        bannedIps.delete(clientIp);
+      }
+    }
+
+    // B. Block Known Scanner Paths & Probing (Bots scanning for vulnerabilities)
+    const pathLower = (req.path || '').toLowerCase();
+    const isProbingPath = /\/(wp-login|\.env|\.git|phpmyadmin|cgi-bin|xmlrpc|actuator|eval-stdin|phpinfo|\.php|\.asp|\.jsp)/i.test(pathLower);
+    if (isProbingPath) {
+      totalDdosBlockedRequests++;
+      serverLog('SYSTEM', 'WARN', 'BOTNET_PROBE_BLOCKED', `IP ${clientIp} quét đường dẫn cấm: ${req.path}`);
+      bannedIps.set(clientIp, {
+        bannedUntil: Date.now() + 15 * 60 * 1000,
+        reason: `Quét mã độc đường dẫn: ${req.path}`,
+        strikes: 5
+      });
+      return res.status(403).json({ error: 'Yêu cầu bị từ chối bởi hệ thống phòng thủ DDoS & WAF' });
+    }
+
+    // C. Block Malicious Scanner User-Agents
+    const ua = (req.headers['user-agent'] || '').toLowerCase();
+    const isMaliciousUa = /(sqlmap|nikto|masscan|wpscan|nmap|zgrab|acunetix|nessus|dirbuster)/i.test(ua);
+    if (isMaliciousUa) {
+      totalDdosBlockedRequests++;
+      serverLog('SYSTEM', 'WARN', 'MALICIOUS_UA_BLOCKED', `IP ${clientIp} sử dụng công cụ tấn công: ${ua}`);
+      bannedIps.set(clientIp, {
+        bannedUntil: Date.now() + 30 * 60 * 1000,
+        reason: `Công cụ dò quét: ${ua.substring(0, 40)}`,
+        strikes: 10
+      });
+      return res.status(403).json({ error: 'Chặn công cụ quét bảo mật tự động' });
+    }
+
+    // D. Backpressure & Load Shedding under Severe Stress (Event loop lag > 250ms)
+    if (eventLoopLagMs > 250 && req.path.startsWith('/api/') && !req.path.startsWith('/api/health')) {
+      totalDdosBlockedRequests++;
+      res.setHeader('Retry-After', 3);
+      return res.status(503).json({
+        error: 'Hệ thống đang chịu tải cao (Anti-DDoS Load Shedding). Vui lòng thử lại sau 3 giây.'
+      });
+    }
+
+    next();
+  });
+
+  // ─────────────────────────────────────────
   // 🛡️ ENTERPRISE HTTP SECURITY HEADERS
   // ─────────────────────────────────────────
   app.disable('x-powered-by');
@@ -306,6 +400,17 @@ async function startServer(isVercel = false) {
       if (record.count > max) {
         res.setHeader('Retry-After', resetSeconds);
         serverLog('SYSTEM', 'WARN', 'RATE_LIMIT_EXCEEDED', `[ANTI-SPAM] IP ${clientIp} vượt hạn mức ${max} req/${options.windowMs / 1000}s. Chặn trong ${resetSeconds}s.`);
+
+        // Auto-jail IP into DDoS blacklist if flooding more than double the limit
+        if (record.count >= Math.max(20, max * 2)) {
+          bannedIps.set(clientIp, {
+            bannedUntil: now + 10 * 60 * 1000,
+            reason: `Spam lũ lụt request (${record.count}/${max} reqs)`,
+            strikes: 3
+          });
+          serverLog('SYSTEM', 'WARN', 'IP_AUTO_JAILED', `[ANTI-DDOS] Đã tự động đưa IP ${clientIp} vào Blacklist trong 10 phút.`);
+        }
+
         return res.status(429).json({
           error: options.message,
           retryAfter: resetSeconds,
@@ -1141,6 +1246,28 @@ async function startServer(isVercel = false) {
     }
   });
 
+
+  // Admin DDoS & WAF Defense Monitoring Endpoint
+  app.get('/api/admin/ddos-stats', requireAdminAuth, (_req: Request, res: Response) => {
+    res.json({
+      status: 'ACTIVE',
+      totalDdosBlockedRequests,
+      activeBannedIpsCount: bannedIps.size,
+      bannedIps: Array.from(bannedIps.entries()).map(([ip, data]) => ({
+        ip,
+        reason: data.reason,
+        remainingSeconds: Math.max(0, Math.ceil((data.bannedUntil - Date.now()) / 1000)),
+        strikes: data.strikes
+      })),
+      eventLoopLagMs,
+      uptimeSeconds: Math.floor(process.uptime()),
+      memoryUsage: {
+        rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        heapTotalMb: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+      }
+    });
+  });
 
   app.get('/api/debug', async (req: Request, res: Response) => {
     if (process.env.NODE_ENV === 'production') {
@@ -2584,7 +2711,7 @@ YÊU CẦU:
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     serverLog('SYSTEM', 'OK', `Server khởi động`, `http://0.0.0.0:${PORT} | NODE_ENV=${process.env.NODE_ENV || 'development'}`);
     serverLog('SYSTEM', 'INFO', 'Supabase', `URL=${process.env.SUPABASE_URL ? '✅ Set' : '❌ MISSING'} | KEY=${process.env.SUPABASE_ANON_KEY ? '✅ Set' : '❌ MISSING'}`);
     serverLog('SYSTEM', 'INFO', 'Gemini', `API_KEY=${process.env.GEMINI_API_KEY ? '✅ Set' : '❌ MISSING'}`);
@@ -2596,6 +2723,14 @@ YÊU CẦU:
       .then(r => serverLog('RENDER_AI', r.ok ? 'OK' : 'WARN', 'Startup wake-up call', `HTTP ${r.status} — Render AI đang sống`))
       .catch(e => serverLog('RENDER_AI', 'WARN', 'Startup wake-up call', `Render đang ngủ/cold start: ${e.message}`));
   });
+
+  // ─────────────────────────────────────────
+  // 🛡️ SLOWLORIS & TCP SOCKET TIMEOUT HARDENING
+  // ─────────────────────────────────────────
+  server.keepAliveTimeout = 5000;    // 5s keep-alive timeout
+  server.headersTimeout = 10000;     // 10s max headers timeout
+  server.requestTimeout = 30000;     // 30s max total request timeout
+  server.maxHeadersCount = 100;      // max 100 HTTP headers
 }
 
 export default async function getApp() {
