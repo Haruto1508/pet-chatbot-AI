@@ -231,6 +231,19 @@ export function App() {
     refreshPets();
   }, [currentUser.id]);
 
+  const clearAuthHash = () => {
+    if (typeof window !== 'undefined' && window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('provider_token') || window.location.hash.includes('refresh_token'))) {
+      const cleanUrl = window.location.pathname + window.location.search;
+      window.history.replaceState(null, document.title, cleanUrl);
+    }
+  };
+
+  // Clean OAuth tokens from URL bar as soon as Supabase has had time to read them
+  useEffect(() => {
+    const timer = setTimeout(clearAuthHash, 200);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Handle Supabase Auth State
   useEffect(() => {
     const checkUser = async () => {
@@ -244,6 +257,8 @@ export function App() {
       } catch (e) {
         console.error(e);
         setIsAuthLoading(false);
+      } finally {
+        clearAuthHash();
       }
     };
     
@@ -254,6 +269,7 @@ export function App() {
         setIsAuthLoading(true);
         await syncAndSetUser(session.user);
         setIsLoginModalOpen(false);
+        clearAuthHash();
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(guestUser);
         setPets([]);
@@ -277,12 +293,30 @@ export function App() {
     try {
       const payload = {
         id: authUser.id,
-        email: authUser.email,
+        email: authUser.email || '',
         name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
-        avatar: authUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${authUser.email}`
+        avatar: authUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(authUser.email || 'User')}`
       };
-      const syncedUser = await api.syncGoogleUser(payload);
+      
+      let syncedUser: UserProfile;
+      try {
+        syncedUser = await api.syncGoogleUser(payload);
+      } catch (syncErr) {
+        console.warn('Backend sync failed, using client authenticated session fallback:', syncErr);
+        const trimmedEmail = (authUser.email || '').trim().toLowerCase();
+        const isAdmin = trimmedEmail === 'thaivinh2344@gmail.com' || trimmedEmail.endsWith('@vethic.ai') || trimmedEmail.endsWith('@petcare.ai') || authUser.user_metadata?.role === 'admin';
+        syncedUser = {
+          id: authUser.id,
+          email: authUser.email || '',
+          name: payload.name,
+          avatar: payload.avatar,
+          role: isAdmin ? 'admin' : 'user',
+          createdAt: new Date().toISOString()
+        };
+      }
+
       setCurrentUser(syncedUser);
+      clearAuthHash();
       
       const currentPath = window.location.pathname.substring(1);
       const isAdminRoute = currentPath.startsWith('admin') || currentTab.startsWith('admin_');
@@ -302,6 +336,7 @@ export function App() {
       console.error('Error syncing user:', e);
     } finally {
       setIsAuthLoading(false);
+      clearAuthHash();
     }
   };
 

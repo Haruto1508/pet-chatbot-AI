@@ -63,34 +63,50 @@ export const NearestClinicsView: React.FC = () => {
 
   const fetchIPLocation = async (): Promise<{ lat: number; lng: number } | null> => {
     try {
-      const res = await fetch('https://ipapi.co/json/');
+      const res = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
           return { lat: data.latitude, lng: data.longitude };
         }
       }
-    } catch (e) {
-      console.warn('ipapi.co lookup failed, trying fallback...', e);
-    }
+    } catch {}
 
     try {
-      const res2 = await fetch('https://api.bigdatacloud.net/data/reverse-geocode-client');
+      const res2 = await fetch('https://ipapi.co/json/');
       if (res2.ok) {
         const data2 = await res2.json();
         if (data2 && typeof data2.latitude === 'number' && typeof data2.longitude === 'number') {
           return { lat: data2.latitude, lng: data2.longitude };
         }
       }
-    } catch (e2) {
-      console.warn('BigDataCloud lookup failed...', e2);
-    }
+    } catch {}
 
     return null;
   };
 
   const detectLocation = useCallback(async (isAuto = false) => {
     setLocationLoading(true);
+
+    // If browser permission was explicitly denied, jump straight to IP fallback
+    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
+      try {
+        const perm = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+        if (perm.state === 'denied') {
+          const ipLoc = await fetchIPLocation();
+          if (ipLoc) {
+            setUserLocation(ipLoc);
+            setLocationSource('ip');
+            setLocationLoading(false);
+            setMapTarget({ lat: ipLoc.lat, lng: ipLoc.lng, zoom: 13 });
+            if (!isAuto) showSuccess('Đã xác định vị trí tương đối qua IP mạng');
+          } else {
+            setLocationLoading(false);
+          }
+          return;
+        }
+      } catch {}
+    }
 
     const getBrowserPosition = (options: PositionOptions) => {
       return new Promise<GeolocationPosition>((resolve, reject) => {
@@ -113,7 +129,6 @@ export const NearestClinicsView: React.FC = () => {
       showSuccess(isAuto ? 'Tự động định vị GPS thành công!' : 'Đã cập nhật vị trí GPS của bạn!');
       return;
     } catch (err: any) {
-      console.warn('GPS High Accuracy failed/timed out, checking fallback...', err);
       if (err?.code !== 1) { // If not explicitly PERMISSION_DENIED
         try {
           const pos = await getBrowserPosition({ enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 });
@@ -124,9 +139,7 @@ export const NearestClinicsView: React.FC = () => {
           setMapTarget({ lat: loc.lat, lng: loc.lng, zoom: 15 });
           showSuccess('Xác định vị trí thành công!');
           return;
-        } catch (err2) {
-          console.warn('GPS Low Accuracy failed, switching to IP Geolocation...', err2);
-        }
+        } catch {}
       }
     }
 

@@ -120,16 +120,24 @@ async function startServer(isVercel = false) {
   }, 120000);
   if ((banCleanupInterval as any).unref) (banCleanupInterval as any).unref();
 
-  // Event Loop Lag Monitor (Detects server overload in real-time)
+  // Event Loop Lag Monitor (Detects server overload in real-time on persistent Node processes)
   let eventLoopLagMs = 0;
   let lastLagCheck = Date.now();
-  const lagInterval = setInterval(() => {
-    const now = Date.now();
-    const delta = now - lastLagCheck;
-    eventLoopLagMs = Math.max(0, delta - 500);
-    lastLagCheck = now;
-  }, 500);
-  if ((lagInterval as any).unref) (lagInterval as any).unref();
+  if (!isVercel && process.env.VERCEL !== '1') {
+    const lagInterval = setInterval(() => {
+      const now = Date.now();
+      const delta = now - lastLagCheck;
+      // If delta > 5000ms, container was paused/sleeping; ignore to prevent false 503 spikes
+      if (delta < 5000) {
+        eventLoopLagMs = Math.max(0, delta - 500);
+      } else {
+        eventLoopLagMs = 0;
+      }
+      lastLagCheck = now;
+    }, 500);
+    if ((lagInterval as any).unref) (lagInterval as any).unref();
+  }
+
 
   // 1. First Gatekeeper: DDoS Shield, IP Jail & Malicious Scanner Auto-Blocker
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -180,7 +188,9 @@ async function startServer(isVercel = false) {
     }
 
     // D. Backpressure & Load Shedding under Severe Stress (Event loop lag > 250ms)
-    if (eventLoopLagMs > 250 && req.path.startsWith('/api/') && !req.path.startsWith('/api/health')) {
+    // Never trigger on Vercel serverless or on critical auth routes (/api/auth/*)
+    const isAuthRoute = pathLower.startsWith('/api/auth');
+    if (!isVercel && process.env.VERCEL !== '1' && !isAuthRoute && eventLoopLagMs > 250 && pathLower.startsWith('/api/') && !pathLower.startsWith('/api/health')) {
       totalDdosBlockedRequests++;
       res.setHeader('Retry-After', 3);
       return res.status(503).json({
@@ -190,6 +200,7 @@ async function startServer(isVercel = false) {
 
     next();
   });
+
 
   // ─────────────────────────────────────────
   // 🛡️ ENTERPRISE HTTP SECURITY HEADERS

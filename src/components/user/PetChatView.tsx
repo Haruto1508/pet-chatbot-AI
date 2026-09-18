@@ -184,24 +184,38 @@ export const PetChatView: React.FC<Props> = ({
       }
     }).catch((e) => console.warn('Lỗi tải danh sách phòng khám cho chat:', e));
 
-    // Detect user position for distance ranking
+    // Detect user position for distance ranking (silent, no console errors or permission warnings)
+    const fallbackToIp = () => {
+      fetch('https://api.bigdatacloud.net/data/reverse-geocode-client')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+            setUserLocation({ lat: data.latitude, lng: data.longitude });
+          }
+        })
+        .catch(() => {});
+    };
+
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-        () => {
-          fetch('https://ipapi.co/json/')
-            .then(res => res.json())
-            .then(data => {
-              if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-                setUserLocation({ lat: data.latitude, lng: data.longitude });
-              }
-            })
-            .catch(() => {});
-        },
-        { timeout: 8000, maximumAge: 300000 }
-      );
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'geolocation' as PermissionName }).then((result) => {
+          if (result.state === 'denied') {
+            fallbackToIp();
+          } else {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+              fallbackToIp,
+              { timeout: 5000, maximumAge: 300000 }
+            );
+          }
+        }).catch(() => fallbackToIp());
+      } else {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          fallbackToIp,
+          { timeout: 5000, maximumAge: 300000 }
+        );
+      }
     }
   }, []);
 
