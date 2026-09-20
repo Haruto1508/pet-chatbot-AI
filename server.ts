@@ -1971,22 +1971,44 @@ async function startServer(isVercel = false) {
     res.json({ success: true, id });
   });
 
-  // System & API Logs (Admin Only — Secure Server-Side DB Access)
+  // System & API Logs (Admin & SubAdmin — Secure Server-Side DB Access with Pagination)
   app.get('/api/logs', requireAdminAuth, async (req: Request, res: Response) => {
     try {
-      const { log_type, level, limit } = req.query;
+      const { log_type, level, limit, page, search } = req.query;
+      const pageNum = Math.max(1, parseInt((page as string) || '1', 10));
+      const pageSize = Math.min(200, Math.max(10, parseInt((limit as string) || '30', 10)));
+      const from = (pageNum - 1) * pageSize;
+      const to = from + pageSize - 1;
+
       let query = supabase
         .from('api_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit ? parseInt(limit as string, 10) : 200);
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
 
-      if (log_type) query = query.eq('log_type', log_type as string);
-      if (level) query = query.eq('level', level as string);
+      if (log_type && log_type !== 'all') {
+        query = query.eq('log_type', log_type as string);
+      }
+      if (level && level !== 'all') {
+        query = query.eq('level', level as string);
+      }
+      if (search && (search as string).trim()) {
+        const term = (search as string).trim();
+        query = query.ilike('message', `%${term}%`);
+      }
 
-      const { data, error } = await query;
+      query = query.range(from, to);
+
+      const { data, count, error } = await query;
       if (error) return res.status(500).json(secureResponse({ error: error.message }));
-      return res.json(secureResponse(data || []));
+
+      const total = count ?? (data ? data.length : 0);
+      return res.json(secureResponse({
+        logs: data || [],
+        total,
+        page: pageNum,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(total / pageSize))
+      }));
     } catch (e: any) {
       return res.status(500).json(secureResponse({ error: e.message }));
     }

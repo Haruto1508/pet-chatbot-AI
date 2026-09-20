@@ -12,6 +12,7 @@ import {
   ApiLog,
   ApiLogType,
   ApiLogLevel,
+  PaginatedLogsResponse,
   AiEvaluationReport
 } from '../types';
 import { supabase } from './supabaseClient';
@@ -633,15 +634,35 @@ export const api = {
     log_type?: ApiLogType;
     level?: ApiLogLevel;
     limit?: number;
-  }): Promise<ApiLog[]> => {
+    page?: number;
+    search?: string;
+  }): Promise<PaginatedLogsResponse> => {
     const params = new URLSearchParams();
     if (filters?.log_type) params.set('log_type', filters.log_type);
     if (filters?.level) params.set('level', filters.level);
     if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.page) params.set('page', String(filters.page));
+    if (filters?.search) params.set('search', filters.search);
     const qs = params.toString();
     const res = await authFetch(`/api/logs${qs ? `?${qs}` : ''}`);
     if (!res.ok) throw new Error('Không thể tải nhật ký');
-    return res.json();
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      return {
+        logs: data,
+        total: data.length,
+        page: 1,
+        pageSize: data.length,
+        totalPages: 1
+      };
+    }
+    return {
+      logs: Array.isArray(data?.logs) ? data.logs : [],
+      total: data?.total ?? 0,
+      page: data?.page ?? 1,
+      pageSize: data?.pageSize ?? 30,
+      totalPages: data?.totalPages ?? 1
+    };
   },
 
   writeLog: async (_log?: Omit<ApiLog, 'id' | 'created_at'>): Promise<void> => {

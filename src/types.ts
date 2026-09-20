@@ -151,6 +151,14 @@ export interface ApiLog {
   status_code?: number | null;
 }
 
+export interface PaginatedLogsResponse {
+  logs: ApiLog[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export type AnalyticsEventType =
   | 'PAGE_VIEW'
   | 'CHAT_OPEN'
