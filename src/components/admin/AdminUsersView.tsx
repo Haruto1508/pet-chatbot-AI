@@ -9,6 +9,7 @@ import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { AdminChatSessionsModal } from './AdminChatSessionsModal';
+import { TableRowsSkeleton } from '../common/LoadingSkeleton';
 
 interface AdminUsersViewProps {
   currentUser: UserProfile;
@@ -404,14 +405,11 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
                 <th className="p-4 text-right">Thao Tác Quản Trị</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="text-center p-8 text-slate-500">
-                    Đang tải danh sách người dùng...
-                  </td>
-                </tr>
-              ) : filteredUsers.length === 0 ? (
+            {loading ? (
+              <TableRowsSkeleton rows={pageSize} cols={5} />
+            ) : (
+              <tbody className="divide-y divide-slate-100">
+                {filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="text-center p-8 text-slate-500">
                     Không tìm thấy tài khoản nào phù hợp bộ lọc.
@@ -558,6 +556,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
                 })
               )}
             </tbody>
+          )}
           </table>
         </div>
 

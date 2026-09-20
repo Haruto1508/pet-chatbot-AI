@@ -3,6 +3,7 @@ import { MapPin, Plus, Edit, Trash2, Phone, Star, AlertCircle, X } from 'lucide-
 import { VetClinic } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { CardsGridSkeleton } from '../common/LoadingSkeleton';
 
 export const AdminClinicsView: React.FC = () => {
   const { showSuccess, showError } = useNotification();
@@ -151,7 +152,9 @@ export const AdminClinicsView: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {loading ? (
-          <div className="text-center py-12 text-slate-500 text-xs col-span-2">Đang tải...</div>
+          <div className="col-span-1 md:col-span-2">
+            <CardsGridSkeleton count={4} />
+          </div>
         ) : (
           clinics.map((clinic) => (
             <div key={clinic.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">

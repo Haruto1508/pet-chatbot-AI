@@ -8,6 +8,7 @@ import {
 import { ApiLog, ApiLogLevel, ApiLogType } from '../../types';
 import { api } from '../../services/api';
 import { AdminChatSessionsModal } from './AdminChatSessionsModal';
+import { LogsListSkeleton } from '../common/LoadingSkeleton';
 
 const LOG_TYPES: { value: ApiLogType | 'all'; label: string; icon: React.ReactNode }[] = [
   { value: 'all',      label: 'Tất cả',    icon: <Activity className="w-3.5 h-3.5" /> },
@@ -381,9 +382,8 @@ export const AdminLogView: React.FC = () => {
       {/* ── Log Table List ── */}
       <div className="flex-1 overflow-y-auto px-6 py-3">
         {loading && logs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
-            <RefreshCw className="w-8 h-8 animate-spin mb-3 text-indigo-500" />
-            <p className="text-sm font-semibold">Đang truy vấn nhật ký hệ thống...</p>
+          <div className="py-2">
+            <LogsListSkeleton count={pageSize || 10} />
           </div>
         ) : logs.length === 0 && !fetchError ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-2xs">

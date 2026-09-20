@@ -40,6 +40,7 @@ import {
 import { SystemStats, MedicalRecord, AnalyticsEvent } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
+import { AdminPageSkeleton } from '../common/LoadingSkeleton';
 
 // Module-level cache to avoid re-fetching stats when this component briefly
 // remounts (e.g. caused by Supabase token-refresh firing SIGNED_IN event).
@@ -115,12 +116,7 @@ export const AdminDashboardView: React.FC = () => {
   }, [timeRange]);
 
   if (loading || !stats) {
-    return (
-      <div className="flex flex-col items-center justify-center py-28 space-y-4">
-        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-        <p className="text-sm font-medium text-slate-500">Đang tải và tổng hợp dữ liệu thống kê Vethic Analytics...</p>
-      </div>
-    );
+    return <AdminPageSkeleton title="Đang tải và tổng hợp dữ liệu thống kê Vethic Analytics..." />;
   }
 
   // Triage breakdown percentages

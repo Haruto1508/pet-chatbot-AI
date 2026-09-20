@@ -3,6 +3,7 @@ import { Newspaper, Search, ShieldAlert, BookOpen, Clock, Tag, ChevronRight } fr
 import { KnowledgeArticle } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
+import { CardsGridSkeleton } from '../common/LoadingSkeleton';
 
 const DEFAULT_ARTICLE_IMAGE = 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&q=80&w=800';
 
@@ -183,7 +184,7 @@ export const ArticlesNewsView: React.FC = () => {
 
           {/* Articles Grid */}
           {loading ? (
-            <div className="text-center py-12 text-slate-500 text-xs">Đang tải kiến thức y khoa...</div>
+            <CardsGridSkeleton count={6} />
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 bg-white rounded-2xl border border-slate-200 p-8">
               <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-2" />

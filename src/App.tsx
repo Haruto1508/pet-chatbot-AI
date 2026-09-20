@@ -15,6 +15,7 @@ import { AdminAccessDeniedView } from './components/common/AdminAccessDeniedView
 import { MaintenanceView } from './components/common/MaintenanceView';
 import { getTabFromPath, getPathFromTab, TAB_TITLES, TAB_DESCRIPTIONS } from './utils/routes';
 import { trackEvent } from './utils/analytics';
+import { UniversalPageLoader, AdminPageSkeleton } from './components/common/LoadingSkeleton';
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -38,17 +39,7 @@ const AdminHealthCheckView  = lazyWithRetry(() => import('./components/admin/Adm
 const AdminLogView          = lazyWithRetry(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
 const AdminAiEvaluationView = lazyWithRetry(() => import('./components/admin/AdminAiEvaluationView').then(m => ({ default: m.AdminAiEvaluationView })));
 
-// Loading spinner fallback for lazy-loaded components
-function PageLoader() {
-  return (
-    <div className="flex-1 flex items-center justify-center h-full">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-10 h-10 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
-        <span className="text-sm text-slate-500 font-medium">Đang tải...</span>
-      </div>
-    </div>
-  );
-}
+const AUTH_USER_STORAGE_KEY = 'vethic_auth_user';
 
 const guestUser: UserProfile = {
   id: 'guest',
@@ -60,6 +51,20 @@ const guestUser: UserProfile = {
   createdAt: new Date().toISOString()
 };
 
+function getInitialUser(): UserProfile {
+  if (typeof window === 'undefined') return guestUser;
+  try {
+    const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.id && parsed.role) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return guestUser;
+}
+
 export function App() {
   const getInitialTab = () => {
     const tab = getTabFromPath(window.location.pathname);
@@ -70,10 +75,15 @@ export function App() {
     return tab;
   };
 
-  const [currentUser, setCurrentUser] = useState<UserProfile>(guestUser);
+  const [currentUser, setCurrentUser] = useState<UserProfile>(getInitialUser);
   const [currentTab, setCurrentTab] = useState<string>(getInitialTab());
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const initialUser = getInitialUser();
+    // If we already have a cached authenticated user in localStorage, don't block the screen with full loader
+    return initialUser.id === 'guest';
+  });
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean>(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState<string>('');
   const syncedUserIdRef = useRef<string | null>(null);
@@ -325,6 +335,9 @@ export function App() {
         trackEvent('LOGIN', { userId: session.user.id, email: session.user.email });
       } else if (event === 'SIGNED_OUT') {
         syncedUserIdRef.current = null;
+        try {
+          localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+        } catch {}
         setCurrentUser(guestUser);
         setPets([]);
         setSelectedPet(null);
@@ -372,6 +385,9 @@ export function App() {
 
       syncedUserIdRef.current = syncedUser.id;
       setCurrentUser(syncedUser);
+      try {
+        localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(syncedUser));
+      } catch {}
       clearAuthHash();
       
       const currentPath = window.location.pathname.substring(1);
@@ -472,7 +488,7 @@ export function App() {
                   : 'overflow-y-auto p-3 sm:p-6 max-w-7xl pt-14 lg:pt-6 scrollbar-page'
             }`}
           >
-            <Suspense fallback={<PageLoader />}>
+            <Suspense fallback={<UniversalPageLoader currentTab={currentTab} />}>
             {/* User Navigation Views */}
             {currentTab === 'chat' && (
               <PetChatView
@@ -555,7 +571,7 @@ export function App() {
             {/* Admin Navigation Views - Protected by Role Guard */}
             {currentTab.startsWith('admin_') && (
               isAuthLoading ? (
-                <PageLoader />
+                <AdminPageSkeleton />
               ) : (currentUser.role === 'admin' || currentUser.role === 'subadmin') ? (
                 <>
                   {/* Subadmin blocked tabs: useEffect will redirect to dashboard */}
