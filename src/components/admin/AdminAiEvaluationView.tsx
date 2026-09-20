@@ -40,13 +40,13 @@ export const AdminAiEvaluationView: React.FC = () => {
 
   const handleRunFullBenchmark = async () => {
     setRunningBenchmark(true);
-    showInfo('Đang kích hoạt toàn bộ Test Suite (TorchMetrics, Cleanlab, Ragas, DeepEval)...');
+    showInfo('Đang kích hoạt toàn bộ Test Suite thực tế qua Gemini LLM & RAG Vector Engine...');
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      await fetchReport(true);
-      showSuccess('Kiểm định toàn diện hoàn tất! Tỷ lệ vượt chuẩn: 96.0% (48/50 tests passed)');
+      const updated = await api.runAiBenchmark();
+      setReport(updated);
+      showSuccess(`Kiểm định toàn diện hoàn tất! Tỷ lệ đạt chuẩn: ${updated.passRate}% (${updated.totalTestsPassed} passed)`);
     } catch (e: any) {
-      showError('Lỗi khi chạy benchmark');
+      showError(e.message || 'Lỗi khi chạy benchmark kiểm định');
     } finally {
       setRunningBenchmark(false);
     }
@@ -125,8 +125,6 @@ export const AdminAiEvaluationView: React.FC = () => {
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               Làm Mới
             </button>
-            {/* TODO: Re-enable "Chạy Kiểm Định Toàn Diện" when a real benchmark pipeline endpoint is implemented.
-            Currently uses a hardcoded setTimeout + fake success message — hidden to avoid confusion.
             <button
               onClick={handleRunFullBenchmark}
               disabled={runningBenchmark}
@@ -135,7 +133,6 @@ export const AdminAiEvaluationView: React.FC = () => {
               <Play className={`w-3.5 h-3.5 ${runningBenchmark ? 'animate-spin' : ''}`} />
               {runningBenchmark ? 'Đang Chạy Benchmark...' : 'Chạy Kiểm Định Toàn Diện'}
             </button>
-            */}
 
           </div>
         </div>

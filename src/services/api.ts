@@ -897,5 +897,17 @@ export const api = {
       throw new Error(`Lỗi thực thi kiểm định: ${res.statusText}`);
     }
     return res.json();
+  },
+
+  runAiBenchmark: async (): Promise<AiEvaluationReport> => {
+    const res = await authFetch('/api/admin/ai-evaluation/benchmark', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!res.ok) {
+      throw new Error(`Lỗi chạy bộ kiểm định benchmark: ${res.statusText}`);
+    }
+    const json = await res.json();
+    return json.data;
   }
 };

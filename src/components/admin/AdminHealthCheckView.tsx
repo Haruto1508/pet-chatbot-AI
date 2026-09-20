@@ -367,6 +367,12 @@ export const AdminHealthCheckView: React.FC = () => {
 
             <div className="bg-slate-50 rounded-xl p-2.5 space-y-1 text-xs">
               <div className="flex items-center justify-between text-slate-600">
+                <span>Độ trễ API:</span>
+                <span className="font-bold text-slate-900">
+                  {health?.gemini?.latencyMs !== null && health?.gemini?.latencyMs !== undefined ? `${health?.gemini?.latencyMs}ms` : '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-slate-600">
                 <span>Nguồn API Key:</span>
                 <span className="font-bold text-slate-900">
                   {health?.gemini?.source === 'database' ? 'Admin DB' : 'Môi trường (.env)'}
