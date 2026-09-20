@@ -75,13 +75,16 @@ export const AdminNotifications: React.FC<AdminNotificationsProps> = ({ onNaviga
   useEffect(() => {
     loadNotifications();
 
-    const handleStorageChange = () => loadNotifications();
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key && !e.key.startsWith('petcare_')) return;
+      loadNotifications();
+    };
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('petcare_notifications_updated', handleStorageChange);
+    window.addEventListener('petcare_notifications_updated', () => loadNotifications());
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('petcare_notifications_updated', handleStorageChange);
+      window.removeEventListener('petcare_notifications_updated', () => loadNotifications());
     };
   }, []);
 

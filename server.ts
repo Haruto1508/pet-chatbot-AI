@@ -322,7 +322,7 @@ async function startServer(isVercel = false) {
       id: string;
       name: string;
       email: string;
-      role: 'user' | 'admin';
+      role: 'user' | 'admin' | 'subadmin';
       status: 'active' | 'suspended';
     } | null;
   }
@@ -352,7 +352,14 @@ async function startServer(isVercel = false) {
         userEmail.endsWith('@vethic.ai') ||
         userEmail.endsWith('@petcare.ai');
 
-      const effectiveRole: 'user' | 'admin' = (profile?.role === 'admin' || isAdminEmail) ? 'admin' : 'user';
+      // Determine effective role: hard-coded admin emails always get 'admin'.
+      // Otherwise trust the DB role which can be 'user', 'admin', or 'subadmin'.
+      const dbRole = profile?.role as string | undefined;
+      const effectiveRole: 'user' | 'admin' | 'subadmin' = isAdminEmail
+        ? 'admin'
+        : (dbRole === 'admin' || dbRole === 'subadmin')
+          ? dbRole as 'admin' | 'subadmin'
+          : 'user';
 
       return {
         user,
@@ -373,6 +380,7 @@ async function startServer(isVercel = false) {
     }
   }
 
+  // Allows both 'admin' and 'subadmin' roles (most admin API routes)
   async function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
     const auth = await resolveAuthContext(req);
     if (!auth || !auth.user) {
@@ -387,13 +395,32 @@ async function startServer(isVercel = false) {
       });
     }
 
-    if (auth.profile?.role !== 'admin') {
+    if (auth.profile?.role !== 'admin' && auth.profile?.role !== 'subadmin') {
       serverLog('SYSTEM', 'WARN', 'ADMIN_ACCESS_DENIED', `User ${auth.profile?.email} (ID: ${auth.user.id}) cố gọi API Admin`);
       return res.status(403).json({
-        error: 'Từ chối truy cập: Bạn không có quyền Quản trị viên (Admin)'
+        error: 'Từ chối truy cập: Bạn không có quyền Quản trị viên'
       });
     }
 
+    (req as any).auth = auth;
+    next();
+  }
+
+  // Only allows true 'admin' role (user management, system config, role changes)
+  async function requireFullAdminAuth(req: Request, res: Response, next: NextFunction) {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.user) {
+      return res.status(401).json({ error: 'Yêu cầu đăng nhập quản trị viên' });
+    }
+    if (auth.profile?.status === 'suspended') {
+      return res.status(403).json({ error: 'Tài khoản của bạn đang bị tạm khóa' });
+    }
+    if (auth.profile?.role !== 'admin') {
+      serverLog('SYSTEM', 'WARN', 'FULL_ADMIN_ACCESS_DENIED', `Subadmin ${auth.profile?.email} cố gọi Full-Admin API`);
+      return res.status(403).json({
+        error: 'Từ chối truy cập: Chức năng này chỉ dành cho Quản trị viên cấp cao (Admin)'
+      });
+    }
     (req as any).auth = auth;
     next();
   }
@@ -1006,7 +1033,7 @@ async function startServer(isVercel = false) {
   });
 
   // Test API Key Endpoint (Admin Only)
-  app.post('/api/test-api-key', requireAdminAuth, heavyTestRateLimiter, async (req: Request, res: Response) => {
+  app.post('/api/test-api-key', requireFullAdminAuth, heavyTestRateLimiter, async (req: Request, res: Response) => {
     const { apiKey, model = 'gemini-3.6-flash', provider = 'gemini', customBaseUrl } = req.body;
     if (!apiKey) {
       return res.status(400).json({ ok: false, error: 'Vui lòng nhập API Key để kiểm tra.' });
@@ -1628,7 +1655,7 @@ async function startServer(isVercel = false) {
       const adminUserIds = new Set<string>();
       allUsers.forEach(u => {
         const email = (u.email || '').trim().toLowerCase();
-        if (u.role === 'admin' || email === 'thaivinh2344@gmail.com' || email.endsWith('@vethic.ai') || email.endsWith('@petcare.ai')) {
+        if (u.role === 'admin' || u.role === 'subadmin' || email === 'thaivinh2344@gmail.com' || email.endsWith('@vethic.ai') || email.endsWith('@petcare.ai')) {
           adminUserIds.add(u.id);
         }
       });
@@ -1818,8 +1845,10 @@ async function startServer(isVercel = false) {
       }
 
       if (existingUser) {
-        // Keep existing role if already admin in database
-        const finalRole = existingUser.role === 'admin' ? 'admin' : role;
+        // Keep existing role if already admin or subadmin in database
+        const finalRole: 'user' | 'admin' | 'subadmin' = (existingUser.role === 'admin' || role === 'admin')
+          ? 'admin'
+          : (existingUser.role === 'subadmin' ? 'subadmin' : 'user');
         const { data, error: updateError } = await supabase
           .from('users')
           .update({
@@ -1847,28 +1876,59 @@ async function startServer(isVercel = false) {
     }
   });
 
-  // Users Management (Admin Only)
-  app.get('/api/users', requireAdminAuth, async (_req: Request, res: Response) => {
+  // Users Management — Full Admin only
+  app.get('/api/users', requireFullAdminAuth, async (_req: Request, res: Response) => {
     const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
-    const mapped = data.map(u => ({
-      ...u,
-      createdAt: u.created_at
-    }));
+    const mapped = (data || []).map(u => {
+      const email = (u.email || '').trim().toLowerCase();
+      const isAdminEmail = email === 'thaivinh2344@gmail.com' || email.endsWith('@vethic.ai') || email.endsWith('@petcare.ai');
+      const role: 'user' | 'admin' | 'subadmin' = (u.role === 'admin' || isAdminEmail)
+        ? 'admin'
+        : (u.role === 'subadmin' ? 'subadmin' : 'user');
+      return {
+        ...u,
+        role,
+        createdAt: u.created_at
+      };
+    });
     res.json(mapped);
   });
 
-  app.put('/api/users/:id/status', requireAdminAuth, async (req: Request, res: Response) => {
+  app.put('/api/users/:id/status', requireFullAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status } = req.body;
+    if (!['active', 'suspended'].includes(status)) return res.status(400).json({ error: 'Trạng thái không hợp lệ' });
     const { data, error } = await supabase.from('users').update({ status }).eq('id', id).select().single();
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'User not found' });
     res.json({ ...data, createdAt: data.created_at });
   });
 
-  app.delete('/api/users/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  app.put('/api/users/:id/role', requireFullAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
+    const { role } = req.body;
+    // Admin can only assign 'subadmin' or demote back to 'user' — never self-assign 'admin' via this route
+    if (!['user', 'subadmin'].includes(role)) {
+      return res.status(400).json({ error: 'Chỉ có thể đặt role là "subadmin" hoặc "user"' });
+    }
+    const auth = (req as any).auth;
+    if (auth?.profile?.id === id) {
+      return res.status(400).json({ error: 'Không thể thay đổi role của chính mình' });
+    }
+    const { data, error } = await supabase.from('users').update({ role }).eq('id', id).select().single();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) return res.status(404).json({ error: 'User not found' });
+    serverLog('SYSTEM', 'INFO', 'ROLE_UPDATED', `Admin ${auth?.profile?.email} đặt role ${role} cho user ID: ${id}`);
+    res.json({ ...data, createdAt: data.created_at });
+  });
+
+  app.delete('/api/users/:id', requireFullAdminAuth, async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const auth = (req as any).auth;
+    if (auth?.profile?.id === id) {
+      return res.status(400).json({ error: 'Không thể xóa tài khoản của chính mình' });
+    }
     const { error } = await supabase.from('users').delete().eq('id', id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true, id });
@@ -2371,7 +2431,7 @@ async function startServer(isVercel = false) {
     }
   });
 
-  app.post('/api/config', requireAdminAuth, async (req: Request, res: Response) => {
+  app.post('/api/config', requireFullAdminAuth, async (req: Request, res: Response) => {
     try {
       const local = getLocalConfig();
 

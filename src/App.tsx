@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { UserProfile, PetProfile, MedicalRecord } from './types';
 import { initialUsers, initialPets } from './data/initialData';
 import { api, authFetch } from './services/api';
@@ -77,6 +77,7 @@ export function App() {
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean>(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState<string>('');
+  const syncedUserIdRef = useRef<string | null>(null);
 
   // Real-time Maintenance Mode Polling (every 15s)
   useEffect(() => {
@@ -283,6 +284,13 @@ export function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Subadmin tab guard: immediately redirect to admin_dashboard if attempting to access blocked admin tabs
+  useEffect(() => {
+    if (currentUser.role === 'subadmin' && (currentTab === 'admin_users' || currentTab === 'admin_config')) {
+      setCurrentTab('admin_dashboard');
+    }
+  }, [currentUser.role, currentTab]);
+
   // Handle Supabase Auth State
   useEffect(() => {
     const checkUser = async () => {
@@ -305,12 +313,19 @@ export function App() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
+        // Prevent background tab switch/window focus from re-syncing, flickering PageLoader, and re-mounting tabs
+        if (syncedUserIdRef.current === session.user.id) {
+          setIsLoginModalOpen(false);
+          clearAuthHash();
+          return;
+        }
         setIsAuthLoading(true);
         await syncAndSetUser(session.user);
         setIsLoginModalOpen(false);
         clearAuthHash();
         trackEvent('LOGIN', { userId: session.user.id, email: session.user.email });
       } else if (event === 'SIGNED_OUT') {
+        syncedUserIdRef.current = null;
         setCurrentUser(guestUser);
         setPets([]);
         setSelectedPet(null);
@@ -356,18 +371,19 @@ export function App() {
         };
       }
 
+      syncedUserIdRef.current = syncedUser.id;
       setCurrentUser(syncedUser);
       clearAuthHash();
       
       const currentPath = window.location.pathname.substring(1);
       const isAdminRoute = currentPath.startsWith('admin') || currentTab.startsWith('admin_');
       
-      if (syncedUser.role !== 'admin' && isAdminRoute) {
+      if (syncedUser.role !== 'admin' && syncedUser.role !== 'subadmin' && isAdminRoute) {
         // Kick non-admins out of admin routes
         setCurrentTab('chat');
       } else if (window.location.pathname === '/' || window.location.pathname === '/chat') {
         // Default landing page based on role
-        if (syncedUser.role === 'admin') {
+        if (syncedUser.role === 'admin' || syncedUser.role === 'subadmin') {
           setCurrentTab('admin_dashboard');
         } else {
           setCurrentTab('chat');
@@ -381,8 +397,8 @@ export function App() {
     }
   };
 
-  // Maintenance Mode Guard: All non-admin users and visitors are blocked and redirected to MaintenanceView
-  if (!isAuthLoading && isMaintenanceMode && currentUser.role !== 'admin') {
+  // Maintenance Mode Guard: All non-admin/non-subadmin users and visitors are blocked
+  if (!isAuthLoading && isMaintenanceMode && currentUser.role !== 'admin' && currentUser.role !== 'subadmin') {
     return (
       <NotificationProvider>
         <MaintenanceView
@@ -537,21 +553,23 @@ export function App() {
               />
             )}
 
-            {/* Admin Navigation Views - Protected by Strict Role Guard */}
+            {/* Admin Navigation Views - Protected by Role Guard */}
             {currentTab.startsWith('admin_') && (
               isAuthLoading ? (
                 <PageLoader />
-              ) : currentUser.role === 'admin' ? (
+              ) : (currentUser.role === 'admin' || currentUser.role === 'subadmin') ? (
                 <>
+                  {/* Subadmin blocked tabs: useEffect will redirect to dashboard */}
+                  {currentUser.role === 'subadmin' && (currentTab === 'admin_users' || currentTab === 'admin_config') && null}
                   {currentTab === 'admin_dashboard' && <AdminDashboardView />}
-                  {currentTab === 'admin_users'     && <AdminUsersView currentUser={currentUser} />}
+                  {currentTab === 'admin_users'     && currentUser.role === 'admin' && <AdminUsersView currentUser={currentUser} />}
                   {/* Quản lý bệnh án tạm thời tắt theo yêu cầu, có thể mở lại khi cần:
                   {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
                   */}
                   {currentTab === 'admin_clinics'   && <AdminClinicsView />}
                   {currentTab === 'admin_rag'       && <AdminKnowledgeRAGView />}
                   {currentTab === 'admin_eval'      && <AdminAiEvaluationView />}
-                  {currentTab === 'admin_config'    && <AdminSystemConfigView />}
+                  {currentTab === 'admin_config'    && currentUser.role === 'admin' && <AdminSystemConfigView />}
                   {currentTab === 'admin_health'    && <AdminHealthCheckView />}
                   {currentTab === 'admin_logs'      && <AdminLogView />}
                 </>

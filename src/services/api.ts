@@ -172,6 +172,20 @@ export const api = {
     return res.json();
   },
 
+  updateUserRole: async (id: string, role: 'user' | 'subadmin'): Promise<UserProfile> => {
+    const res = await authFetch(`/api/users/${id}/role`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Lỗi không xác định' }));
+      throw new Error(err.error || 'Cập nhật role thất bại');
+    }
+    return res.json();
+  },
+
+
   deleteUser: async (id: string): Promise<void> => {
     await authFetch(`/api/users/${id}`, { method: 'DELETE' });
   },

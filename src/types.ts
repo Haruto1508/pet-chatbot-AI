@@ -1,6 +1,7 @@
 export type TriageLevel = 'RED' | 'YELLOW' | 'GREEN';
 
-export type UserRole = 'user' | 'admin';
+export type UserRole = 'user' | 'admin' | 'subadmin';
+
 
 export interface UserProfile {
   id: string;

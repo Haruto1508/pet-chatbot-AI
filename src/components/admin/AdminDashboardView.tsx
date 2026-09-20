@@ -96,13 +96,22 @@ export const AdminDashboardView: React.FC = () => {
   useEffect(() => {
     const cached = _statsCache[timeRange];
     const now = Date.now();
-    // Use cached data if still fresh (avoids refetch on brief remount from auth events)
+    // Use cached data if still fresh
     if (cached && now - cached.loadedAt < STATS_CACHE_TTL_MS) {
       setStats(cached.data);
       setLoading(false);
       return;
     }
     loadData(timeRange);
+  }, [timeRange]);
+
+  // Explicit refresh when clicking sidebar menu item
+  useEffect(() => {
+    const handleSidebarRefresh = () => {
+      loadData(timeRange, true);
+    };
+    window.addEventListener('petcare_refresh_admin_dashboard', handleSidebarRefresh);
+    return () => window.removeEventListener('petcare_refresh_admin_dashboard', handleSidebarRefresh);
   }, [timeRange]);
 
   if (loading || !stats) {

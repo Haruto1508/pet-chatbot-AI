@@ -24,8 +24,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentTab, setCurrentTab, currentUser, onOpenLoginModal,
   isOpenMobile, onCloseMobile, isDesktopOpen, onToggleDesktop,
 }) => {
-  const isAdminRole = currentUser.role === "admin";
-  const isAdminView = currentTab.startsWith("admin");
+  const isAdminRole = currentUser.role === 'admin' || currentUser.role === 'subadmin';
+  const isFullAdmin = currentUser.role === 'admin';
+  const isAdminView = currentTab.startsWith('admin');
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const userNavItems = [
@@ -49,11 +50,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "admin_health",    label: "Kiểm Tra & Giữ Sống",     icon: Activity },
     { id: "admin_logs",      label: "Log Hệ Thống",            icon: ScrollText },
   ];
+  // Subadmin cannot access user management or system config
+  const SUBADMIN_BLOCKED_TABS = ['admin_users', 'admin_config'];
+
+  const visibleAdminNavItems = adminNavItems.filter(item =>
+    isFullAdmin || !SUBADMIN_BLOCKED_TABS.includes(item.id)
+  );
 
   const handleNav = (tabId: string) => {
+    if (currentTab === tabId) {
+      if (tabId === 'admin_dashboard') window.dispatchEvent(new Event('petcare_refresh_admin_dashboard'));
+      if (tabId === 'admin_users') window.dispatchEvent(new Event('petcare_refresh_admin_users'));
+    }
     setCurrentTab(tabId);
     onCloseMobile();
   };
+
 
   const avatarInitials = currentUser.name
     ? currentUser.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()
@@ -79,7 +91,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-black text-white">Vethic</span>
-                    <span className="bg-amber-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded uppercase">ADMIN</span>
+                    <span className="bg-amber-400 text-slate-950 text-[9px] font-black px-1.5 py-0.5 rounded uppercase">
+                      {isFullAdmin ? 'ADMIN' : 'SUBADMIN'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -91,12 +105,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Admin Nav */}
             <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-0.5">
               <p className="px-3 mb-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">Menu Quản Trị</p>
-              {adminNavItems.map(({ id, label, icon: Icon }) => {
+              {visibleAdminNavItems.map(({ id, label, icon: Icon }) => {
                 const isActive = currentTab === id;
                 return (
                   <button key={id} onClick={() => handleNav(id)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all text-left ${
-                      isActive ? "bg-amber-400 text-slate-950 font-black" : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                      isActive ? 'bg-amber-400 text-slate-950 font-black' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                     }`}>
                     <Icon className="w-4 h-4 flex-shrink-0" />
                     <span>{label}</span>
