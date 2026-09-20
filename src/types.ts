@@ -147,16 +147,68 @@ export interface ApiLog {
   status_code?: number | null;
 }
 
+export type AnalyticsEventType =
+  | 'PAGE_VIEW'
+  | 'CHAT_OPEN'
+  | 'CHAT_MESSAGE_SENT'
+  | 'CHAT_SESSION_STARTED'
+  | 'LOGIN'
+  | 'REGISTER';
+
+export interface AnalyticsEvent {
+  id: string;
+  eventType: AnalyticsEventType;
+  visitorId: string;
+  userId?: string | null;
+  path?: string;
+  metadata?: Record<string, any>;
+  createdAt: string;
+}
+
 export interface SystemStats {
-  totalUsers: number;
-  activeChats: number;
+  // 10 Core Metrics requested by user
+  websiteVisitors: number;
+  uniqueVisitors: number;
+  registeredUsers: number;
+  activeUsers: number;
+  chatUsers: number;
+  guestChatUsers: number;
+  loggedInChatUsers: number;
+  chatSessions: number;
+  guestSessions: number;
+  registeredSessions: number;
+  totalMessages: number;
+  pageViews: number;
+
+  // Conversion & Engagement Rates
+  visitorToChatRate: number; // (chatUsers / uniqueVisitors) * 100
+  guestToRegisteredRate: number; // (registeredUsers / uniqueVisitors) * 100
+  avgMessagesPerSession: number; // totalMessages / chatSessions
+  userGrowth: number;
+
+  // Domain & Veterinary Metrics
   totalPets: number;
   totalMedicalRecords: number;
   triageRedCount: number;
   triageYellowCount: number;
   triageGreenCount: number;
-  history?: any[];
-  userGrowth?: number;
+
+  // Historical trend data for graphs
+  history?: Array<{
+    date: string;
+    visitors: number;
+    chatUsers: number;
+    chats: number;
+    messages: number;
+    users?: number;
+  }>;
+
+  // Real-time recent event stream
+  recentEvents?: AnalyticsEvent[];
+
+  // Legacy backwards compatibility aliases
+  totalUsers?: number;
+  activeChats?: number;
 }
 
 export interface UnlockRequest {

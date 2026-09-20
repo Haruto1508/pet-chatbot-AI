@@ -39,6 +39,7 @@ import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, Medical
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { trackEvent } from '../../utils/analytics';
 
 interface Props {
   pets: PetProfile[];
@@ -177,6 +178,9 @@ export const PetChatView: React.FC<Props> = ({
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
+    // Track CHAT_OPEN telemetry
+    trackEvent('CHAT_OPEN', { isGuest, userId: isGuest ? undefined : currentUser.id });
+
     // Pre-fetch clinics for quick emergency recommendations
     api.getClinics().then((data) => {
       if (data && Array.isArray(data)) {
@@ -489,6 +493,13 @@ export const PetChatView: React.FC<Props> = ({
     setHasReceivedFirstChunk(false);
     setThinkingStep(0);
 
+    // Track CHAT_MESSAGE_SENT event
+    trackEvent('CHAT_MESSAGE_SENT', {
+      isGuest,
+      userId: isGuest ? undefined : currentUser.id,
+      hasImage: !!imageToSend
+    });
+
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
       const initialTitle = queryText.length > 30 ? queryText.substring(0, 30) + '...' : queryText;
@@ -505,6 +516,13 @@ export const PetChatView: React.FC<Props> = ({
         if (!isGuest) {
           setSessions(prev => [newSession, ...prev]);
         }
+
+        // Track CHAT_SESSION_STARTED event
+        trackEvent('CHAT_SESSION_STARTED', {
+          isGuest,
+          userId: isGuest ? undefined : currentUser.id,
+          sessionId: activeSessionId
+        });
 
         // Generate smart title in the background
         api.generateTitle(queryText).then(async ({ title }) => {

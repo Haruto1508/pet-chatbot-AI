@@ -13,6 +13,7 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import { NotFoundView } from './components/common/NotFoundView';
 import { AdminAccessDeniedView } from './components/common/AdminAccessDeniedView';
 import { getTabFromPath, getPathFromTab, TAB_TITLES, TAB_DESCRIPTIONS } from './utils/routes';
+import { trackEvent } from './utils/analytics';
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -90,6 +91,13 @@ export function App() {
     if (metaDesc && TAB_DESCRIPTIONS[currentTab]) {
       metaDesc.setAttribute('content', TAB_DESCRIPTIONS[currentTab]);
     }
+
+    // Telemetry: track page views
+    trackEvent('PAGE_VIEW', {
+      tab: currentTab,
+      path: currentPath,
+      userId: currentUser.id !== 'guest' ? currentUser.id : undefined
+    });
   }, [currentTab, selectedRecord]);
 
   // Load record from URL query param if present
@@ -270,6 +278,7 @@ export function App() {
         await syncAndSetUser(session.user);
         setIsLoginModalOpen(false);
         clearAuthHash();
+        trackEvent('LOGIN', { userId: session.user.id, email: session.user.email });
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(guestUser);
         setPets([]);
