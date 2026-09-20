@@ -31,7 +31,7 @@ export const AdminArticlesView: React.FC = () => {
   const [title, setTitle] = useState('');
   const [species, setSpecies] = useState<'Chó' | 'Mèo' | 'Cả hai'>('Cả hai');
   const [category, setCategory] = useState<'symptom' | 'first_aid' | 'prevention' | 'nutrition'>('symptom');
-  const [urgencyLevel, setUrgencyLevel] = useState<TriageLevel>(TriageLevel.GREEN);
+  const [urgencyLevel, setUrgencyLevel] = useState<TriageLevel>('GREEN');
   const [summary, setSummary] = useState('');
   const [doctorAdvice, setDoctorAdvice] = useState('');
   const [imageUrl, setImageUrl] = useState('');
@@ -65,7 +65,7 @@ export const AdminArticlesView: React.FC = () => {
     setTitle('');
     setSpecies('Cả hai');
     setCategory('symptom');
-    setUrgencyLevel(TriageLevel.GREEN);
+    setUrgencyLevel('GREEN');
     setSummary('');
     setDoctorAdvice('');
     setImageUrl('');
@@ -83,7 +83,7 @@ export const AdminArticlesView: React.FC = () => {
     setTitle(art.title || '');
     setSpecies(art.species || 'Cả hai');
     setCategory(art.category || 'symptom');
-    setUrgencyLevel(art.urgencyLevel || TriageLevel.GREEN);
+    setUrgencyLevel(art.urgencyLevel || 'GREEN');
     setSummary(art.summary || '');
     setDoctorAdvice(art.doctorAdvice || '');
     setImageUrl(art.imageUrl || '');
@@ -216,7 +216,7 @@ export const AdminArticlesView: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Cơ sở tri thức RAG chính thức cho AI tư vấn. Hỗ trợ soạn thảo Markdown, quản lý checklist sơ cứu và xem trước giao diện người dùng.
+              Hỗ trợ soạn thảo Markdown, quản lý checklist sơ cứu và xem trước giao diện người dùng.
             </p>
           </div>
         </div>
@@ -482,9 +482,9 @@ export const AdminArticlesView: React.FC = () => {
                         onChange={(e) => setUrgencyLevel(e.target.value as any)}
                         className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 font-medium focus:border-teal-500 focus:outline-hidden"
                       >
-                        <option value={TriageLevel.GREEN}>🟢 Xanh lá (GREEN - Nhẹ / Chăm sóc tại nhà)</option>
-                        <option value={TriageLevel.YELLOW}>🟡 Vàng (YELLOW - Cần khám trong 24h)</option>
-                        <option value={TriageLevel.RED}>🔴 Đỏ (RED - Cấp cứu khẩn cấp tối nguy)</option>
+                        <option value="GREEN">🟢 Xanh lá (GREEN - Nhẹ / Chăm sóc tại nhà)</option>
+                        <option value="YELLOW">🟡 Vàng (YELLOW - Cần khám trong 24h)</option>
+                        <option value="RED">🔴 Đỏ (RED - Cấp cứu khẩn cấp tối nguy)</option>
                       </select>
                     </div>
                   </div>
