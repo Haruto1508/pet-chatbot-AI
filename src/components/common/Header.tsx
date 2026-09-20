@@ -60,8 +60,6 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Quản Lý Hồ Sơ Y Tế & Chẩn Đoán', badge: 'Admin System' };
       case 'admin_clinics':
         return { title: 'Cấu Hình Danh Sách Phòng Khám', badge: 'Google Maps Data' };
-      case 'admin_rag':
-        return { title: 'Cơ Sở Tri Thức RAG & Bệnh Lý AI', badge: 'Gemini Vector' };
       case 'admin_config':
         return { title: 'Cấu Hình Mô Hình AI & Tham Số', badge: 'System Config' };
       case 'admin_eval':

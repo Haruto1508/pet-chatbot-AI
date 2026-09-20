@@ -33,7 +33,6 @@ const AdminDashboardView = lazyWithRetry(() => import('./components/admin/AdminD
 const AdminUsersView = lazyWithRetry(() => import('./components/admin/AdminUsersView').then(m => ({ default: m.AdminUsersView })));
 const AdminPetsRecordsView = lazyWithRetry(() => import('./components/admin/AdminPetsRecordsView').then(m => ({ default: m.AdminPetsRecordsView })));
 const AdminClinicsView = lazyWithRetry(() => import('./components/admin/AdminClinicsView').then(m => ({ default: m.AdminClinicsView })));
-const AdminKnowledgeRAGView = lazyWithRetry(() => import('./components/admin/AdminKnowledgeRAGView').then(m => ({ default: m.AdminKnowledgeRAGView })));
 const AdminSystemConfigView = lazyWithRetry(() => import('./components/admin/AdminSystemConfigView').then(m => ({ default: m.AdminSystemConfigView })));
 const AdminHealthCheckView  = lazyWithRetry(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
 const AdminLogView          = lazyWithRetry(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
@@ -64,8 +63,8 @@ const guestUser: UserProfile = {
 export function App() {
   const getInitialTab = () => {
     const tab = getTabFromPath(window.location.pathname);
-    // Quản lý bệnh án tạm thời tắt theo yêu cầu, chuyển hướng an toàn về dashboard/chat
-    if (tab === 'records' || tab === 'record_detail' || tab === 'admin_records') {
+    // Quản lý bệnh án & RAG data tạm thời tắt theo yêu cầu, chuyển hướng an toàn về dashboard/chat
+    if (tab === 'records' || tab === 'record_detail' || tab === 'admin_records' || tab === 'admin_rag') {
       return tab.startsWith('admin') ? 'admin_dashboard' : 'chat';
     }
     return tab;
@@ -567,7 +566,6 @@ export function App() {
                   {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
                   */}
                   {currentTab === 'admin_clinics'   && <AdminClinicsView />}
-                  {currentTab === 'admin_rag'       && <AdminKnowledgeRAGView />}
                   {currentTab === 'admin_eval'      && <AdminAiEvaluationView />}
                   {currentTab === 'admin_config'    && currentUser.role === 'admin' && <AdminSystemConfigView />}
                   {currentTab === 'admin_health'    && <AdminHealthCheckView />}

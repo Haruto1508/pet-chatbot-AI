@@ -44,7 +44,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: "admin_users",     label: "Quản Lý Người Dùng",      icon: Users },
     // { id: "admin_records",   label: "Quản Lý Bệnh Án",         icon: FileText }, // Tạm thời tắt, tương lai có thể bật lại
     { id: "admin_clinics",   label: "Danh Sách Phòng Khám",    icon: MapPin },
-    { id: "admin_rag",       label: "Tri Thức RAG & AI",       icon: Database },
     { id: "admin_eval",      label: "Kiểm Định Chất Lượng AI", icon: Award },
     { id: "admin_config",    label: "Cấu Hình AI & API",       icon: Sliders },
     { id: "admin_health",    label: "Kiểm Tra & Giữ Sống",     icon: Activity },
