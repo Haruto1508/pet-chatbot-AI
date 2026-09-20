@@ -428,9 +428,16 @@ export const AdminChatSessionsModal: React.FC<AdminChatSessionsModalProps> = ({
                       </div>
 
                       {/* Session Title */}
-                      <h4 className="text-xs font-semibold text-slate-900 line-clamp-1 mb-1">
-                        {session.title || 'Hội thoại không tiêu đề'}
-                      </h4>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <h4 className="text-xs font-semibold text-slate-900 line-clamp-1 flex-1">
+                          {session.title || 'Hội thoại không tiêu đề'}
+                        </h4>
+                        {session.isHiddenFromUser && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-500 border border-slate-200 shrink-0" title="Đoạn chat này đã được người dùng ẩn/xóa khỏi giao diện cá nhân">
+                            Đã ẩn bởi user
+                          </span>
+                        )}
+                      </div>
 
                       {/* Footer Details */}
                       <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-1 border-t border-slate-100">

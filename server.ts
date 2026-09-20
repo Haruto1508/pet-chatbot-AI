@@ -3117,8 +3117,12 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
             role: 'user'
           };
         }
+        const isHidden = typeof s.title === 'string' && s.title.startsWith('[HIDDEN_USER]');
+        const cleanTitle = isHidden ? s.title.replace(/^\[HIDDEN_USER\]\s*/, '') : s.title;
         return {
           ...s,
+          title: cleanTitle,
+          isHiddenFromUser: isHidden,
           userId: s.user_id,
           petId: s.pet_id,
           user: user || null,
@@ -3126,7 +3130,10 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
           updatedAt: s.updated_at
         };
       });
-      res.json(secureResponse(mapped));
+
+      // Regular users only see active (non-hidden) sessions. Admin sees all sessions including soft-deleted ones.
+      const result = isAdmin ? mapped : mapped.filter(s => !s.isHiddenFromUser);
+      res.json(secureResponse(result));
     } catch (e: any) {
       res.status(500).json(secureResponse({ error: e.message }));
     }
@@ -3146,8 +3153,13 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       return res.status(403).json(secureResponse({ error: 'Không có quyền truy cập phiên chat này' }));
     }
     
+    const isHidden = typeof data.title === 'string' && data.title.startsWith('[HIDDEN_USER]');
+    const cleanTitle = isHidden ? data.title.replace(/^\[HIDDEN_USER\]\s*/, '') : data.title;
+
     res.json(secureResponse({
       ...data,
+      title: cleanTitle,
+      isHiddenFromUser: isHidden,
       userId: data.user_id,
       petId: data.pet_id,
       createdAt: data.created_at,
@@ -3228,16 +3240,30 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     const isAdmin = auth?.profile?.role === 'admin';
     const callerUserId = auth?.user?.id;
 
-    if (!isAdmin && callerUserId) {
-      const { data: session } = await supabase.from('chat_sessions').select('user_id').eq('id', id).single();
-      if (session && session.user_id !== callerUserId && session.user_id !== 'guest') {
-        return res.status(403).json(secureResponse({ error: 'Không có quyền xóa phiên chat này' }));
-      }
+    const { data: session } = await supabase.from('chat_sessions').select('*').eq('id', id).single();
+    if (!session) return res.status(404).json(secureResponse({ error: 'Session not found' }));
+
+    if (!isAdmin && callerUserId && session.user_id !== callerUserId && session.user_id !== 'guest') {
+      return res.status(403).json(secureResponse({ error: 'Không có quyền xóa phiên chat này' }));
     }
 
-    const { error } = await supabase.from('chat_sessions').delete().eq('id', id);
+    // Hard delete only when explicitly requested by admin
+    if (isAdmin && req.query.permanent === 'true') {
+      const { error } = await supabase.from('chat_sessions').delete().eq('id', id);
+      if (error) return res.status(500).json(secureResponse({ error: error.message }));
+      return res.json(secureResponse({ success: true, id, permanent: true }));
+    }
+
+    // Soft delete: hide from user view, preserve in database for Admin auditing & evaluation
+    const currentTitle = session.title || 'Phiên chat';
+    const updatedTitle = currentTitle.startsWith('[HIDDEN_USER]') ? currentTitle : `[HIDDEN_USER] ${currentTitle}`;
+    const { error } = await supabase.from('chat_sessions').update({
+      title: updatedTitle,
+      updated_at: new Date().toISOString()
+    }).eq('id', id);
+
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    res.json(secureResponse({ success: true, id }));
+    res.json(secureResponse({ success: true, id, hidden: true }));
   });
 
   app.delete('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
@@ -3246,9 +3272,27 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     const callerUserId = auth?.user?.id;
     const targetUserId = (isAdmin && req.query.userId) ? (req.query.userId as string) : (callerUserId || (req.query.userId === 'guest' ? 'guest' : ''));
     if (!targetUserId) return res.status(400).json(secureResponse({ error: 'Missing target user or unauthenticated' }));
-    const { error } = await supabase.from('chat_sessions').delete().eq('user_id', targetUserId);
-    if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    res.json(secureResponse({ success: true }));
+
+    // Hard delete only when explicitly requested by admin
+    if (isAdmin && req.query.permanent === 'true') {
+      const { error } = await supabase.from('chat_sessions').delete().eq('user_id', targetUserId);
+      if (error) return res.status(500).json(secureResponse({ error: error.message }));
+      return res.json(secureResponse({ success: true, permanent: true }));
+    }
+
+    // Soft delete: mark all user's sessions as hidden, preserving them for Admin auditing
+    const { data: userSessions } = await supabase.from('chat_sessions').select('id, title').eq('user_id', targetUserId);
+    if (userSessions && userSessions.length > 0) {
+      for (const s of userSessions) {
+        if (!s.title?.startsWith('[HIDDEN_USER]')) {
+          await supabase.from('chat_sessions').update({
+            title: `[HIDDEN_USER] ${s.title}`,
+            updated_at: new Date().toISOString()
+          }).eq('id', s.id);
+        }
+      }
+    }
+    res.json(secureResponse({ success: true, hidden: true }));
   });
 
   app.post('/api/generate-title', chatRateLimiter, async (req: Request, res: Response) => {
@@ -3917,6 +3961,20 @@ YÊU CẦU:
     serverLog('SYSTEM', 'OK', `Server khởi động`, `http://0.0.0.0:${PORT} | NODE_ENV=${process.env.NODE_ENV || 'development'}`);
     serverLog('SYSTEM', 'INFO', 'Supabase', `URL=${process.env.SUPABASE_URL ? '✅ Set' : '❌ MISSING'} | KEY=${process.env.SUPABASE_ANON_KEY ? '✅ Set' : '❌ MISSING'}`);
     serverLog('SYSTEM', 'INFO', 'Gemini', `API_KEY=${process.env.GEMINI_API_KEY ? '✅ Set' : '❌ MISSING'}`);
+
+    // Đảm bảo user "guest" luôn tồn tại trong DB để lưu chat_sessions của khách
+    supabase.from('users').upsert({
+      id: 'guest',
+      name: 'Khách (Guest)',
+      email: 'guest@petcare.local',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+      role: 'user',
+      status: 'active'
+    }, { onConflict: 'id' }).then(() => {
+      serverLog('SYSTEM', 'OK', 'Guest User Init', 'Tài khoản guest mặc định đã sẵn sàng');
+    }).catch(e => {
+      serverLog('SYSTEM', 'WARN', 'Guest User Init', e?.message || 'Warning');
+    });
 
     // Tự động "đánh thức" Python AI Server trên Render ngay khi khởi động Dev Server
     const renderUrl = 'https://pet-chatbot-ai.onrender.com';

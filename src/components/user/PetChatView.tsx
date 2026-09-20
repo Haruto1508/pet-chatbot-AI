@@ -32,7 +32,8 @@ import {
   MapPin,
   Phone,
   Navigation,
-  ShieldAlert
+  ShieldAlert,
+  UploadCloud
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord, VetClinic } from '../../types';
@@ -175,6 +176,8 @@ export const PetChatView: React.FC<Props> = ({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageMeta, setSelectedImageMeta] = useState<{ name: string; size: number } | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
@@ -388,14 +391,85 @@ export const PetChatView: React.FC<Props> = ({
     '🩸 Chó bị chảy máu nướu răng và hôi miệng'
   ];
 
+  // Cấu hình & Giới hạn tải ảnh theo quy định hệ thống (5MB, JPG/PNG/WEBP/GIF)
+  const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+  const processImageFile = (file: File) => {
+    if (!file) return;
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      showError('Định dạng tệp không được hỗ trợ. Vui lòng chọn ảnh JPG, PNG, WEBP hoặc GIF.');
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      showError(`Ảnh quá lớn (${(file.size / (1024 * 1024)).toFixed(1)}MB). Giới hạn tối đa là 5MB theo cấu hình hệ thống.`);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSelectedImage(reader.result as string);
+      setSelectedImageMeta({
+        name: file.name || 'anh_trieu_chung.jpg',
+        size: file.size
+      });
+      showSuccess(`Đã đính kèm ảnh: ${file.name || 'Ảnh triệu chứng'} (${(file.size / (1024 * 1024)).toFixed(1)}MB)`);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      processImageFile(file);
+    }
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
+  const handleClipboardPaste = (e: React.ClipboardEvent) => {
+    if (isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          processImageFile(file);
+        }
+        break;
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDraggingOver) setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    if (isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)) return;
+
+    const file = e.dataTransfer?.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      processImageFile(file);
     }
   };
 
@@ -501,6 +575,7 @@ export const PetChatView: React.FC<Props> = ({
     setInput('');
     const imageToSend = selectedImage;
     setSelectedImage(null);
+    setSelectedImageMeta(null);
     setIsLoading(true);
     setHasReceivedFirstChunk(false);
     setThinkingStep(0);
@@ -1008,7 +1083,14 @@ export const PetChatView: React.FC<Props> = ({
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 min-w-0 flex flex-col h-full w-full bg-white overflow-hidden relative">
+      <div
+        onPaste={handleClipboardPaste}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className="flex-1 min-w-0 flex flex-col h-full w-full bg-white overflow-hidden relative"
+      >
 
         {/* Floating sidebar toggle — only when sidebar is closed on desktop */}
         {!isSidebarOpen && (
@@ -1548,21 +1630,84 @@ export const PetChatView: React.FC<Props> = ({
                   </div>
                 )}
 
-                {selectedImage && (
-                  <div className="mb-2 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 font-semibold text-emerald-800">
-                      <ImageIcon className="w-3.5 h-3.5" />
-                      <span>Đã đính kèm ảnh</span>
+                {/* Hidden File Input for Image Upload */}
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                  tabIndex={-1}
+                />
+
+                {/* Drag and Drop Active Overlay */}
+                {isDraggingOver && (
+                  <div className="mb-2 p-4 rounded-2xl bg-emerald-600/90 text-white shadow-xl backdrop-blur-md border-2 border-dashed border-white/80 flex items-center justify-center gap-3 animate-in fade-in zoom-in-95 pointer-events-none">
+                    <UploadCloud className="w-6 h-6 animate-bounce text-white shrink-0" />
+                    <div>
+                      <p className="text-xs font-bold">Thả ảnh triệu chứng vào đây để gửi AI chẩn đoán</p>
+                      <p className="text-[10px] text-emerald-100 font-medium">Hỗ trợ JPG, PNG, WEBP, GIF • Tối đa 5MB</p>
                     </div>
-                    <button onClick={() => setSelectedImage(null)} className="text-slate-400 hover:text-red-600 p-0.5 rounded">
-                      <X className="w-3.5 h-3.5" />
+                  </div>
+                )}
+
+                {/* Selected Image Preview Box */}
+                {selectedImage && (
+                  <div className="mb-2 p-2 bg-emerald-50/95 rounded-2xl border border-emerald-200/80 flex items-center justify-between text-xs shadow-2xs animate-in fade-in slide-in-from-bottom-1">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={selectedImage}
+                        alt="Ảnh triệu chứng đính kèm"
+                        className="w-10 h-10 rounded-xl object-cover border border-emerald-300 shadow-2xs shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-xs text-emerald-950 truncate max-w-[200px] sm:max-w-xs">
+                            {selectedImageMeta?.name || 'Ảnh triệu chứng đính kèm'}
+                          </span>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                            {selectedImageMeta ? `${(selectedImageMeta.size / (1024 * 1024)).toFixed(1)} MB` : 'Đã đính kèm'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                          ✨ AI sẽ phân tích hình ảnh và đối chiếu kiến thức thú y
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedImage(null);
+                        setSelectedImageMeta(null);
+                      }}
+                      title="Gỡ bỏ ảnh này"
+                      className="text-slate-400 hover:text-red-600 p-1.5 rounded-xl hover:bg-white/80 transition-colors shrink-0 cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 )}
 
-                <div data-tour="chat-input" className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200 shadow-md px-2.5 py-1.5">
-                  <button data-tour="image-upload" onClick={() => fileInputRef.current?.click()} disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)} title="Đính kèm ảnh"
-                    className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0 cursor-pointer">
+                {/* Chat Input Bar with Drag/Drop & Paste Support */}
+                <div
+                  data-tour="chat-input"
+                  onPaste={handleClipboardPaste}
+                  onDragOver={handleDragOver}
+                  onDragEnter={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border shadow-md px-2.5 py-1.5 transition-all ${
+                    isDraggingOver ? 'border-emerald-500 ring-2 ring-emerald-400/30' : 'border-slate-200'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    data-tour="image-upload"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)}
+                    title="Đính kèm ảnh triệu chứng (Tối đa 5MB • Hỗ trợ JPG, PNG, WEBP, GIF)"
+                    className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0 cursor-pointer"
+                  >
                     <ImageIcon className="w-5 h-5" />
                   </button>
 
@@ -1572,6 +1717,7 @@ export const PetChatView: React.FC<Props> = ({
                     value={input}
                     disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)}
                     onChange={(e) => setInput(e.target.value)}
+                    onPaste={handleClipboardPaste}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !isLoading) {
                         if (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) {
@@ -1587,8 +1733,8 @@ export const PetChatView: React.FC<Props> = ({
                         ? 'Bạn đã hết lượt dùng thử miễn phí. Vui lòng đăng nhập để tiếp tục...'
                         : isRetrying ? 'Bác sĩ AI đang đối chiếu thông tin & tổng hợp phác đồ...'
                         : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
-                        : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}...`
-                        : 'Mô tả triệu chứng, tình trạng bỏ ăn, nôn mửa...'
+                        : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}... (Có thể dán Ctrl+V hoặc kéo ảnh vào)`
+                        : 'Mô tả triệu chứng, tình trạng... (Có thể dán Ctrl+V hoặc kéo ảnh vào)'
                     }
                     className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 disabled:text-slate-400 py-1.5 px-2"
                   />
@@ -1607,7 +1753,14 @@ export const PetChatView: React.FC<Props> = ({
                     </button>
                   )}
                 </div>
-                <p className="text-[10px] sm:text-[11px] text-slate-400 text-center mt-2 px-2 leading-relaxed select-none">
+
+                {/* Upload Format & Capacity Hint */}
+                <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 mt-1.5 px-2 select-none text-center">
+                  <ImageIcon className="w-3 h-3 text-slate-400 shrink-0" />
+                  <span>Hỗ trợ dán ảnh (Ctrl+V), kéo thả hoặc tải lên (Tối đa 5MB • JPG, PNG, WEBP, GIF)</span>
+                </div>
+
+                <p className="text-[10px] sm:text-[11px] text-slate-400 text-center mt-1 px-2 leading-relaxed select-none">
                   Vethic AI chỉ mang tính chất tham khảo &amp; hỗ trợ tư vấn sơ bộ, không thay thế chẩn đoán y khoa từ bác sĩ thú y. Vui lòng liên hệ cơ sở thú y gần nhất trong trường hợp khẩn cấp.
                 </p>
               </div>
