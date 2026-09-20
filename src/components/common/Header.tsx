@@ -43,9 +43,8 @@ export const Header: React.FC<HeaderProps> = ({
       case 'record_detail':
         return { title: 'Chi Tiết Hồ Sơ Bệnh Án', badge: 'AI Diagnostic' };
       case 'news':
-        return { title: 'Tin Tức & Bệnh Lý Thú Y', badge: 'Cẩm Nang' };
       case 'emergency':
-        return { title: 'Sơ Cứu Khẩn Cấp 24/7', badge: 'Cấp Cứu' };
+        return { title: 'Tin Tức & Sơ Cứu Khẩn Cấp (24/7)', badge: '24/7' };
       case 'clinics':
         return { title: 'Tìm Phòng Khám Thú Y Gần Nhất', badge: 'Bản Đồ Google' };
       case 'pets':
@@ -60,6 +59,8 @@ export const Header: React.FC<HeaderProps> = ({
         return { title: 'Quản Lý Hồ Sơ Y Tế & Chẩn Đoán', badge: 'Admin System' };
       case 'admin_clinics':
         return { title: 'Cấu Hình Danh Sách Phòng Khám', badge: 'Google Maps Data' };
+      case 'admin_articles':
+        return { title: 'Quản Lý Bài Viết & Hướng Dẫn Sơ Cứu', badge: 'CRUD & Markdown' };
       case 'admin_config':
         return { title: 'Cấu Hình Mô Hình AI & Tham Số', badge: 'System Config' };
       case 'admin_eval':

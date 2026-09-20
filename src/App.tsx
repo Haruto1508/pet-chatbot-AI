@@ -24,7 +24,6 @@ const PetChatView = lazyWithRetry(() => import('./components/user/PetChatView').
 const MedicalHistoryView = lazyWithRetry(() => import('./components/user/MedicalHistoryView').then(m => ({ default: m.MedicalHistoryView })));
 const MedicalRecordDetailView = lazyWithRetry(() => import('./components/user/MedicalRecordDetailView').then(m => ({ default: m.MedicalRecordDetailView })));
 const ArticlesNewsView = lazyWithRetry(() => import('./components/user/ArticlesNewsView').then(m => ({ default: m.ArticlesNewsView })));
-const EmergencyFirstAidView = lazyWithRetry(() => import('./components/user/EmergencyFirstAidView').then(m => ({ default: m.EmergencyFirstAidView })));
 const NearestClinicsView = lazyWithRetry(() => import('./components/user/NearestClinicsView').then(m => ({ default: m.NearestClinicsView })));
 const PetManagementView = lazyWithRetry(() => import('./components/user/PetManagementView').then(m => ({ default: m.PetManagementView })));
 const AccountSettingsView = lazyWithRetry(() => import('./components/user/AccountSettingsView').then(m => ({ default: m.AccountSettingsView })));
@@ -34,6 +33,7 @@ const AdminDashboardView = lazyWithRetry(() => import('./components/admin/AdminD
 const AdminUsersView = lazyWithRetry(() => import('./components/admin/AdminUsersView').then(m => ({ default: m.AdminUsersView })));
 const AdminPetsRecordsView = lazyWithRetry(() => import('./components/admin/AdminPetsRecordsView').then(m => ({ default: m.AdminPetsRecordsView })));
 const AdminClinicsView = lazyWithRetry(() => import('./components/admin/AdminClinicsView').then(m => ({ default: m.AdminClinicsView })));
+const AdminArticlesView = lazyWithRetry(() => import('./components/admin/AdminArticlesView').then(m => ({ default: m.AdminArticlesView })));
 const AdminSystemConfigView = lazyWithRetry(() => import('./components/admin/AdminSystemConfigView').then(m => ({ default: m.AdminSystemConfigView })));
 const AdminHealthCheckView  = lazyWithRetry(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
 const AdminLogView          = lazyWithRetry(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
@@ -537,12 +537,8 @@ export function App() {
             )}
             */}
 
-            {currentTab === 'news' && (
+            {(currentTab === 'news' || currentTab === 'emergency') && (
               <ArticlesNewsView />
-            )}
-
-            {currentTab === 'emergency' && (
-              <EmergencyFirstAidView />
             )}
 
             {currentTab === 'clinics' && (
@@ -582,6 +578,7 @@ export function App() {
                   {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
                   */}
                   {currentTab === 'admin_clinics'   && <AdminClinicsView />}
+                  {currentTab === 'admin_articles'  && <AdminArticlesView />}
                   {currentTab === 'admin_eval'      && <AdminAiEvaluationView />}
                   {currentTab === 'admin_config'    && currentUser.role === 'admin' && <AdminSystemConfigView />}
                   {currentTab === 'admin_health'    && <AdminHealthCheckView />}

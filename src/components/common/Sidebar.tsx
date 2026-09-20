@@ -32,8 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const userNavItems = [
     { id: "chat", label: "Chat AI Tư Vấn", icon: MessageSquare },
     // { id: "records", label: "Hồ Sơ Bệnh Án", icon: FileText },
-    { id: "news", label: "Tin Tức & Bệnh Lý", icon: Newspaper },
-    { id: "emergency", label: "Sơ Cứu Khẩn Cấp", icon: ShieldAlert, badge: "24/7" },
+    { id: "news", label: "Tin Tức & Sơ Cứu", icon: Newspaper, badge: "24/7" },
     { id: "clinics", label: "Tìm Phòng Khám", icon: MapPin },
     // { id: "pets", label: "Quản Lý Thú Cưng", icon: PawPrint },
     { id: "account", label: "Tài Khoản & Cài Đặt", icon: Settings },
@@ -42,7 +41,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const adminNavItems = [
     { id: "admin_dashboard", label: "Thống Kê & Báo Cáo",      icon: LayoutDashboard },
     { id: "admin_users",     label: "Quản Lý Người Dùng",      icon: Users },
-    // { id: "admin_records",   label: "Quản Lý Bệnh Án",         icon: FileText }, // Tạm thời tắt, tương lai có thể bật lại
+    { id: "admin_articles",  label: "Quản Lý Bài Viết & Sơ Cứu", icon: Newspaper },
     { id: "admin_clinics",   label: "Danh Sách Phòng Khám",    icon: MapPin },
     { id: "admin_eval",      label: "Kiểm Định Chất Lượng AI", icon: Award },
     { id: "admin_config",    label: "Cấu Hình AI & API",       icon: Sliders },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Newspaper, Search, ShieldAlert, BookOpen, Clock, Tag, ChevronRight } from 'lucide-react';
 import { KnowledgeArticle } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
@@ -120,8 +121,8 @@ export const ArticlesNewsView: React.FC = () => {
                 </p>
               </div>
 
-              <div className="prose prose-slate max-w-none text-slate-700 whitespace-pre-wrap leading-relaxed text-sm sm:text-base pt-4 border-t border-slate-100">
-                {activeArticle.content}
+              <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed text-sm sm:text-base pt-4 border-t border-slate-100">
+                <ReactMarkdown>{activeArticle.content}</ReactMarkdown>
               </div>
             </div>
           </div>
@@ -131,13 +132,19 @@ export const ArticlesNewsView: React.FC = () => {
           {/* Title */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
                 <Newspaper className="w-6 h-6" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Trang Tin Tức & Y Khoa Bệnh Lý Thú Cưng</h2>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h2 className="text-xl font-bold text-slate-900">Tin Tức & Hướng Dẫn Sơ Cứu Khẩn Cấp</h2>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-100 text-red-700 border border-red-200 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    24/7
+                  </span>
+                </div>
                 <p className="text-xs text-slate-500">
-                  Cơ sở dữ liệu bệnh lý, các biện pháp phòng ngừa và chế độ dinh dưỡng chuẩn cho Chó & Mèo.
+                  Cơ sở dữ liệu bệnh lý, các bước sơ cứu khẩn cấp 24/7 chuẩn y khoa, phòng ngừa và chế độ dinh dưỡng cho Chó & Mèo.
                 </p>
               </div>
             </div>
@@ -164,9 +171,9 @@ export const ArticlesNewsView: React.FC = () => {
               className="text-xs font-semibold px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-700"
             >
               <option value="all">📂 Tất cả danh mục</option>
+              <option value="first_aid">🚨 Sơ cứu khẩn cấp (24/7)</option>
               <option value="symptom">🩺 Tra cứu triệu chứng</option>
               <option value="prevention">🛡️ Phòng bệnh & Vắc xin</option>
-              <option value="first_aid">🚨 Sơ cứu khẩn cấp</option>
               <option value="nutrition">🥗 Dinh dưỡng khoa học</option>
             </select>
 

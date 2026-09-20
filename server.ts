@@ -1920,17 +1920,22 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
       saveAnalyticsStore(store);
 
-      // Silently sync to Supabase analytics_events table if created
+      // Sync to Supabase analytics_events table
       (async () => {
         try {
           await supabase.from('analytics_events').insert([{
+            id: crypto.randomUUID(),
             event_type: eventType,
             visitor_id: vid,
+            ip_address: clientIp,
             user_id: metadata?.userId || null,
             path: evPath || '/',
-            metadata: metadata || {}
+            metadata: metadata || {},
+            created_at: now
           }]);
-        } catch {}
+        } catch (dbErr: any) {
+          serverLog('SUPABASE', 'WARN', 'analytics_events insert', dbErr.message);
+        }
       })().catch(() => {});
 
       return res.json(secureResponse({ success: true }));
@@ -1939,14 +1944,14 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     }
   });
 
-  // 2. Comprehensive System & Funnel Analytics Dashboard Endpoint
+  // 2. Comprehensive System & Funnel Analytics Dashboard Endpoint (100% Real DB-Driven)
   app.get('/api/stats', optionalAuth, async (_req: Request, res: Response) => {
     try {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
 
-      // Parallel DB queries for actual registered entities & chat histories
+      // Parallel DB queries for actual registered entities & chat histories & analytics events
       const [
         usersRes,
         usersOldRes,
@@ -1956,7 +1961,10 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         yellowRes,
         greenRes,
         sessionsRes,
-        guestLimitsRes
+        guestLimitsRes,
+        analyticsEventsRes,
+        pageViewsCountRes,
+        recentEventsRes
       ] = await Promise.all([
         supabase.from('users').select('id, role, email, created_at'),
         supabase.from('users').select('*', { count: 'exact', head: true }).lt('created_at', thirtyDaysAgoISO),
@@ -1966,7 +1974,10 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'YELLOW'),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'GREEN'),
         supabase.from('chat_sessions').select('id, user_id, messages, created_at'),
-        supabase.from('guest_rate_limits').select('ip_address, message_count')
+        supabase.from('guest_rate_limits').select('ip_address, message_count, first_seen_at, last_message_at'),
+        supabase.from('analytics_events').select('visitor_id, ip_address, event_type, created_at').limit(1000),
+        supabase.from('analytics_events').select('*', { count: 'exact', head: true }).eq('event_type', 'PAGE_VIEW'),
+        supabase.from('analytics_events').select('*').order('created_at', { ascending: false }).limit(20)
       ]);
 
       const allUsers = usersRes.data || [];
@@ -2023,29 +2034,40 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       Object.keys(guestStore).forEach(ip => distinctGuestIps.add(ip));
 
       // Each distinct IP = 1 machine = 1 guest user
-      const guestChatUsers = distinctGuestIps.size > 0 
-        ? distinctGuestIps.size 
-        : (guestSessions > 0 ? Math.min(guestSessions, Math.max(1, Math.round(guestSessions * 0.7))) : 0);
+      const guestChatUsers = distinctGuestIps.size > 0 ? distinctGuestIps.size : guestSessions;
       const chatUsers = loggedInChatUsers + guestChatUsers;
 
-      // Realtime Analytics Store metrics
+      // Realtime Analytics metrics directly from Supabase & store
       const store = getAnalyticsStore();
-      const nonAdminVisitors = Object.entries(store.visitors || {}).filter(([vid]) => !vid.startsWith('usr_') || !adminUserIds.has(vid.replace('usr_', '')));
-      const storeUniqueCount = nonAdminVisitors.length;
-      const storePageViews = store.pageViews || 0;
+      const dbEvents = analyticsEventsRes.data || [];
+      
+      const distinctVisitorIds = new Set<string>();
+      dbEvents.forEach(e => {
+        if (e.visitor_id && !adminUserIds.has(e.visitor_id.replace('usr_', ''))) {
+          distinctVisitorIds.add(e.visitor_id);
+        }
+      });
+      Object.keys(store.visitors || {}).forEach(vid => {
+        if (!adminUserIds.has(vid.replace('usr_', ''))) {
+          distinctVisitorIds.add(vid);
+        }
+      });
+      distinctGuestIps.forEach(ip => distinctVisitorIds.add(`machine_${ip}`));
 
-      // Realistic minimum baseline derived from real non-admin sessions & accounts
-      const uniqueVisitors = Math.max(storeUniqueCount, chatUsers + Math.round(registeredUsers * 1.2) + 8);
-      const websiteVisitors = Math.max(storePageViews, uniqueVisitors * 2, chatSessions * 2 + 15);
-      const pageViews = Math.max(storePageViews, websiteVisitors * 2 + 5);
-      const activeUsers = Math.min(websiteVisitors, chatUsers + registeredUsers + 4);
+      // Pure DB counts - no fake multipliers
+      const uniqueVisitors = Math.max(distinctVisitorIds.size, chatUsers, registeredUsers, 1);
+      const dbPageViews = pageViewsCountRes.count ?? 0;
+      const storePageViews = store.pageViews || 0;
+      const pageViews = Math.max(dbPageViews, storePageViews, uniqueVisitors);
+      const websiteVisitors = uniqueVisitors;
+      const activeUsers = Math.max(chatUsers + registeredUsers, 1);
 
       // Conversion rates
       const visitorToChatRate = Math.min(100, Math.round((chatUsers / Math.max(1, uniqueVisitors)) * 100));
       const guestToRegisteredRate = Math.min(100, Math.round((registeredUsers / Math.max(1, uniqueVisitors)) * 100));
       const avgMessagesPerSession = chatSessions > 0 ? Math.round((totalMessages / chatSessions) * 10) / 10 : 0;
 
-      // Generate accurate trend history
+      // Generate accurate trend history strictly from actual records
       const timeRange = (_req.query.timeRange as string) || '7days';
       const days = timeRange === '30days' ? 30 : 7;
       const history = [];
@@ -2058,30 +2080,45 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         const dateIso = d.toISOString().split('T')[0];
 
         // Match sessions on that specific day
-        const daySessions = allSessions.filter(s => (s.created_at || '').startsWith(dateIso));
+        const daySessions = nonAdminSessions.filter(s => (s.created_at || '').startsWith(dateIso));
         const dayChatsCount = daySessions.length;
         const dayMessagesCount = daySessions.reduce((acc, s) => acc + (Array.isArray(s.messages) ? s.messages.length : 0), 0);
 
-        // Model realistic visitors around day's chats
-        const baseDailyVisitors = Math.max(3, Math.round(websiteVisitors / days));
-        const dayVisitors = Math.max(dayChatsCount * 2 + 2, baseDailyVisitors + ((i * 3) % 7) - 3);
-        const dayChatUsers = Math.max(1, Math.min(dayVisitors, Math.round(dayChatsCount * 0.85) + 1));
+        // Match events & visitors on that specific day
+        const dayEvents = dbEvents.filter(e => (e.created_at || '').startsWith(dateIso));
+        const dayVisitorSet = new Set<string>();
+        dayEvents.forEach(e => { if (e.visitor_id) dayVisitorSet.add(e.visitor_id); });
+        daySessions.forEach(s => { if (s.user_id) dayVisitorSet.add(s.user_id); });
+
+        const dayVisitors = Math.max(dayVisitorSet.size, dayChatsCount);
+        const dayChatUsers = Math.min(dayVisitors, dayChatsCount);
+        const usersRegisteredOnDay = nonAdminUsers.filter(u => (u.created_at || '').startsWith(dateIso)).length;
 
         history.push({
           date: dateStr,
-          visitors: Math.max(1, dayVisitors),
-          chatUsers: Math.max(1, dayChatUsers),
-          chats: Math.max(0, dayChatsCount || Math.max(0, Math.round(chatSessions / days) + ((i % 3) - 1))),
-          messages: Math.max(0, dayMessagesCount || Math.max(0, Math.round(totalMessages / days) + ((i % 4) - 2))),
-          users: Math.max(0, registeredUsers - Math.floor(i / 3))
+          visitors: dayVisitors,
+          chatUsers: dayChatUsers,
+          chats: dayChatsCount,
+          messages: dayMessagesCount,
+          users: usersRegisteredOnDay
         });
       }
 
-      // Recent 12 live events
-      const recentEvents = (store.events || []).slice(0, 12);
+      // Recent live events directly from Supabase
+      const recentEvents = (recentEventsRes.data && recentEventsRes.data.length > 0)
+        ? recentEventsRes.data.map((e: any) => ({
+            id: e.id,
+            eventType: e.event_type,
+            visitorId: e.visitor_id,
+            userId: e.user_id,
+            path: e.path,
+            metadata: e.metadata,
+            createdAt: e.created_at
+          }))
+        : (store.events || []).slice(0, 15);
 
       const statsPayload: any = {
-        // 10 Core Metrics requested by user
+        // Core Real Metrics directly from database
         websiteVisitors,
         uniqueVisitors,
         registeredUsers,
@@ -2636,69 +2673,80 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
   });
 
   app.post('/api/articles', requireAdminAuth, async (req: Request, res: Response) => {
-    const payload: any = {
-      title: req.body.title || 'Bài viết mới',
-      species: req.body.species || 'Cả hai',
-      category: req.body.category || 'symptom',
-      summary: req.body.summary || '',
-      symptoms: req.body.symptoms || [],
-      first_aid_steps: req.body.firstAidSteps || [],
-      doctor_advice: req.body.doctorAdvice || '',
-      urgency_level: req.body.urgencyLevel || 'GREEN',
-      image_url: req.body.imageUrl || '',
-      content: req.body.content || ''
-    };
-    
-    // Generate embedding for the new article
-    const textToEmbed = `${payload.title} ${payload.summary} ${(payload.symptoms || []).join(' ')} ${payload.content}`;
-    const embedding = await generateEmbedding(textToEmbed);
-    if (embedding) {
-      payload.embedding = embedding;
-    }
-
-    const { data, error } = await supabase.from('articles').insert([payload]).select().single();
-    if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
-    res.json(secureResponse({
-      ...data,
-      firstAidSteps: data.first_aid_steps,
-      doctorAdvice: data.doctor_advice,
-      urgencyLevel: data.urgency_level,
-      imageUrl: data.image_url,
-      updatedAt: data.updated_at
-    }));
-  });
-
-  app.put('/api/articles/:id', requireAdminAuth, async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const payload: any = { ...req.body };
-    if (payload.firstAidSteps) { payload.first_aid_steps = payload.firstAidSteps; delete payload.firstAidSteps; }
-    if (payload.doctorAdvice) { payload.doctor_advice = payload.doctorAdvice; delete payload.doctorAdvice; }
-    if (payload.urgencyLevel) { payload.urgency_level = payload.urgencyLevel; delete payload.urgencyLevel; }
-    if (payload.imageUrl) { payload.image_url = payload.imageUrl; delete payload.imageUrl; }
-    payload.updated_at = new Date().toISOString();
-
-    // Generate embedding for the updated article
-    const textToEmbed = `${payload.title || ''} ${payload.summary || ''} ${(payload.symptoms || []).join(' ')} ${payload.content || ''}`;
-    // Only generate embedding if there is meaningful text (title is minimally required in the UI)
-    if (textToEmbed.trim().length > 0) {
+    try {
+      const payload: any = {
+        id: req.body.id || crypto.randomUUID(),
+        title: req.body.title || 'Bài viết mới',
+        species: req.body.species || 'Cả hai',
+        category: req.body.category || 'symptom',
+        summary: req.body.summary || '',
+        symptoms: req.body.symptoms || [],
+        first_aid_steps: req.body.firstAidSteps || [],
+        doctor_advice: req.body.doctorAdvice || '',
+        urgency_level: req.body.urgencyLevel || 'GREEN',
+        image_url: req.body.imageUrl || '',
+        content: req.body.content || ''
+      };
+      
+      // Generate embedding for the new article
+      const textToEmbed = `${payload.title} ${payload.summary} ${(payload.symptoms || []).join(' ')} ${payload.content}`;
       const embedding = await generateEmbedding(textToEmbed);
       if (embedding) {
         payload.embedding = embedding;
       }
-    }
 
-    const { data, error } = await supabase.from('articles').update(payload).eq('id', id).select().single();
-    if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
-    res.json(secureResponse({
-      ...data,
-      firstAidSteps: data.first_aid_steps,
-      doctorAdvice: data.doctor_advice,
-      urgencyLevel: data.urgency_level,
-      imageUrl: data.image_url,
-      updatedAt: data.updated_at
-    }));
+      const { data, error } = await supabase.from('articles').insert([payload]).select().single();
+      if (error) return res.status(500).json(secureResponse({ error: error.message }));
+      
+      res.json(secureResponse({
+        ...data,
+        firstAidSteps: data.first_aid_steps,
+        doctorAdvice: data.doctor_advice,
+        urgencyLevel: data.urgency_level,
+        imageUrl: data.image_url,
+        updatedAt: data.updated_at
+      }));
+    } catch (e: any) {
+      res.status(500).json(secureResponse({ error: e.message }));
+    }
+  });
+
+  app.put('/api/articles/:id', requireAdminAuth, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const payload: any = { ...req.body };
+      delete payload.id;
+      delete payload.created_at;
+
+      if (payload.firstAidSteps !== undefined) { payload.first_aid_steps = payload.firstAidSteps; delete payload.firstAidSteps; }
+      if (payload.doctorAdvice !== undefined) { payload.doctor_advice = payload.doctorAdvice; delete payload.doctorAdvice; }
+      if (payload.urgencyLevel !== undefined) { payload.urgency_level = payload.urgencyLevel; delete payload.urgencyLevel; }
+      if (payload.imageUrl !== undefined) { payload.image_url = payload.imageUrl; delete payload.imageUrl; }
+      payload.updated_at = new Date().toISOString();
+
+      // Generate embedding for the updated article
+      const textToEmbed = `${payload.title || ''} ${payload.summary || ''} ${(payload.symptoms || []).join(' ')} ${payload.content || ''}`;
+      if (textToEmbed.trim().length > 0) {
+        const embedding = await generateEmbedding(textToEmbed);
+        if (embedding) {
+          payload.embedding = embedding;
+        }
+      }
+
+      const { data, error } = await supabase.from('articles').update(payload).eq('id', id).select().single();
+      if (error) return res.status(500).json(secureResponse({ error: error.message }));
+      
+      res.json(secureResponse({
+        ...data,
+        firstAidSteps: data.first_aid_steps,
+        doctorAdvice: data.doctor_advice,
+        urgencyLevel: data.urgency_level,
+        imageUrl: data.image_url,
+        updatedAt: data.updated_at
+      }));
+    } catch (e: any) {
+      res.status(500).json(secureResponse({ error: e.message }));
+    }
   });
 
   app.delete('/api/articles/:id', requireAdminAuth, async (req: Request, res: Response) => {
