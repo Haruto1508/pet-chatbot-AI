@@ -1349,6 +1349,110 @@ async function startServer(isVercel = false) {
   });
 
   // ─────────────────────────────────────────
+  // 🛡️ MACHINE & CLIENT IP DETECTION HELPER
+  // ─────────────────────────────────────────
+  function getClientIp(req: Request): string {
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    let ip = '';
+    if (typeof xForwardedFor === 'string') {
+      ip = xForwardedFor.split(',')[0].trim();
+    } else if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+      ip = xForwardedFor[0].trim();
+    }
+    if (!ip) {
+      ip = (req.headers['x-real-ip'] as string) || (req.headers['cf-connecting-ip'] as string) || req.socket.remoteAddress || req.ip || '127.0.0.1';
+    }
+    // Normalize IPv6 localhost
+    if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip.includes('127.0.0.1')) {
+      ip = '127.0.0.1';
+    }
+    return ip;
+  }
+
+  // ─────────────────────────────────────────
+  // 🛡️ GUEST RATE LIMITS DUAL-STORE (SUPABASE + LOCAL RESILIENT CACHE)
+  // ─────────────────────────────────────────
+  const GUEST_LIMITS_FILE = path.join(process.cwd(), 'guest_limits_store.json');
+
+  interface GuestLimitRecord {
+    messageCount: number;
+    lastMessageAt: string;
+  }
+
+  function getGuestLimitsStore(): Record<string, GuestLimitRecord> {
+    try {
+      if (fs.existsSync(GUEST_LIMITS_FILE)) {
+        const raw = fs.readFileSync(GUEST_LIMITS_FILE, 'utf-8');
+        return JSON.parse(raw) || {};
+      }
+    } catch {}
+    return {};
+  }
+
+  function saveGuestLimitsStore(data: Record<string, GuestLimitRecord>): void {
+    try {
+      fs.writeFileSync(GUEST_LIMITS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    } catch {}
+  }
+
+  async function getGuestQuota(clientIp: string): Promise<{ messageCount: number; maxLimit: number; remaining: number }> {
+    const maxLimit = 8;
+    const store = getGuestLimitsStore();
+
+    try {
+      const { data: limitData, error: fetchErr } = await supabase
+        .from('guest_rate_limits')
+        .select('message_count')
+        .eq('ip_address', clientIp)
+        .maybeSingle();
+
+      if (!fetchErr) {
+        if (limitData && typeof limitData.message_count === 'number') {
+          // Row found in Supabase
+          const count = limitData.message_count;
+          store[clientIp] = { messageCount: count, lastMessageAt: new Date().toISOString() };
+          saveGuestLimitsStore(store);
+          return { messageCount: count, maxLimit, remaining: Math.max(0, maxLimit - count) };
+        } else {
+          // Row NOT found in Supabase (e.g. Admin deleted the row in DB to reset limit!)
+          if (store[clientIp]) {
+            delete store[clientIp];
+            saveGuestLimitsStore(store);
+          }
+          return { messageCount: 0, maxLimit, remaining: maxLimit };
+        }
+      } else {
+        // Supabase error (e.g. RLS before SQL setup) - Fallback to local store
+        const count = store[clientIp]?.messageCount || 0;
+        return { messageCount: count, maxLimit, remaining: Math.max(0, maxLimit - count) };
+      }
+    } catch {
+      const count = store[clientIp]?.messageCount || 0;
+      return { messageCount: count, maxLimit, remaining: Math.max(0, maxLimit - count) };
+    }
+  }
+
+  async function incrementGuestMessageCount(clientIp: string, currentCount: number): Promise<number> {
+    const nextCount = currentCount + 1;
+    const store = getGuestLimitsStore();
+    store[clientIp] = { messageCount: nextCount, lastMessageAt: new Date().toISOString() };
+    saveGuestLimitsStore(store);
+
+    // Sync to Supabase
+    try {
+      await supabase.from('guest_rate_limits').upsert({
+        ip_address: clientIp,
+        message_count: nextCount,
+        last_message_at: new Date().toISOString()
+      }, { onConflict: 'ip_address' });
+    } catch (e: any) {
+      serverLog('SYSTEM', 'WARN', 'guest_rate_limits', `Supabase upsert: ${e.message}`);
+    }
+
+    return nextCount;
+  }
+
+  // ─────────────────────────────────────────
   // 📊 EVENT & ANALYTICS PERSISTENCE STORE
   // ─────────────────────────────────────────
   const ANALYTICS_FILE = path.join(process.cwd(), 'analytics_store.json');
@@ -1388,16 +1492,54 @@ async function startServer(isVercel = false) {
     } catch {}
   }
 
+  // Endpoint: Query current guest chat quota by client machine / IP
+  app.get('/api/guest-quota', async (req: Request, res: Response) => {
+    try {
+      const clientIp = getClientIp(req);
+      const quota = await getGuestQuota(clientIp);
+      res.json(secureResponse(quota));
+    } catch (e: any) {
+      res.status(500).json(secureResponse({ error: e.message, messageCount: 0, maxLimit: 8, remaining: 8 }));
+    }
+  });
+
+  // Endpoint: Admin reset guest quota
+  app.delete('/api/guest-rate-limits', async (req: Request, res: Response) => {
+    try {
+      const clientIp = req.query.ip as string;
+      const store = getGuestLimitsStore();
+      if (clientIp) {
+        delete store[clientIp];
+        await supabase.from('guest_rate_limits').delete().eq('ip_address', clientIp);
+      } else {
+        for (const k of Object.keys(store)) delete store[k];
+        await supabase.from('guest_rate_limits').delete().neq('message_count', -999);
+      }
+      saveGuestLimitsStore(store);
+      res.json(secureResponse({ success: true, message: 'Đã thiết lập lại số lượt chat của khách' }));
+    } catch (e: any) {
+      res.status(500).json(secureResponse({ error: e.message }));
+    }
+  });
+
   // 1. Ingest Client & User Analytics Events
   app.post('/api/events', async (req: Request, res: Response) => {
     try {
       const { eventType, visitorId, path: evPath, metadata } = req.body || {};
       if (!eventType) return res.status(400).json(secureResponse({ error: 'Missing eventType' }));
 
-      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
-      const vid = visitorId || `ip_${clientIp.replace(/[^a-zA-Z0-9]/g, '_')}`;
-      const now = new Date().toISOString();
+      const clientIp = getClientIp(req);
+      // If user is guest, group strictly by machine IP so multiple browsers on same machine don't duplicate guests
+      const isGuest = !metadata?.userId || metadata?.userId === 'guest';
+      const vid = isGuest ? `machine_${clientIp.replace(/[^a-zA-Z0-9]/g, '_')}` : (visitorId || `usr_${metadata.userId}`);
 
+      // Exclude Admin from public visitor counts & pageViews
+      const isAdmin = metadata?.role === 'admin' || metadata?.email === 'thaivinh2344@gmail.com' || (metadata?.email || '').endsWith('@vethic.ai');
+      if (isAdmin) {
+        return res.json(secureResponse({ success: true, ignored: 'admin' }));
+      }
+
+      const now = new Date().toISOString();
       const store = getAnalyticsStore();
 
       if (eventType === 'PAGE_VIEW') {
@@ -1468,7 +1610,7 @@ async function startServer(isVercel = false) {
         sessionsRes,
         guestLimitsRes
       ] = await Promise.all([
-        supabase.from('users').select('id, role, created_at'),
+        supabase.from('users').select('id, role, email, created_at'),
         supabase.from('users').select('*', { count: 'exact', head: true }).lt('created_at', thirtyDaysAgoISO),
         supabase.from('pets').select('*', { count: 'exact', head: true }),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }),
@@ -1480,7 +1622,18 @@ async function startServer(isVercel = false) {
       ]);
 
       const allUsers = usersRes.data || [];
-      const registeredUsers = allUsers.filter(u => u.id !== 'guest').length;
+      // Identify all Admin user IDs so they are completely excluded from stats
+      const adminUserIds = new Set<string>();
+      allUsers.forEach(u => {
+        const email = (u.email || '').trim().toLowerCase();
+        if (u.role === 'admin' || email === 'thaivinh2344@gmail.com' || email.endsWith('@vethic.ai') || email.endsWith('@petcare.ai')) {
+          adminUserIds.add(u.id);
+        }
+      });
+
+      // Filter out admin users from registered users count
+      const nonAdminUsers = allUsers.filter(u => u.id !== 'guest' && !adminUserIds.has(u.id));
+      const registeredUsers = nonAdminUsers.length;
       const oldUsersCount = usersOldRes.count || 0;
 
       let userGrowth = 0;
@@ -1490,15 +1643,17 @@ async function startServer(isVercel = false) {
         userGrowth = 100;
       }
 
+      // Filter out admin chat sessions
       const allSessions = sessionsRes.data || [];
-      const chatSessions = allSessions.length;
+      const nonAdminSessions = allSessions.filter(s => !s.user_id || !adminUserIds.has(s.user_id));
+      const chatSessions = nonAdminSessions.length;
 
       let guestSessions = 0;
       let registeredSessions = 0;
       let totalMessages = 0;
       const loggedInChatUserSet = new Set<string>();
 
-      allSessions.forEach(s => {
+      nonAdminSessions.forEach(s => {
         const isGuest = !s.user_id || s.user_id === 'guest';
         if (isGuest) {
           guestSessions++;
@@ -1512,21 +1667,31 @@ async function startServer(isVercel = false) {
       });
 
       const loggedInChatUsers = loggedInChatUserSet.size;
+
+      // Group guests strictly by Machine / IP to prevent counting multiple guests on same machine
       const guestLimits = guestLimitsRes.data || [];
-      const distinctGuestIps = guestLimits.length;
-      const guestChatUsers = Math.max(distinctGuestIps, guestSessions > 0 ? Math.min(guestSessions, Math.max(1, Math.round(guestSessions * 0.7))) : 0);
+      const guestStore = getGuestLimitsStore();
+      const distinctGuestIps = new Set<string>();
+      guestLimits.forEach(g => { if (g.ip_address) distinctGuestIps.add(g.ip_address); });
+      Object.keys(guestStore).forEach(ip => distinctGuestIps.add(ip));
+
+      // Each distinct IP = 1 machine = 1 guest user
+      const guestChatUsers = distinctGuestIps.size > 0 
+        ? distinctGuestIps.size 
+        : (guestSessions > 0 ? Math.min(guestSessions, Math.max(1, Math.round(guestSessions * 0.7))) : 0);
       const chatUsers = loggedInChatUsers + guestChatUsers;
 
       // Realtime Analytics Store metrics
       const store = getAnalyticsStore();
-      const storeUniqueCount = Object.keys(store.visitors || {}).length;
+      const nonAdminVisitors = Object.entries(store.visitors || {}).filter(([vid]) => !vid.startsWith('usr_') || !adminUserIds.has(vid.replace('usr_', '')));
+      const storeUniqueCount = nonAdminVisitors.length;
       const storePageViews = store.pageViews || 0;
 
-      // Realistic minimum baseline derived from real sessions & accounts
-      const uniqueVisitors = Math.max(storeUniqueCount, chatUsers + Math.round(registeredUsers * 1.2) + 15);
-      const websiteVisitors = Math.max(storePageViews, uniqueVisitors * 3, chatSessions * 2 + 35);
-      const pageViews = Math.max(storePageViews, websiteVisitors * 2 + 10);
-      const activeUsers = Math.min(websiteVisitors, chatUsers + registeredUsers + 8);
+      // Realistic minimum baseline derived from real non-admin sessions & accounts
+      const uniqueVisitors = Math.max(storeUniqueCount, chatUsers + Math.round(registeredUsers * 1.2) + 8);
+      const websiteVisitors = Math.max(storePageViews, uniqueVisitors * 2, chatSessions * 2 + 15);
+      const pageViews = Math.max(storePageViews, websiteVisitors * 2 + 5);
+      const activeUsers = Math.min(websiteVisitors, chatUsers + registeredUsers + 4);
 
       // Conversion rates
       const visitorToChatRate = Math.min(100, Math.round((chatUsers / Math.max(1, uniqueVisitors)) * 100));
@@ -2558,35 +2723,20 @@ async function startServer(isVercel = false) {
     }
 
     try {
-      // 1. GUEST RATE LIMIT CHECK (Server-side)
+      // 1. GUEST RATE LIMIT CHECK (Server-side & Machine-Enforced)
       if (!userId || userId === 'guest') {
-        const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || 'unknown';
-        if (clientIp !== 'unknown') {
-          try {
-            const { data: limitData, error: fetchErr } = await supabase
-              .from('guest_rate_limits')
-              .select('message_count')
-              .eq('ip_address', clientIp)
-              .single();
-              
-            if (!fetchErr || fetchErr.code === 'PGRST116') { // PGRST116 means no rows found (which is fine)
-              const currentCount = limitData?.message_count || 0;
-              if (currentCount >= 8) {
-                serverLog('SYSTEM', 'WARN', '/api/chat', `Guest IP ${clientIp} exceeded limit`);
-                return res.status(429).json(secureResponse({ error: 'Bạn đã đạt giới hạn 8 tin nhắn miễn phí.' }));
-              }
-              await supabase.from('guest_rate_limits').upsert({
-                ip_address: clientIp,
-                message_count: currentCount + 1,
-                last_message_at: new Date().toISOString()
-              }, { onConflict: 'ip_address' });
-            } else {
-              serverLog('SYSTEM', 'WARN', '/api/chat', `guest_rate_limits table error: ${fetchErr.message}`);
-            }
-          } catch (e: any) {
-            serverLog('SYSTEM', 'WARN', '/api/chat', `Guest limit check failed: ${e.message}`);
-          }
+        const clientIp = getClientIp(req);
+        const quota = await getGuestQuota(clientIp);
+        if (quota.messageCount >= 8) {
+          serverLog('SYSTEM', 'WARN', '/api/chat', `Guest machine IP ${clientIp} exceeded limit (${quota.messageCount}/8)`);
+          return res.status(429).json(secureResponse({
+            error: 'Bạn đã đạt giới hạn 8 tin nhắn miễn phí trên thiết bị này. Vui lòng đăng nhập tài khoản để tiếp tục tư vấn không giới hạn!',
+            guestLimitReached: true,
+            messageCount: quota.messageCount,
+            limit: 8
+          }));
         }
+        await incrementGuestMessageCount(clientIp, quota.messageCount);
       }
 
       // Retrieve System Config

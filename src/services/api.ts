@@ -62,6 +62,22 @@ export const api = {
     return res.json();
   },
 
+  // Guest Quota & Machine Rate Limits
+  getGuestQuota: async (): Promise<{ messageCount: number; maxLimit: number; remaining: number }> => {
+    try {
+      const res = await authFetch('/api/guest-quota');
+      if (!res.ok) return { messageCount: 0, maxLimit: 8, remaining: 8 };
+      return res.json();
+    } catch {
+      return { messageCount: 0, maxLimit: 8, remaining: 8 };
+    }
+  },
+
+  resetGuestQuota: async (ip?: string): Promise<void> => {
+    const url = ip ? `/api/guest-rate-limits?ip=${encodeURIComponent(ip)}` : '/api/guest-rate-limits';
+    await authFetch(url, { method: 'DELETE' });
+  },
+
   // Health / Connection Check
   checkHealth: async (): Promise<{
     supabase: { status: string; latencyMs: number | null; message: string; url?: string };

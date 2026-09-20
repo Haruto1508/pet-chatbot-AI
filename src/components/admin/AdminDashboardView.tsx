@@ -21,7 +21,9 @@ import {
   BarChart2,
   Clock,
   CheckCircle2,
-  Filter
+  Filter,
+  RotateCcw,
+  ShieldCheck
 } from 'lucide-react';
 import {
   AreaChart,
@@ -48,6 +50,22 @@ export const AdminDashboardView: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [timeRange, setTimeRange] = useState('7days');
   const [activeTab, setActiveTab] = useState<TabSection>('acquisition');
+  const [isResettingQuota, setIsResettingQuota] = useState(false);
+
+  const handleResetGuestQuota = async () => {
+    if (!window.confirm('Bạn có chắc chắn muốn reset toàn bộ số lượt chat của khách vãng lai? Sau khi reset, tất cả khách sẽ được chat lại 8 lượt.')) {
+      return;
+    }
+    setIsResettingQuota(true);
+    try {
+      await api.resetGuestQuota();
+      await loadData(timeRange, true);
+    } catch (e) {
+      console.error('Lỗi reset guest quota:', e);
+    } finally {
+      setIsResettingQuota(false);
+    }
+  };
 
   const loadData = async (range: string, showRefreshIndicator = false) => {
     if (showRefreshIndicator) setIsRefreshing(true);
@@ -583,6 +601,33 @@ export const AdminDashboardView: React.FC = () => {
                       <span className="text-xl font-black text-emerald-600">{loggedInChatUsers}</span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Guest Rate Limits Management Card */}
+              <div className="p-5 rounded-2xl border border-slate-200 bg-gradient-to-r from-amber-50/60 to-orange-50/40 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-amber-600" /> Quản Lý Giới Hạn Chat Khách Vãng Lai (Guest Rate Limit)
+                    </h4>
+                    <p className="text-xs text-slate-600 mt-1 max-w-2xl">
+                      Hệ thống tự động khóa chặt theo <strong>Thiết Bị / IP Máy</strong> (giới hạn 8 tin nhắn miễn phí). Người dùng chuyển sang tab ẩn danh (Incognito) hoặc trình duyệt khác trên cùng máy đều được nhận diện và tính chung 1 hạn mức.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleResetGuestQuota}
+                    disabled={isResettingQuota}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 shadow-xs transition-all self-start sm:self-center disabled:opacity-50"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 ${isResettingQuota ? 'animate-spin text-amber-600' : 'text-amber-700'}`} />
+                    <span>{isResettingQuota ? 'Đang reset...' : 'Reset Toàn Bộ Quota Guest'}</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-4 text-[11px] text-slate-500 pt-1 border-t border-amber-200/50">
+                  <span>Hạn mức mặc định: <strong>8 tin nhắn / máy</strong></span>
+                  <span>•</span>
+                  <span>Đồng bộ thời gian thực với Supabase <code>guest_rate_limits</code></span>
                 </div>
               </div>
             </div>

@@ -151,6 +151,18 @@ export const PetChatView: React.FC<Props> = ({
     return saved ? parseInt(saved, 10) || 0 : 0;
   });
 
+  // Synchronize guest quota from database / server (resets if admin cleared DB, blocks incognito/other browser)
+  useEffect(() => {
+    if (isGuest) {
+      api.getGuestQuota().then(quota => {
+        if (typeof quota?.messageCount === 'number') {
+          setGuestMsgCount(quota.messageCount);
+          localStorage.setItem('petcare_guest_msg_count', quota.messageCount.toString());
+        }
+      }).catch(() => {});
+    }
+  }, [isGuest]);
+
   const [isRetrying, setIsRetrying] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -672,10 +684,14 @@ export const PetChatView: React.FC<Props> = ({
         }
       } else {
         const isTimeout = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('timeout') || err?.message?.toLowerCase().includes('quá thời gian');
-        const isRateLimit = err?.message?.includes('giới hạn 8 tin nhắn');
+        const isRateLimit = err?.message?.includes('giới hạn 8 tin nhắn') ||
+                           err?.message?.includes('đạt giới hạn') ||
+                           err?.message?.includes('dùng thử miễn phí') ||
+                           (err as any)?.guestLimitReached;
         
         if (isRateLimit && isGuest) {
           setGuestMsgCount(GUEST_MESSAGE_LIMIT); // Trigger banner immediately
+          localStorage.setItem('petcare_guest_msg_count', GUEST_MESSAGE_LIMIT.toString());
         }
 
         const isOverload = err?.message?.toLowerCase().includes('quá tải') ||
