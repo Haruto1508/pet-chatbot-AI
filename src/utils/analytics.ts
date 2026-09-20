@@ -45,13 +45,21 @@ export async function trackEvent(
     };
 
     const jsonStr = JSON.stringify(payload);
+    const endpoint = '/api/app-activity';
 
-    // Prefer sendBeacon for unblocked telemetry, fallback to keepalive fetch
-    if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      navigator.sendBeacon('/api/events', blob);
-    } else {
-      fetch('/api/events', {
+    // Prefer sendBeacon for non-blocking telemetry, fallback to keepalive fetch
+    let sent = false;
+    if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      try {
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        sent = navigator.sendBeacon(endpoint, blob);
+      } catch {
+        sent = false;
+      }
+    }
+
+    if (!sent && typeof fetch === 'function') {
+      fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: jsonStr,
@@ -59,6 +67,6 @@ export async function trackEvent(
       }).catch(() => {});
     }
   } catch {
-    // Analytics failures must never interrupt user experience
+    // Activity tracking failures must never interrupt user experience
   }
 }

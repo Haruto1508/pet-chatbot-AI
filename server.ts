@@ -1544,8 +1544,8 @@ async function startServer(isVercel = false) {
     }
   });
 
-  // 1. Ingest Client & User Analytics Events
-  app.post('/api/events', async (req: Request, res: Response) => {
+  // 1. Ingest Client & User Activity Events (supports /api/app-activity to avoid ad-blocker filters like EasyPrivacy)
+  app.post(['/api/app-activity', '/api/events'], async (req: Request, res: Response) => {
     try {
       const { eventType, visitorId, path: evPath, metadata } = req.body || {};
       if (!eventType) return res.status(400).json(secureResponse({ error: 'Missing eventType' }));
