@@ -19,6 +19,67 @@ export function getVisitorId(): string {
   }
 }
 
+// Dwell time & path cooldown tracker for accurate User Page Views
+let pendingPageViewTimer: any = null;
+const lastTrackedPaths: Record<string, number> = {};
+const MIN_DWELL_MS = 3000;       // User must stay on page for at least 3s (prevents click spam / rapid tab switching)
+const PATH_COOLDOWN_MS = 60000;  // 60s cooldown per path to prevent duplicate counts on roundtrips
+
+/**
+ * Schedule a user page view with dwell time and cooldown.
+ * Strictly excludes Admin routes, Admin tabs, and Admin/Subadmin roles.
+ * Returns a cancel callback for React useEffect cleanup.
+ */
+export function schedulePageView(
+  tab: string,
+  path: string,
+  user?: { id?: string; role?: string }
+): () => void {
+  // Cancel previous pending timer if user navigated away quickly
+  if (pendingPageViewTimer) {
+    clearTimeout(pendingPageViewTimer);
+    pendingPageViewTimer = null;
+  }
+
+  // 1. STRICTLY EXCLUDE ADMIN: Never record page views for admin areas or admin users
+  const isAdminArea = 
+    tab.startsWith('admin_') || 
+    path.startsWith('/admin') ||
+    user?.role === 'admin' ||
+    user?.role === 'subadmin';
+
+  if (isAdminArea) {
+    return () => {};
+  }
+
+  // 2. CHECK COOLDOWN PER ROUTE (prevents counting when user clicks back and forth)
+  const now = Date.now();
+  const lastTracked = lastTrackedPaths[path] || 0;
+  if (now - lastTracked < PATH_COOLDOWN_MS) {
+    return () => {};
+  }
+
+  // 3. DWELL TIME: User must remain on the tab/page for at least MIN_DWELL_MS (3s)
+  pendingPageViewTimer = setTimeout(() => {
+    lastTrackedPaths[path] = Date.now();
+    trackEvent('PAGE_VIEW', {
+      tab,
+      path,
+      userId: user?.id && user.id !== 'guest' ? user.id : undefined,
+      role: user?.role
+    });
+    pendingPageViewTimer = null;
+  }, MIN_DWELL_MS);
+
+  // Return cancel function for useEffect cleanup
+  return () => {
+    if (pendingPageViewTimer) {
+      clearTimeout(pendingPageViewTimer);
+      pendingPageViewTimer = null;
+    }
+  };
+}
+
 /**
  * Non-blocking event tracking helper for Vethic AI Analytics & Funnel Monitoring.
  * Tracks events: PAGE_VIEW, CHAT_OPEN, CHAT_MESSAGE_SENT, CHAT_SESSION_STARTED, LOGIN, REGISTER.
@@ -29,12 +90,23 @@ export async function trackEvent(
 ): Promise<void> {
   if (typeof window === 'undefined') return;
 
+  const evPath = metadata?.path || (typeof window !== 'undefined' ? window.location.pathname : '') || '/';
+  const tab = metadata?.tab || '';
+  const role = metadata?.role || '';
+
+  // Double-check: Never record PAGE_VIEW for admin paths or roles
+  if (eventType === 'PAGE_VIEW') {
+    if (evPath.startsWith('/admin') || tab.startsWith('admin_') || role === 'admin' || role === 'subadmin') {
+      return;
+    }
+  }
+
   try {
     const visitorId = getVisitorId();
     const payload = {
       eventType,
       visitorId,
-      path: metadata?.path || window.location.pathname || '/',
+      path: evPath,
       metadata: {
         ...metadata,
         url: window.location.href,

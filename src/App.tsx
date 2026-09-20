@@ -14,7 +14,7 @@ import { NotFoundView } from './components/common/NotFoundView';
 import { AdminAccessDeniedView } from './components/common/AdminAccessDeniedView';
 import { MaintenanceView } from './components/common/MaintenanceView';
 import { getTabFromPath, getPathFromTab, TAB_TITLES, TAB_DESCRIPTIONS } from './utils/routes';
-import { trackEvent } from './utils/analytics';
+import { trackEvent, schedulePageView } from './utils/analytics';
 import { UniversalPageLoader, AdminPageSkeleton } from './components/common/LoadingSkeleton';
 
 import { lazyWithRetry } from './utils/lazyWithRetry';
@@ -133,13 +133,13 @@ export function App() {
       metaDesc.setAttribute('content', TAB_DESCRIPTIONS[currentTab]);
     }
 
-    // Telemetry: track page views
-    trackEvent('PAGE_VIEW', {
-      tab: currentTab,
-      path: currentPath,
-      userId: currentUser.id !== 'guest' ? currentUser.id : undefined
-    });
-  }, [currentTab, selectedRecord]);
+    // Telemetry: schedule user page views with 3s dwell time & 60s cooldown per route
+    // Strictly ignores all admin routes and admin roles
+    const cancelPageView = schedulePageView(currentTab, currentPath, currentUser);
+    return () => {
+      if (cancelPageView) cancelPageView();
+    };
+  }, [currentTab, selectedRecord, currentUser.id, currentUser.role]);
 
   // Load record from URL query param if present
   useEffect(() => {

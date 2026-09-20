@@ -1870,6 +1870,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     }
   });
 
+  // In-memory cooldown map for server-side pageview deduplication (30s per machine + path)
+  const recentPageViewsCooldownMap = new Map<string, number>();
+
   // 1. Ingest Client & User Activity Events (supports /api/app-activity to avoid ad-blocker filters like EasyPrivacy)
   app.post(['/api/app-activity', '/api/events'], async (req: Request, res: Response) => {
     try {
@@ -1877,14 +1880,37 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       if (!eventType) return res.status(400).json(secureResponse({ error: 'Missing eventType' }));
 
       const clientIp = getClientIp(req);
+      const cleanPath = (evPath || '').toLowerCase();
+      const tab = (metadata?.tab || '').toLowerCase();
+      const role = (metadata?.role || '').toLowerCase();
+
+      // 🛡️ STRICTLY EXCLUDE ADMIN: Never record pageviews or activities from admin routes or admin roles
+      const isAdminAreaOrRole = 
+        cleanPath.startsWith('/admin') ||
+        tab.startsWith('admin_') ||
+        role === 'admin' ||
+        role === 'subadmin';
+
+      if (isAdminAreaOrRole) {
+        return res.json(secureResponse({ success: true, ignored: 'admin_exclusion' }));
+      }
+
       // If user is guest, group strictly by machine IP so multiple browsers on same machine don't duplicate guests
       const isGuest = !metadata?.userId || metadata?.userId === 'guest';
       const vid = isGuest ? `machine_${clientIp.replace(/[^a-zA-Z0-9]/g, '_')}` : (visitorId || `usr_${metadata.userId}`);
 
-      // Exclude Admin from public visitor counts & pageViews
-      const isAdmin = metadata?.role === 'admin' || metadata?.role === 'subadmin';
-      if (isAdmin) {
-        return res.json(secureResponse({ success: true, ignored: 'admin' }));
+      // Server-side cooldown: Prevent rapid pageview spamming (must be >= 30s apart for same path & client)
+      if (eventType === 'PAGE_VIEW') {
+        const pvKey = `${clientIp}_${cleanPath}`;
+        const lastPv = recentPageViewsCooldownMap.get(pvKey) || 0;
+        const nowMs = Date.now();
+        if (nowMs - lastPv < 30000) {
+          return res.json(secureResponse({ success: true, deduplicated: true }));
+        }
+        recentPageViewsCooldownMap.set(pvKey, nowMs);
+        if (recentPageViewsCooldownMap.size > 2000) {
+          recentPageViewsCooldownMap.clear();
+        }
       }
 
       const now = new Date().toISOString();
@@ -1908,7 +1934,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         eventType,
         visitorId: vid,
         userId: metadata?.userId || null,
-        path: evPath || '/',
+        path: cleanPath || '/',
         metadata: metadata || {},
         createdAt: now
       });
@@ -1929,7 +1955,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
             visitor_id: vid,
             ip_address: clientIp,
             user_id: metadata?.userId || null,
-            path: evPath || '/',
+            path: cleanPath || '/',
             metadata: metadata || {},
             created_at: now
           }]);
@@ -1975,9 +2001,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'GREEN'),
         supabase.from('chat_sessions').select('id, user_id, messages, created_at'),
         supabase.from('guest_rate_limits').select('ip_address, message_count, first_seen_at, last_message_at'),
-        supabase.from('analytics_events').select('visitor_id, ip_address, event_type, created_at').limit(1000),
-        supabase.from('analytics_events').select('*', { count: 'exact', head: true }).eq('event_type', 'PAGE_VIEW'),
-        supabase.from('analytics_events').select('*').order('created_at', { ascending: false }).limit(20)
+        supabase.from('analytics_events').select('visitor_id, ip_address, event_type, path, created_at').not('path', 'like', '/admin%').limit(1000),
+        supabase.from('analytics_events').select('*', { count: 'exact', head: true }).eq('event_type', 'PAGE_VIEW').not('path', 'like', '/admin%'),
+        supabase.from('analytics_events').select('*').not('path', 'like', '/admin%').order('created_at', { ascending: false }).limit(20)
       ]);
 
       const allUsers = usersRes.data || [];
@@ -2054,11 +2080,17 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       });
       distinctGuestIps.forEach(ip => distinctVisitorIds.add(`machine_${ip}`));
 
-      // Pure DB counts - no fake multipliers
+      // Clean up any legacy admin events from DB
+      (async () => {
+        try {
+          await supabase.from('analytics_events').delete().like('path', '/admin%');
+        } catch {}
+      })();
+
+      // Pure DB counts for user page views - strictly non-admin
       const uniqueVisitors = Math.max(distinctVisitorIds.size, chatUsers, registeredUsers, 1);
       const dbPageViews = pageViewsCountRes.count ?? 0;
-      const storePageViews = store.pageViews || 0;
-      const pageViews = Math.max(dbPageViews, storePageViews, uniqueVisitors);
+      const pageViews = Math.max(dbPageViews, uniqueVisitors);
       const websiteVisitors = uniqueVisitors;
       const activeUsers = Math.max(chatUsers + registeredUsers, 1);
 
