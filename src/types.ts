@@ -54,6 +54,8 @@ export interface ChatSession {
   messages: ChatMessage[];
   createdAt: string;
   updatedAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
   isHiddenFromUser?: boolean;
   user?: {
     id: string;

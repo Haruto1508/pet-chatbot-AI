@@ -130,6 +130,8 @@ CREATE TABLE chat_sessions (
   pet_id TEXT,
   title TEXT NOT NULL,
   messages JSONB DEFAULT '[]',
+  is_deleted BOOLEAN DEFAULT FALSE,
+  deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );

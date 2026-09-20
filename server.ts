@@ -3117,12 +3117,14 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
             role: 'user'
           };
         }
-        const isHidden = typeof s.title === 'string' && s.title.startsWith('[HIDDEN_USER]');
-        const cleanTitle = isHidden ? s.title.replace(/^\[HIDDEN_USER\]\s*/, '') : s.title;
+        const isSoftDeleted = s.is_deleted === true || (typeof s.title === 'string' && s.title.startsWith('[HIDDEN_USER]'));
+        const cleanTitle = typeof s.title === 'string' ? s.title.replace(/^\[HIDDEN_USER\]\s*/, '') : s.title;
         return {
           ...s,
           title: cleanTitle,
-          isHiddenFromUser: isHidden,
+          isDeleted: isSoftDeleted,
+          deletedAt: s.deleted_at || null,
+          isHiddenFromUser: isSoftDeleted,
           userId: s.user_id,
           petId: s.pet_id,
           user: user || null,
@@ -3132,7 +3134,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       });
 
       // Regular users only see active (non-hidden) sessions. Admin sees all sessions including soft-deleted ones.
-      const result = isAdmin ? mapped : mapped.filter(s => !s.isHiddenFromUser);
+      const result = isAdmin ? mapped : mapped.filter(s => !s.isHiddenFromUser && !s.isDeleted);
       res.json(secureResponse(result));
     } catch (e: any) {
       res.status(500).json(secureResponse({ error: e.message }));
@@ -3153,13 +3155,15 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       return res.status(403).json(secureResponse({ error: 'Không có quyền truy cập phiên chat này' }));
     }
     
-    const isHidden = typeof data.title === 'string' && data.title.startsWith('[HIDDEN_USER]');
-    const cleanTitle = isHidden ? data.title.replace(/^\[HIDDEN_USER\]\s*/, '') : data.title;
+    const isSoftDeleted = data.is_deleted === true || (typeof data.title === 'string' && data.title.startsWith('[HIDDEN_USER]'));
+    const cleanTitle = typeof data.title === 'string' ? data.title.replace(/^\[HIDDEN_USER\]\s*/, '') : data.title;
 
     res.json(secureResponse({
       ...data,
       title: cleanTitle,
-      isHiddenFromUser: isHidden,
+      isDeleted: isSoftDeleted,
+      deletedAt: data.deleted_at || null,
+      isHiddenFromUser: isSoftDeleted,
       userId: data.user_id,
       petId: data.pet_id,
       createdAt: data.created_at,
@@ -3254,16 +3258,27 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       return res.json(secureResponse({ success: true, id, permanent: true }));
     }
 
-    // Soft delete: hide from user view, preserve in database for Admin auditing & evaluation
+    // Soft delete: try updating is_deleted & deleted_at columns in DB
     const currentTitle = session.title || 'Phiên chat';
     const updatedTitle = currentTitle.startsWith('[HIDDEN_USER]') ? currentTitle : `[HIDDEN_USER] ${currentTitle}`;
-    const { error } = await supabase.from('chat_sessions').update({
-      title: updatedTitle,
+    
+    let { error } = await supabase.from('chat_sessions').update({
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }).eq('id', id);
 
+    // If is_deleted column does not exist yet, fallback to title marker
+    if (error && (error.message.includes('is_deleted') || error.code === '42703')) {
+      const fallbackRes = await supabase.from('chat_sessions').update({
+        title: updatedTitle,
+        updated_at: new Date().toISOString()
+      }).eq('id', id);
+      error = fallbackRes.error;
+    }
+
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    res.json(secureResponse({ success: true, id, hidden: true }));
+    res.json(secureResponse({ success: true, id, hidden: true, isDeleted: true }));
   });
 
   app.delete('/api/chat-sessions', optionalAuth, async (req: Request, res: Response) => {
@@ -3280,19 +3295,31 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       return res.json(secureResponse({ success: true, permanent: true }));
     }
 
-    // Soft delete: mark all user's sessions as hidden, preserving them for Admin auditing
-    const { data: userSessions } = await supabase.from('chat_sessions').select('id, title').eq('user_id', targetUserId);
-    if (userSessions && userSessions.length > 0) {
-      for (const s of userSessions) {
-        if (!s.title?.startsWith('[HIDDEN_USER]')) {
-          await supabase.from('chat_sessions').update({
-            title: `[HIDDEN_USER] ${s.title}`,
-            updated_at: new Date().toISOString()
-          }).eq('id', s.id);
+    // Soft delete: mark all user's sessions as is_deleted in DB
+    let { error } = await supabase.from('chat_sessions').update({
+      is_deleted: true,
+      deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('user_id', targetUserId);
+
+    // If is_deleted column does not exist yet, fallback to title marker
+    if (error && (error.message.includes('is_deleted') || error.code === '42703')) {
+      const { data: userSessions } = await supabase.from('chat_sessions').select('id, title').eq('user_id', targetUserId);
+      if (userSessions && userSessions.length > 0) {
+        for (const s of userSessions) {
+          if (!s.title?.startsWith('[HIDDEN_USER]')) {
+            await supabase.from('chat_sessions').update({
+              title: `[HIDDEN_USER] ${s.title}`,
+              updated_at: new Date().toISOString()
+            }).eq('id', s.id);
+          }
         }
       }
+      error = null;
     }
-    res.json(secureResponse({ success: true, hidden: true }));
+
+    if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    res.json(secureResponse({ success: true, hidden: true, isDeleted: true }));
   });
 
   app.post('/api/generate-title', chatRateLimiter, async (req: Request, res: Response) => {
