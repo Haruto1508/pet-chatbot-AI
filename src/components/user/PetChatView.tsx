@@ -785,7 +785,6 @@ export const PetChatView: React.FC<Props> = ({
           sender: 'ai',
           text: `⚠️ **${errorText}**`,
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          triageLevel: 'YELLOW',
           status: 'error',
           errorMessage: err?.message || errorText,
           latencyMs: Date.now() - sendStartTime
@@ -1335,7 +1334,7 @@ export const PetChatView: React.FC<Props> = ({
                     const isYellow = msg.triageLevel === 'YELLOW' ||
                       (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /theo dõi|thăm khám|cần khám/i.test(msg.triageDetails.urgency)));
 
-                    if ((!isRed && !isYellow) || emergencyClinics.length === 0) return null;
+                    if (msg.status === 'error' || (!isRed && !isYellow) || emergencyClinics.length === 0) return null;
 
                     return (
                       <div className="pl-8 mt-2.5">
