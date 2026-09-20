@@ -28,10 +28,10 @@ export const TOUR_STEPS: TourStepConfig[] = [
     tabRequired: 'chat',
     requiresMobileSidebar: false,
     tag: 'Bước 1 / 4',
-    title: 'Mô Tả Triệu Chứng & Hỏi Bác Sĩ AI',
+    title: 'Chat AI Tư Vấn',
     description:
-      'Nhập bất kỳ thắc mắc hoặc triệu chứng bé cưng đang gặp phải (nôn bọt trắng, tiêu chảy, mệt mỏi, bỏ ăn...). Vethic AI sẽ tự động phân loại mức độ nguy hiểm theo Khung cảnh báo 🔴 Đỏ / 🟡 Vàng / 🟢 Xanh và hướng dẫn sơ cứu tức thì.',
-    tip: '💡 Gợi ý: Mô tả càng chi tiết thời gian xuất hiện triệu chứng, AI chẩn đoán càng sát thực tế.',
+      'Nhập triệu chứng thú cưng (nôn, bỏ ăn, tiêu chảy...). AI phân loại nguy cơ 🔴 Đỏ / 🟡 Vàng / 🟢 Xanh và đưa hướng dẫn sơ cứu ngay lập tức.',
+    tip: '💡 Mô tả kèm thời gian xuất hiện giúp AI chẩn đoán chính xác hơn.',
     placement: 'top'
   },
   {
@@ -40,32 +40,32 @@ export const TOUR_STEPS: TourStepConfig[] = [
     tabRequired: 'chat',
     requiresMobileSidebar: false,
     tag: 'Bước 2 / 4',
-    title: 'Chẩn Đoán Qua Ảnh Chụp Lâm Sàng',
+    title: 'Gửi Ảnh Chẩn Đoán',
     description:
-      'Bấm vào nút này để chụp hoặc tải lên hình ảnh vùng da bị nấm, vết thương, trầy xước, mắt đỏ hoặc phân thú cưng. Mô hình AI thị giác đa phương thức sẽ đối chiếu hình ảnh cùng mô tả để phát hiện sớm bất thường.',
-    tip: '📸 Mẹo: Nên chụp ở nơi đủ ánh sáng và chụp cận cảnh vùng tổn thương.',
+      'Đính kèm ảnh vết thương, da, mắt hoặc phân (JPG/PNG/WEBP/GIF, tối đa 5MB). Hỗ trợ dán Ctrl+V hoặc kéo thả ảnh thẳng vào khung chat.',
+    tip: '📸 Chụp cận cảnh, đủ sáng để AI nhận diện chính xác hơn.',
     placement: 'top'
   },
   {
     id: 3,
-    selector: '[data-tour="nav-clinics"]',
+    selector: '[data-tour="nav-news"]',
     requiresMobileSidebar: true,
     tag: 'Bước 3 / 4',
-    title: 'Định Vị Phòng Khám & Cấp Cứu 24/7',
+    title: 'Tin Tức & Sơ Cứu 24/7',
     description:
-      'Mở bản đồ GPS quét nhanh các cơ sở y tế thú y xung quanh vị trí của bạn, tự động tính khoảng cách km, lọc các bệnh viện trực đêm có bác sĩ chuyên khoa và 1-click gọi hotline cấp cứu hoặc mở chỉ đường Google Maps.',
-    tip: '📍 Hữu ích khi thú cưng có dấu hiệu cảnh báo Đỏ (RED) cần đưa đi bệnh viện ngay.',
+      'Tra cứu thao tác sơ cứu (ngộ độc, sặc dị vật, sốc nhiệt...) và đọc cẩm nang y khoa cập nhật cho thú cưng.',
+    tip: '🚑 Làm đúng các bước sơ cứu giúp duy trì sinh tồn trước khi đến thú y.',
     placement: 'right'
   },
   {
     id: 4,
-    selector: '[data-tour="nav-emergency"]',
+    selector: '[data-tour="nav-clinics"]',
     requiresMobileSidebar: true,
     tag: 'Bước 4 / 4',
-    title: 'Cẩm Nang Sơ Cứu Cứu Nguy Sống Còn',
+    title: 'Tìm Phòng Khám Gần Nhất',
     description:
-      'Tra cứu các thao tác sơ cứu chuẩn y khoa cho các tình huống khẩn cấp (ngộ độc socola/hóa chất, sặc dị vật nghẹt thở, sốc nhiệt say nắng, chấn thương va chạm...) cùng các cảnh báo sai lầm tuyệt đối KHÔNG ĐƯỢC làm.',
-    tip: '🚑 Các bước sơ cứu đúng cách giúp duy trì dấu hiệu sinh tồn trước khi đến thú y.',
+      'Định vị GPS phòng khám thú y quanh bạn, lọc trực cấp cứu 24/7, gọi hotline hoặc mở chỉ đường Google Maps chỉ 1 chạm.',
+    tip: '📍 Dùng khi thú cưng nhận cảnh báo 🔴 Đỏ cần đến bác sĩ ngay.',
     placement: 'right'
   }
 ];
@@ -334,7 +334,7 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
           top: `${tooltipPos.top}px`,
           left: `${tooltipPos.left}px`
         }}
-        className="absolute w-[calc(100vw-32px)] max-w-sm sm:max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200/90 p-4 sm:p-5 transition-all duration-300 ease-out z-50 pointer-events-auto"
+        className="absolute w-[calc(100vw-28px)] max-w-[320px] bg-white rounded-xl shadow-xl border border-slate-200/90 p-3 transition-all duration-300 ease-out z-50 pointer-events-auto"
       >
         {/* Top Header */}
         <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100">
@@ -367,39 +367,39 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
         </div>
 
         {/* Body Content */}
-        <div className="space-y-2">
-          <h3 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-            <Compass className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="space-y-1.5">
+          <h3 className="text-sm font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
+            <Compass className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span>{currentStep.title}</span>
           </h3>
-          <p className="text-xs sm:text-[13px] text-slate-600 leading-relaxed">
+          <p className="text-[11px] text-slate-600 leading-relaxed">
             {currentStep.description}
           </p>
 
           {currentStep.tip && (
-            <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60 text-emerald-800 text-[11px] font-medium leading-normal">
+            <div className="px-2 py-1.5 rounded-lg bg-emerald-50/70 border border-emerald-200/60 text-emerald-800 text-[10px] font-medium leading-snug">
               {currentStep.tip}
             </div>
           )}
         </div>
 
         {/* Footer Navigation */}
-        <div className="mt-4 pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
           {/* Checkbox Don't show again */}
-          <label className="flex items-center gap-1.5 text-[11px] text-slate-500 cursor-pointer select-none order-2 sm:order-1">
+          <label className="flex items-center gap-1 text-[10px] text-slate-500 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={dontShowAgain}
               onChange={(e) => setDontShowAgain(e.target.checked)}
-              className="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+              className="w-3 h-3 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
             />
             <span>Không hiện lại</span>
           </label>
 
           {/* Dots and Buttons */}
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end order-1 sm:order-2">
+          <div className="flex items-center gap-1.5">
             {/* Step Dots */}
-            <div className="flex items-center gap-1 mr-1">
+            <div className="flex items-center gap-1">
               {TOUR_STEPS.map((_, idx) => (
                 <button
                   key={idx}
@@ -407,7 +407,7 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
                   onClick={() => setCurrentStepIndex(idx)}
                   className={`h-1.5 rounded-full transition-all cursor-pointer ${
                     idx === currentStepIndex
-                      ? 'w-5 bg-emerald-600'
+                      ? 'w-4 bg-emerald-600'
                       : 'w-1.5 bg-slate-200 hover:bg-slate-300'
                   }`}
                   title={`Bước ${idx + 1}`}
@@ -420,10 +420,10 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
               <button
                 type="button"
                 onClick={handlePrev}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors flex items-center gap-0.5 cursor-pointer"
+                className="px-2 py-1 rounded-lg text-[11px] font-semibold text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-0.5 cursor-pointer"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                Quay lại
+                <ChevronLeft className="w-3 h-3" />
+                Lại
               </button>
             )}
 
@@ -431,14 +431,14 @@ export const SpotlightTour: React.FC<SpotlightTourProps> = ({
             <button
               type="button"
               onClick={handleNext}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-1 shadow-xs cursor-pointer ${
+              className={`px-3 py-1 rounded-lg text-[11px] font-bold text-white transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${
                 isLastStep
-                  ? 'bg-emerald-600 hover:bg-emerald-700 active:scale-95 ring-2 ring-emerald-500/30'
-                  : 'bg-slate-900 hover:bg-slate-800 active:scale-95'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-slate-800 hover:bg-slate-700'
               }`}
             >
-              <span>{isLastStep ? 'Hoàn tất' : 'Tiếp theo'}</span>
-              {isLastStep ? <Sparkles className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              <span>{isLastStep ? 'Hoàn tất' : 'Tiếp'}</span>
+              {isLastStep ? <Sparkles className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
             </button>
           </div>
         </div>
