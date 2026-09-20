@@ -1895,9 +1895,8 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         return res.json(secureResponse({ success: true, ignored: 'admin_exclusion' }));
       }
 
-      // If user is guest, group strictly by machine IP so multiple browsers on same machine don't duplicate guests
-      const isGuest = !metadata?.userId || metadata?.userId === 'guest';
-      const vid = isGuest ? `machine_${clientIp.replace(/[^a-zA-Z0-9]/g, '_')}` : (visitorId || `usr_${metadata.userId}`);
+      // Use persistent client visitorId or clean visitor identifier
+      const vid = visitorId || (metadata?.userId ? `usr_${metadata.userId}` : `v_${clientIp.replace(/[^a-zA-Z0-9]/g, '_')}`);
 
       // Server-side cooldown: Prevent rapid pageview spamming (must be >= 30s apart for same path & client)
       if (eventType === 'PAGE_VIEW') {
@@ -2078,7 +2077,6 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
           distinctVisitorIds.add(vid);
         }
       });
-      distinctGuestIps.forEach(ip => distinctVisitorIds.add(`machine_${ip}`));
 
       // Clean up any legacy admin events from DB
       (async () => {
