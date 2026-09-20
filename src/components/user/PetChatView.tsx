@@ -1243,28 +1243,34 @@ export const PetChatView: React.FC<Props> = ({
                     {isLoading && idx === messages.length - 1 && (
                       <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />
                     )}
+                  </div>
 
-                    {/* 🏥 Khuyến nghị cơ sở thú y phù hợp theo Triage Level (Đồng bộ, Tinh tế, Chuyên nghiệp) */}
-                    {(() => {
-                      const isRed = msg.triageLevel === 'RED' ||
-                        (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /cấp cứu|nguy kịch|khẩn cấp/i.test(msg.triageDetails.urgency)));
-                      
-                      const isYellow = msg.triageLevel === 'YELLOW' ||
-                        (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /theo dõi|thăm khám|cần khám/i.test(msg.triageDetails.urgency)));
+                  {/* 🏥 Khuyến nghị cơ sở thú y phù hợp theo Triage Level (Đồng bộ theo trạng thái, Trung tính & Tinh tế) */}
+                  {(() => {
+                    const isRed = msg.triageLevel === 'RED' ||
+                      (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /cấp cứu|nguy kịch|khẩn cấp/i.test(msg.triageDetails.urgency)));
+                    
+                    const isYellow = msg.triageLevel === 'YELLOW' ||
+                      (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /theo dõi|thăm khám|cần khám/i.test(msg.triageDetails.urgency)));
 
-                      if ((!isRed && !isYellow) || emergencyClinics.length === 0) return null;
+                    if ((!isRed && !isYellow) || emergencyClinics.length === 0) return null;
 
-                      return (
-                        <div className="mt-3 rounded-xl border border-slate-200/90 bg-slate-50/80 p-2.5 sm:p-3 shadow-2xs">
+                    return (
+                      <div className="pl-8 mt-2.5">
+                        <div className={`rounded-xl border p-2.5 sm:p-3 shadow-2xs ${
+                          isRed 
+                            ? 'border-rose-200/90 bg-rose-50/30' 
+                            : 'border-slate-200/90 bg-slate-50/70'
+                        }`}>
                           {/* Compact Header */}
                           <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-200/60">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <MapPin className={`w-3.5 h-3.5 shrink-0 ${isRed ? 'text-rose-600' : 'text-teal-600'}`} />
+                              <MapPin className={`w-3.5 h-3.5 shrink-0 ${isRed ? 'text-rose-600' : 'text-slate-600'}`} />
                               <span className="text-xs font-bold text-slate-800 truncate">
                                 {isRed ? 'Cơ sở thú y trực cấp cứu 24/7' : 'Phòng khám thú y đề xuất'}
                               </span>
                               {isRed && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 shrink-0">
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 border border-rose-200/70 shrink-0">
                                   Cấp cứu
                                 </span>
                               )}
@@ -1274,7 +1280,7 @@ export const PetChatView: React.FC<Props> = ({
                               <button
                                 type="button"
                                 onClick={onNavigateToClinics}
-                                className="text-[11px] font-semibold text-teal-700 hover:text-teal-800 transition-colors flex items-center gap-0.5 shrink-0 cursor-pointer"
+                                className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-0.5 shrink-0 cursor-pointer"
                               >
                                 Xem bản đồ →
                               </button>
@@ -1286,7 +1292,7 @@ export const PetChatView: React.FC<Props> = ({
                             {emergencyClinics.slice(0, 2).map((clinic) => (
                               <div
                                 key={clinic.id}
-                                className="bg-white rounded-lg p-2 sm:px-2.5 border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 hover:border-teal-300 transition-colors"
+                                className="bg-white rounded-lg p-2 sm:px-2.5 border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-slate-300 transition-colors"
                               >
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -1313,10 +1319,18 @@ export const PetChatView: React.FC<Props> = ({
                                   {clinic.phone && (
                                     <a
                                       href={`tel:${clinic.phone}`}
-                                      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 transition-colors"
+                                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors ${
+                                        isRed
+                                          ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                      }`}
+                                      style={{
+                                        color: isRed ? '#be123c' : '#334155',
+                                        textDecoration: 'none'
+                                      }}
                                       title={`Gọi ${clinic.phone}`}
                                     >
-                                      <Phone className="w-3 h-3 text-emerald-600" />
+                                      <Phone className={`w-3 h-3 ${isRed ? 'text-rose-600' : 'text-slate-600'}`} />
                                       <span className="hidden sm:inline">Gọi</span>
                                     </a>
                                   )}
@@ -1324,7 +1338,15 @@ export const PetChatView: React.FC<Props> = ({
                                     href={getClinicDirectionsUrl(clinic)}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white shadow-2xs transition-colors"
+                                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-2xs transition-colors ${
+                                      isRed
+                                        ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                                        : 'bg-slate-800 hover:bg-slate-900 text-white'
+                                    }`}
+                                    style={{
+                                      color: '#ffffff',
+                                      textDecoration: 'none'
+                                    }}
                                     title="Chỉ đường trên Google Maps"
                                   >
                                     <Navigation className="w-3 h-3 text-white" />
@@ -1335,9 +1357,9 @@ export const PetChatView: React.FC<Props> = ({
                             ))}
                           </div>
                         </div>
-                      );
-                    })()}
-                  </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Action buttons — appear on hover */}
                   <div className="pl-8 mt-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
