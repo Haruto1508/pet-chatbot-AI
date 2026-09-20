@@ -41,6 +41,11 @@ import { SystemStats, MedicalRecord, AnalyticsEvent } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
 
+// Module-level cache to avoid re-fetching stats when this component briefly
+// remounts (e.g. caused by Supabase token-refresh firing SIGNED_IN event).
+const _statsCache: Record<string, { data: SystemStats; loadedAt: number }> = {};
+const STATS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 type TabSection = 'acquisition' | 'users' | 'chatbot' | 'events';
 
 export const AdminDashboardView: React.FC = () => {
@@ -78,6 +83,8 @@ export const AdminDashboardView: React.FC = () => {
       ]);
       setStats(sData);
       setRecentRecords(rData.slice(0, 5));
+      // Populate cache so remounts within TTL skip the API call
+      _statsCache[range] = { data: sData, loadedAt: Date.now() };
     } catch (e) {
       console.error('Error loading admin dashboard stats:', e);
     } finally {
@@ -87,6 +94,14 @@ export const AdminDashboardView: React.FC = () => {
   };
 
   useEffect(() => {
+    const cached = _statsCache[timeRange];
+    const now = Date.now();
+    // Use cached data if still fresh (avoids refetch on brief remount from auth events)
+    if (cached && now - cached.loadedAt < STATS_CACHE_TTL_MS) {
+      setStats(cached.data);
+      setLoading(false);
+      return;
+    }
     loadData(timeRange);
   }, [timeRange]);
 

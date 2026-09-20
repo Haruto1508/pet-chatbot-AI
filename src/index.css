@@ -62,6 +62,26 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ─── Premium page scrollbar (admin & user views) ─── */
+.scrollbar-page {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.scrollbar-page::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-page::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-page::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+  transition: background 0.2s;
+}
+.scrollbar-page::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 /* ─────────────────────────────────────────
    MARKDOWN CHAT BODY STYLING
    ───────────────────────────────────────── */

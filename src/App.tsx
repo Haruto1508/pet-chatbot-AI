@@ -452,7 +452,9 @@ export function App() {
             className={`flex-1 min-h-0 w-full mx-auto ${
               currentTab === 'chat'
                 ? 'flex flex-col overflow-hidden pt-0'
-                : 'overflow-y-auto p-3 sm:p-6 max-w-7xl pt-14 lg:pt-6'
+                : currentTab.startsWith('admin_')
+                  ? 'overflow-y-auto p-3 sm:p-6 pt-14 lg:pt-6 scrollbar-page'
+                  : 'overflow-y-auto p-3 sm:p-6 max-w-7xl pt-14 lg:pt-6 scrollbar-page'
             }`}
           >
             <Suspense fallback={<PageLoader />}>

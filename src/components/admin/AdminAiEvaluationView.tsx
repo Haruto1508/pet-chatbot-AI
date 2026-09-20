@@ -125,6 +125,8 @@ export const AdminAiEvaluationView: React.FC = () => {
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               Làm Mới
             </button>
+            {/* TODO: Re-enable "Chạy Kiểm Định Toàn Diện" when a real benchmark pipeline endpoint is implemented.
+            Currently uses a hardcoded setTimeout + fake success message — hidden to avoid confusion.
             <button
               onClick={handleRunFullBenchmark}
               disabled={runningBenchmark}
@@ -133,6 +135,8 @@ export const AdminAiEvaluationView: React.FC = () => {
               <Play className={`w-3.5 h-3.5 ${runningBenchmark ? 'animate-spin' : ''}`} />
               {runningBenchmark ? 'Đang Chạy Benchmark...' : 'Chạy Kiểm Định Toàn Diện'}
             </button>
+            */}
+
           </div>
         </div>
       </div>
