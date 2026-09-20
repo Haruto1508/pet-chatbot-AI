@@ -1255,114 +1255,85 @@ export const PetChatView: React.FC<Props> = ({
                       if ((!isRed && !isYellow) || emergencyClinics.length === 0) return null;
 
                       return (
-                        <div
-                          className={`mt-4 rounded-2xl border p-3.5 sm:p-4 shadow-2xs transition-all ${
-                            isRed
-                              ? 'border-red-200 bg-red-50/40 border-l-4 border-l-red-500'
-                              : 'border-amber-200/80 bg-amber-50/30 border-l-4 border-l-amber-400'
-                          }`}
-                        >
-                          {/* Header */}
-                          <div className="flex items-start gap-2.5 mb-3">
-                            <div
-                              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-2xs ${
-                                isRed ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'
-                              }`}
-                            >
-                              {isRed ? <ShieldAlert className="w-4 h-4" /> : <Stethoscope className="w-4 h-4" />}
+                        <div className="mt-3 rounded-xl border border-slate-200/90 bg-slate-50/80 p-2.5 sm:p-3 shadow-2xs">
+                          {/* Compact Header */}
+                          <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-200/60">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <MapPin className={`w-3.5 h-3.5 shrink-0 ${isRed ? 'text-rose-600' : 'text-teal-600'}`} />
+                              <span className="text-xs font-bold text-slate-800 truncate">
+                                {isRed ? 'Cơ sở thú y trực cấp cứu 24/7' : 'Phòng khám thú y đề xuất'}
+                              </span>
+                              {isRed && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 shrink-0">
+                                  Cấp cứu
+                                </span>
+                              )}
                             </div>
 
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                                <span
-                                  className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                                    isRed
-                                      ? 'bg-red-100 text-red-700'
-                                      : 'bg-amber-100 text-amber-800'
-                                  }`}
-                                >
-                                  {isRed ? '🔴 CẤP CỨU KHẨN CẤP' : '🟡 THEO DÕI & THĂM KHÁM'}
-                                </span>
-                                <span className="text-xs sm:text-sm font-semibold text-slate-800">
-                                  {isRed
-                                    ? 'Cơ sở thú y trực cấp cứu 24/7 khuyên dùng'
-                                    : 'Phòng khám thú y đề xuất thăm khám'}
-                                </span>
-                              </div>
-                              <p className="text-xs text-slate-600 leading-relaxed">
-                                {isRed
-                                  ? 'Bé cưng có dấu hiệu nguy kịch cần can thiệp y tế ngay. Hãy giữ bình tĩnh, giữ ấm và liên hệ cơ sở thú y trực cấp cứu gần nhất:'
-                                  : 'Nếu triệu chứng kéo dài, không thuyên giảm sau 12-24h hoặc xuất hiện dấu hiệu mệt lử, bạn nên đưa bé đến phòng khám để bác sĩ thăm khám:'}
-                              </p>
-                            </div>
+                            {onNavigateToClinics && (
+                              <button
+                                type="button"
+                                onClick={onNavigateToClinics}
+                                className="text-[11px] font-semibold text-teal-700 hover:text-teal-800 transition-colors flex items-center gap-0.5 shrink-0 cursor-pointer"
+                              >
+                                Xem bản đồ →
+                              </button>
+                            )}
                           </div>
 
-                          {/* Clinic Cards List */}
-                          <div className="space-y-2">
+                          {/* Clinic Cards List - Clean & Compact */}
+                          <div className="space-y-1.5">
                             {emergencyClinics.slice(0, 2).map((clinic) => (
                               <div
                                 key={clinic.id}
-                                className="bg-white rounded-xl p-3 border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:border-slate-300 transition-all"
+                                className="bg-white rounded-lg p-2 sm:px-2.5 border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 hover:border-teal-300 transition-colors"
                               >
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <h4 className="text-xs sm:text-sm font-bold text-slate-900">{clinic.name}</h4>
+                                    <h4 className="text-xs font-bold text-slate-800 truncate" title={clinic.name}>
+                                      {clinic.name}
+                                    </h4>
                                     {clinic.isEmergency247 && (
-                                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200/60">
-                                        24/7 Cấp cứu
+                                      <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-rose-50 text-rose-600 border border-rose-200/60 shrink-0">
+                                        24/7
                                       </span>
                                     )}
                                     {clinic.distanceKm !== undefined && (
-                                      <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                                      <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded shrink-0">
                                         📍 {clinic.distanceKm.toFixed(1)} km
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-xs text-slate-500 truncate mt-0.5">{clinic.address}</p>
+                                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                    {clinic.address}
+                                  </p>
                                 </div>
 
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <a
-                                    href={`tel:${clinic.phone}`}
-                                    className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border shadow-2xs transition-colors ${
-                                      isRed
-                                        ? 'bg-red-600 hover:bg-red-700 text-white border-red-600'
-                                        : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-emerald-700 border-slate-200'
-                                    }`}
-                                  >
-                                    <Phone className={`w-3.5 h-3.5 ${isRed ? 'text-white' : 'text-emerald-600'}`} />
-                                    <span>{isRed ? 'Gọi cấp cứu' : `Gọi: ${clinic.phone}`}</span>
-                                  </a>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {clinic.phone && (
+                                    <a
+                                      href={`tel:${clinic.phone}`}
+                                      className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 transition-colors"
+                                      title={`Gọi ${clinic.phone}`}
+                                    >
+                                      <Phone className="w-3 h-3 text-emerald-600" />
+                                      <span className="hidden sm:inline">Gọi</span>
+                                    </a>
+                                  )}
                                   <a
                                     href={getClinicDirectionsUrl(clinic)}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white shadow-2xs transition-colors"
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white shadow-2xs transition-colors"
+                                    title="Chỉ đường trên Google Maps"
                                   >
-                                    <Navigation className="w-3.5 h-3.5 text-emerald-400" />
+                                    <Navigation className="w-3 h-3 text-white" />
                                     <span>Chỉ đường</span>
                                   </a>
                                 </div>
                               </div>
                             ))}
                           </div>
-
-                          {/* Footer Navigation to Map */}
-                          {onNavigateToClinics && (
-                            <div className="mt-3 pt-2.5 border-t border-slate-200/70 flex items-center justify-between text-xs">
-                              <span className="text-slate-500 hidden sm:inline text-[11px]">
-                                Cần tìm các cơ sở khác xung quanh bạn?
-                              </span>
-                              <button
-                                type="button"
-                                onClick={onNavigateToClinics}
-                                className="font-bold text-slate-700 hover:text-emerald-700 transition-colors flex items-center gap-1 cursor-pointer ml-auto sm:ml-0"
-                              >
-                                <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                                Mở bản đồ tìm tất cả phòng khám →
-                              </button>
-                            </div>
-                          )}
                         </div>
                       );
                     })()}
