@@ -3833,8 +3833,43 @@ YÊU CẦU:
   // Serve static assets in production or use Vite middleware in development
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(process.cwd(), 'dist');
+    const assetsDir = path.join(distPath, 'assets');
+
+    // Static assets with 1-year cache
+    app.use('/assets', express.static(assetsDir, {
+      maxAge: '1y',
+      immutable: true,
+      fallthrough: true
+    }));
+
+    // Fallback for stale asset hashes (e.g. client having older HTML pointing to replaced CSS/JS)
+    app.get('/assets/:file', (req, res, next) => {
+      const file = req.params.file;
+      if (fs.existsSync(assetsDir)) {
+        const files = fs.readdirSync(assetsDir);
+        if (file.endsWith('.css')) {
+          const mainCss = files.find(f => f.startsWith('index-') && f.endsWith('.css'));
+          if (mainCss) {
+            res.setHeader('Content-Type', 'text/css');
+            return res.sendFile(path.join(assetsDir, mainCss));
+          }
+        } else if (file.endsWith('.js') && file.startsWith('index-')) {
+          const mainJs = files.find(f => f.startsWith('index-') && f.endsWith('.js'));
+          if (mainJs) {
+            res.setHeader('Content-Type', 'application/javascript');
+            return res.sendFile(path.join(assetsDir, mainJs));
+          }
+        }
+      }
+      res.status(404).send('Asset not found');
+    });
+
     app.use(express.static(distPath));
+
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {

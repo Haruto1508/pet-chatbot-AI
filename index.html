@@ -73,6 +73,30 @@
       ]
     }
     </script>
+    <!-- 🛡️ Automatic Stale Asset & Deployment Mismatch Auto-Recovery -->
+    <script>
+      (function() {
+        window.addEventListener('error', function(e) {
+          var target = e.target;
+          if (target && (target.tagName === 'LINK' || target.tagName === 'SCRIPT')) {
+            var url = target.src || target.href || '';
+            if (url.indexOf('/assets/') !== -1) {
+              var key = 'vethic_asset_mismatch_reload';
+              if (!sessionStorage.getItem(key)) {
+                sessionStorage.setItem(key, Date.now().toString());
+                window.location.reload();
+              }
+            }
+          }
+        }, true);
+
+        window.addEventListener('load', function() {
+          setTimeout(function() {
+            sessionStorage.removeItem('vethic_asset_mismatch_reload');
+          }, 3000);
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
