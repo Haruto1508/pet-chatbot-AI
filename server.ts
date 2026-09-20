@@ -1862,8 +1862,11 @@ async function startServer(isVercel = false) {
     }
   });
 
-  // Users Management — Full Admin only
-  app.get('/api/users', requireFullAdminAuth, async (_req: Request, res: Response) => {
+  // Users Management — Full Admin only (Supports pagination via ?page=&limit=)
+  app.get('/api/users', requireFullAdminAuth, async (req: Request, res: Response) => {
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+
     const { data, error } = await supabase
       .from('users')
       .select('*')
@@ -1880,6 +1883,20 @@ async function startServer(isVercel = false) {
         createdAt: u.created_at
       };
     });
+
+    if (page && limit && page > 0 && limit > 0) {
+      const start = (page - 1) * limit;
+      const end = start + limit;
+      const paginated = mapped.slice(start, end);
+      return res.json({
+        users: paginated,
+        total: mapped.length,
+        page,
+        limit,
+        totalPages: Math.ceil(mapped.length / limit)
+      });
+    }
+
     res.json(mapped);
   });
 

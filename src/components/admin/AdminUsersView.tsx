@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Users, Search, Lock, Unlock, Trash2, Shield, UserCheck,
-  MessageSquare, ShieldCheck, ShieldOff, Crown, Ban, Filter, RefreshCw
+  MessageSquare, ShieldCheck, ShieldOff, Crown, Ban, Filter, RefreshCw,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { api } from '../../services/api';
@@ -64,6 +65,14 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
   const isFullAdmin = currentUser.role === 'admin';
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, roleFilter]);
 
   const loadUsersAndRequests = async (force = false) => {
     // Return cached users if available and fresh to avoid refetching on window focus or tab navigation
@@ -219,6 +228,14 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
     if (roleFilter === 'suspended') return u.status === 'suspended';
     return true;
   });
+
+  // Pagination calculations
+  const totalFilteredUsers = filteredUsers.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredUsers / pageSize));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalFilteredUsers);
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
   const totalUsers = safeUsers.length;
   const adminOnlyCount = safeUsers.filter(u => u.role === 'admin').length;
@@ -401,7 +418,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((u) => {
+                paginatedUsers.map((u) => {
                   const isSelf = u.id === currentUser.id;
                   const isTargetAdmin = u.role === 'admin';
 
@@ -542,6 +559,107 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Bar */}
+        <div className="bg-slate-50/90 border-t border-slate-200 px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          {/* Left: Summary & Page Size selector */}
+          <div className="flex flex-wrap items-center gap-3 text-slate-600">
+            <span>
+              Hiển thị <strong>{totalFilteredUsers === 0 ? 0 : startIndex + 1}</strong> - <strong>{endIndex}</strong> trong tổng số <strong>{totalFilteredUsers}</strong> người dùng
+            </span>
+
+            <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
+              <span className="text-slate-400 text-[11px]">Mỗi trang:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="text-xs bg-white border border-slate-200 rounded-lg px-2 py-1 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer shadow-2xs"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Right: Page Navigation buttons */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage <= 1}
+              title="Trang đầu"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={safeCurrentPage <= 1}
+              title="Trang trước"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Page number buttons */}
+            <div className="flex items-center gap-1 px-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === totalPages || Math.abs(p - safeCurrentPage) <= 1)
+                .reduce<(number | string)[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && (p as number) - (arr[idx - 1] as number) > 1) {
+                    acc.push('...');
+                  }
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item, idx) => {
+                  if (item === '...') {
+                    return (
+                      <span key={`dots-${idx}`} className="px-1.5 text-slate-400 select-none">
+                        ...
+                      </span>
+                    );
+                  }
+                  const p = item as number;
+                  const isActive = p === safeCurrentPage;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p)}
+                      className={`min-w-[28px] h-7 px-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                        isActive
+                          ? 'bg-slate-900 text-amber-400 shadow-2xs'
+                          : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
+            </div>
+
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage >= totalPages}
+              title="Trang sau"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage >= totalPages}
+              title="Trang cuối"
+              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <ChevronsRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
