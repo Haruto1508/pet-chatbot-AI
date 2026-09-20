@@ -528,7 +528,9 @@ async function startServer(isVercel = false) {
     enableGeminiFallback: true,
     fallbackGeminiApiKey: process.env.GEMINI_API_KEY || '',
     fallbackModel: 'gemini-3.1-flash-lite',
-    fallbackTimeoutMs: 20000
+    fallbackTimeoutMs: 20000,
+    maintenanceMode: false,
+    maintenanceMessage: 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau'
   };
 
   function getLocalConfig(): Record<string, any> {
@@ -2339,10 +2341,33 @@ async function startServer(isVercel = false) {
         enableGeminiFallback: dbData?.enable_gemini_fallback ?? local.enableGeminiFallback ?? true,
         fallbackGeminiApiKey,
         fallbackModel,
-        fallbackTimeoutMs: dbData?.fallback_timeout_ms || local.fallbackTimeoutMs || 20000
+        fallbackTimeoutMs: dbData?.fallback_timeout_ms || local.fallbackTimeoutMs || 20000,
+        maintenanceMode: dbData?.maintenance_mode ?? local.maintenanceMode ?? false,
+        maintenanceMessage: dbData?.maintenance_message || local.maintenanceMessage || 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau'
       }));
     } catch (e: any) {
       res.status(500).json(secureResponse({ error: e.message }));
+    }
+  });
+
+  // Public unauthenticated endpoint for real-time maintenance check
+  app.get('/api/maintenance-status', async (_req: Request, res: Response) => {
+    try {
+      const local = getLocalConfig();
+      let isMaintenance = local.maintenanceMode ?? false;
+      let msg = local.maintenanceMessage || 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau';
+
+      try {
+        const { data, error } = await supabase.from('system_config').select('maintenance_mode, maintenance_message').eq('id', 1).single();
+        if (!error && data) {
+          if (typeof data.maintenance_mode === 'boolean') isMaintenance = data.maintenance_mode;
+          if (data.maintenance_message) msg = data.maintenance_message;
+        }
+      } catch {}
+
+      res.json(secureResponse({ maintenanceMode: isMaintenance, message: msg }));
+    } catch {
+      res.json(secureResponse({ maintenanceMode: false, message: '' }));
     }
   });
 
@@ -2395,6 +2420,8 @@ async function startServer(isVercel = false) {
           fallback_gemini_api_key: cleanFallbackKey,
           fallback_model: updated.fallbackModel,
           fallback_timeout_ms: updated.fallbackTimeoutMs,
+          maintenance_mode: updated.maintenanceMode ?? false,
+          maintenance_message: updated.maintenanceMessage || 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau',
           updated_at: new Date().toISOString()
         });
         if (upsertErr) {
@@ -2721,6 +2748,30 @@ async function startServer(isVercel = false) {
     if (cleanMessage.length > 2000) {
       return res.status(400).json(secureResponse({ error: 'Tin nhắn quá dài. Giới hạn tối đa là 2000 ký tự.' }));
     }
+
+    // 0.1 MAINTENANCE MODE GUARD (Non-admins are blocked)
+    try {
+      const local = getLocalConfig();
+      let isMaintenance = local.maintenanceMode ?? false;
+      let maintMsg = local.maintenanceMessage || 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau';
+      try {
+        const { data } = await supabase.from('system_config').select('maintenance_mode, maintenance_message').eq('id', 1).single();
+        if (data && typeof data.maintenance_mode === 'boolean') {
+          isMaintenance = data.maintenance_mode;
+          if (data.maintenance_message) maintMsg = data.maintenance_message;
+        }
+      } catch {}
+
+      if (isMaintenance) {
+        const isUserAdmin = (req as any).user?.role === 'admin';
+        if (!isUserAdmin) {
+          return res.status(503).json(secureResponse({
+            error: maintMsg,
+            maintenanceMode: true
+          }));
+        }
+      }
+    } catch {}
 
     try {
       // 1. GUEST RATE LIMIT CHECK (Server-side & Machine-Enforced)

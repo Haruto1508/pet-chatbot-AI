@@ -12,6 +12,7 @@ import { SpotlightTour } from './components/common/SpotlightTour';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { NotFoundView } from './components/common/NotFoundView';
 import { AdminAccessDeniedView } from './components/common/AdminAccessDeniedView';
+import { MaintenanceView } from './components/common/MaintenanceView';
 import { getTabFromPath, getPathFromTab, TAB_TITLES, TAB_DESCRIPTIONS } from './utils/routes';
 import { trackEvent } from './utils/analytics';
 
@@ -69,6 +70,31 @@ export function App() {
   const [currentTab, setCurrentTab] = useState<string>(getInitialTab());
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean>(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState<string>('');
+
+  // Real-time Maintenance Mode Polling (every 15s)
+  useEffect(() => {
+    let isMounted = true;
+    const checkMaintenance = async () => {
+      try {
+        const res = await api.getMaintenanceStatus();
+        if (isMounted && res) {
+          setIsMaintenanceMode(!!res.maintenanceMode);
+          if (res.message) setMaintenanceMessage(res.message);
+        }
+      } catch {
+        // Silently ignore network hiccups
+      }
+    };
+
+    checkMaintenance();
+    const interval = setInterval(checkMaintenance, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
   
   // Sync tab with clean modern URL & Dynamic Document Title
   useEffect(() => {
@@ -350,6 +376,22 @@ export function App() {
     }
   };
 
+  // Maintenance Mode Guard: All non-admin users and visitors are blocked and redirected to MaintenanceView
+  if (!isAuthLoading && isMaintenanceMode && currentUser.role !== 'admin') {
+    return (
+      <NotificationProvider>
+        <MaintenanceView
+          message={maintenanceMessage}
+          onAdminLogin={() => setIsLoginModalOpen(true)}
+        />
+        <LoginModal
+          isOpen={isLoginModalOpen}
+          onClose={() => setIsLoginModalOpen(false)}
+        />
+      </NotificationProvider>
+    );
+  }
+
   return (
     <NotificationProvider>
       <div className="h-screen h-dvh w-screen overflow-hidden bg-slate-100/70 text-slate-900 font-sans flex antialiased selection:bg-emerald-200">
@@ -385,6 +427,22 @@ export function App() {
 
           {/* Main Content Area */}
           <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+            {/* Maintenance Mode Alert Banner for Logged-In Admin */}
+            {currentUser.role === 'admin' && isMaintenanceMode && (
+              <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-sm z-30 shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping shrink-0" />
+                  <span>⚠️ CHẾ ĐỘ BẢO TRÌ ĐANG BẬT — Người dùng thông thường và khách đang bị chuyển hướng đến trang bảo trì.</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('admin_config')}
+                  className="underline hover:text-white transition-colors cursor-pointer text-[11px] shrink-0 font-extrabold"
+                >
+                  Quản lý cấu hình
+                </button>
+              </div>
+            )}
           <main
             className={`flex-1 min-h-0 w-full mx-auto ${
               currentTab === 'chat'

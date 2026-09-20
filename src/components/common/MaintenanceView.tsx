@@ -5,9 +5,11 @@ interface MaintenanceViewProps {
   error?: Error | null;
   resetError?: () => void;
   isCrash?: boolean;
+  message?: string;
+  onAdminLogin?: () => void;
 }
 
-export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ resetError }) => {
+export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ resetError, message, onAdminLogin }) => {
   const handleReload = () => {
     sessionStorage.removeItem('chunk_retry_reloaded');
     sessionStorage.removeItem('vite_preload_reloaded');
@@ -67,7 +69,7 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ resetError }) 
           Hệ thống đang bảo trì nâng cấp
         </h1>
         <p className="text-sm font-medium text-slate-500 mb-6">
-          Vui lòng quay lại sau
+          {message || 'Vui lòng quay lại sau'}
         </p>
 
         {/* Clean Single Action Button */}
@@ -78,6 +80,19 @@ export const MaintenanceView: React.FC<MaintenanceViewProps> = ({ resetError }) 
           <RefreshCw className="w-4 h-4" />
           Tải lại trang
         </button>
+
+        {/* Discrete Admin Login for maintenance bypass */}
+        {onAdminLogin && (
+          <div className="mt-4 pt-3 border-t border-slate-100 text-center">
+            <button
+              type="button"
+              onClick={onAdminLogin}
+              className="text-xs text-slate-400 hover:text-slate-600 transition-colors cursor-pointer font-medium"
+            >
+              Dành cho Quản trị viên (Đăng nhập)
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

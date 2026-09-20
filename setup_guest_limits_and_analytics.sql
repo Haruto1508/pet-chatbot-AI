@@ -42,5 +42,10 @@ GRANT ALL ON TABLE public.analytics_events TO anon, authenticated, service_role;
 CREATE INDEX IF NOT EXISTS idx_guest_rate_limits_last_msg ON public.guest_rate_limits (last_message_at);
 CREATE INDEX IF NOT EXISTS idx_analytics_events_type_created ON public.analytics_events (event_type, created_at DESC);
 
--- 7. Thông báo hoàn tất
-SELECT 'Thiết lập bảng guest_rate_limits và analytics_events thành công!' AS status;
+-- 7. Thêm chế độ bảo trì (Maintenance Mode) vào bảng system_config
+ALTER TABLE public.system_config 
+ADD COLUMN IF NOT EXISTS maintenance_mode BOOLEAN DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS maintenance_message TEXT DEFAULT 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau';
+
+-- 8. Thông báo hoàn tất
+SELECT 'Thiết lập bảng guest_rate_limits, analytics_events và chế độ bảo trì thành công!' AS status;

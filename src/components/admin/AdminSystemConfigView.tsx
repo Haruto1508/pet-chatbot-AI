@@ -3,7 +3,8 @@ import {
   Cpu, Save, ShieldAlert, Check, RefreshCw, Sliders,
   Key, Database, Server, Zap, Activity, CheckCircle2,
   XCircle, AlertTriangle, Clock, Eye, EyeOff, Sparkles,
-  Layers, Lock, HelpCircle, ArrowRight, ExternalLink, Plus, Trash2
+  Layers, Lock, HelpCircle, ArrowRight, ExternalLink, Plus, Trash2,
+  Wrench
 } from 'lucide-react';
 import { SystemConfig } from '../../types';
 import { api } from '../../services/api';
@@ -61,7 +62,9 @@ export const AdminSystemConfigView: React.FC = () => {
         enableGeminiFallback: data?.enableGeminiFallback ?? true,
         fallbackGeminiApiKey: data?.fallbackGeminiApiKey || data?.backupGeminiApiKey || '',
         fallbackModel: data?.fallbackModel || 'gemini-3.6-flash',
-        fallbackTimeoutMs: data?.fallbackTimeoutMs || 20000
+        fallbackTimeoutMs: data?.fallbackTimeoutMs || 20000,
+        maintenanceMode: data?.maintenanceMode ?? false,
+        maintenanceMessage: data?.maintenanceMessage || 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau'
       };
 
       setConfig(merged);
@@ -298,6 +301,96 @@ export const AdminSystemConfigView: React.FC = () => {
       </div>
 
       <form onSubmit={handleSave} className="space-y-6">
+        {/* Section 0: Maintenance Mode (Chế Độ Bảo Trì) */}
+        <div className={`p-6 rounded-2xl border transition-all ${
+          config.maintenanceMode 
+            ? 'bg-amber-50/50 border-amber-300 ring-2 ring-amber-400/20' 
+            : 'bg-white border-slate-200/80 shadow-xs'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-xl border ${
+                config.maintenanceMode 
+                  ? 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse' 
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}>
+                <Wrench className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-slate-900">Chế Độ Bảo Trì Hệ Thống (Maintenance Mode)</h2>
+                  {config.maintenanceMode ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                      Đang Kích Hoạt
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      Hoạt Động Bình Thường
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Khi bật, người dùng thông thường và khách (Guest) sẽ bị chuyển sang trang bảo trì / nâng cấp. Quản trị viên (Admin) vẫn có toàn quyền truy cập.
+                </p>
+              </div>
+            </div>
+
+            {/* Switch Toggle */}
+            <div className="flex items-center gap-3 self-end sm:self-center">
+              <span className={`text-xs font-bold ${config.maintenanceMode ? 'text-amber-700' : 'text-slate-500'}`}>
+                {config.maintenanceMode ? 'Bảo trì: ĐANG BẬT' : 'Bảo trì: ĐANG TẮT'}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={config.maintenanceMode ?? false}
+                onClick={() => setConfig({ ...config, maintenanceMode: !config.maintenanceMode })}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  config.maintenanceMode ? 'bg-amber-500' : 'bg-slate-300 hover:bg-slate-400'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    config.maintenanceMode ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-4 space-y-3">
+            <label className="block text-xs font-bold text-slate-700">
+              Thông Điệp Thông Báo Tới Người Dùng
+            </label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                value={config.maintenanceMessage || ''}
+                onChange={(e) => setConfig({ ...config, maintenanceMessage: e.target.value })}
+                placeholder="Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau..."
+                className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all font-medium"
+              />
+              <button
+                type="button"
+                onClick={() => setConfig({ ...config, maintenanceMessage: 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau' })}
+                className="px-3 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer shrink-0"
+              >
+                Khôi phục mặc định
+              </button>
+            </div>
+            {config.maintenanceMode && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-300/60 flex items-start gap-2.5 text-xs text-amber-900">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Lưu ý quan trọng:</span> Đừng quên bấm nút <strong>"Lưu Thay Đổi"</strong> ở góc trên để áp dụng chế độ này cho toàn hệ thống!
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Section 1: API Keys & Providers Management */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">

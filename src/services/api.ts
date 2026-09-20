@@ -78,6 +78,17 @@ export const api = {
     await authFetch(url, { method: 'DELETE' });
   },
 
+  // Maintenance Status Check
+  getMaintenanceStatus: async (): Promise<{ maintenanceMode: boolean; message: string }> => {
+    try {
+      const res = await authFetch('/api/maintenance-status');
+      if (!res.ok) return { maintenanceMode: false, message: '' };
+      return res.json();
+    } catch {
+      return { maintenanceMode: false, message: '' };
+    }
+  },
+
   // Health / Connection Check
   checkHealth: async (): Promise<{
     supabase: { status: string; latencyMs: number | null; message: string; url?: string };

@@ -123,6 +123,9 @@ export interface SystemConfig {
   customModelName?: string;
   apiProvider?: 'gemini' | 'openai' | 'custom';
   autoKeepAliveIntervalMinutes?: number;
+  // Maintenance mode
+  maintenanceMode?: boolean;
+  maintenanceMessage?: string;
   // Fallback config
   enableGeminiFallback?: boolean;
   fallbackGeminiApiKey?: string;
