@@ -28,7 +28,7 @@ import { decryptPayload } from '../utils/cryptoPayload';
 export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : input.url);
   const isInternal = url.startsWith('/') || (typeof window !== 'undefined' && url.startsWith(window.location.origin));
-  
+
   const headers = new Headers(init?.headers);
   if (isInternal) {
     try {
@@ -222,8 +222,8 @@ export const api = {
     try {
       if (userId === 'guest') return [];
       // Clean query: Do not leak userId in URL for authenticated user
-      const url = (userId && userId !== 'guest' && userId !== 'user_01') 
-        ? `/api/pets?userId=${encodeURIComponent(userId)}` 
+      const url = (userId && userId !== 'guest' && userId !== 'user_01')
+        ? `/api/pets?userId=${encodeURIComponent(userId)}`
         : '/api/pets';
       const res = await authFetch(url);
       if (!res.ok) return [];
@@ -397,7 +397,7 @@ export const api = {
       if (res.ok) {
         serverConfig = await res.json();
       }
-    } catch {}
+    } catch { }
 
     const merged: SystemConfig = {
       ...(serverConfig || {}),
@@ -556,7 +556,7 @@ export const api = {
         status_code: 0,
         latency_ms: Date.now() - t0,
         metadata: { error: msg }
-      }).catch(() => {});
+      }).catch(() => { });
       throw new Error(`Lỗi kết nối máy chủ AI: ${msg}`);
     }
 
@@ -565,7 +565,7 @@ export const api = {
       try {
         const errJson = await res.json();
         errMsg = errJson.message || errJson.error || errJson.details || errMsg;
-      } catch {}
+      } catch { }
       api.writeLog({
         log_type: 'render',
         level: 'error',
@@ -573,7 +573,7 @@ export const api = {
         status_code: res.status,
         latency_ms: Date.now() - t0,
         metadata: { status: res.status, error: errMsg }
-      }).catch(() => {});
+      }).catch(() => { });
       throw new Error(errMsg);
     }
 
@@ -584,7 +584,7 @@ export const api = {
     try {
       while (true) {
         if (signal?.aborted) {
-          try { await reader.cancel(); } catch {}
+          try { await reader.cancel(); } catch { }
           break;
         }
 
@@ -609,9 +609,9 @@ export const api = {
               }
             } catch (e: any) {
               if (e.message !== 'Lỗi server' && !line.includes('"type":"error"')) {
-                 console.error('Error parsing SSE data:', e, line);
+                console.error('Error parsing SSE data:', e, line);
               } else {
-                 throw e; // rethrow the actual API error to be caught by the caller
+                throw e; // rethrow the actual API error to be caught by the caller
               }
             }
           }
@@ -619,7 +619,7 @@ export const api = {
       }
     } catch (e: any) {
       if (e.name === 'AbortError' || signal?.aborted) {
-        try { await reader.cancel(); } catch {}
+        try { await reader.cancel(); } catch { }
         return;
       }
       throw e;
@@ -627,7 +627,7 @@ export const api = {
   },
 
   // ─────────────────────────────────────────────
-  // API LOGS (via Backend API — Client Supabase REST calls suppressed)
+  // API LOGS (via Backend API | Client Supabase REST calls suppressed)
   // ─────────────────────────────────────────────
 
   getLogs: async (filters?: {
@@ -730,7 +730,7 @@ export const api = {
       keyCandidates.push(cfg?.fallbackGeminiApiKey);
       keyCandidates.push(cfg?.backupGeminiApiKey);
       keyCandidates.push(cfg?.geminiApiKey);
-    } catch {}
+    } catch { }
 
     const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
     if (legacyModels.includes(fallbackModel)) {
@@ -783,7 +783,7 @@ export const api = {
         latency_ms: Date.now() - startTime,
         status_code: 200,
         metadata: { messagePreview: payload.message.slice(0, 80) }
-      }).catch(() => {});
+      }).catch(() => { });
 
       return;
     } catch (err: any) {
@@ -796,7 +796,7 @@ export const api = {
         message: `Máy chủ AI chính phản hồi lỗi (Lần 1): ${err?.message || 'unknown'}. Đang tự động thử lại...`,
         latency_ms: Date.now() - startTime,
         metadata: { error: err?.message, attempt: 1 }
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // ── ATTEMPT 2: Auto Retry 1 Time ──
@@ -826,7 +826,7 @@ export const api = {
           latency_ms: Date.now() - startTime,
           status_code: 200,
           metadata: { messagePreview: payload.message.slice(0, 80), attempt: 2 }
-        }).catch(() => {});
+        }).catch(() => { });
 
         return;
       } catch (retryErr: any) {
@@ -839,7 +839,7 @@ export const api = {
           message: `Máy chủ AI chính thất bại lần 2: ${retryErr?.message || 'unknown'}.`,
           latency_ms: Date.now() - startTime,
           metadata: { error: retryErr?.message, attempt: 2 }
-        }).catch(() => {});
+        }).catch(() => { });
 
         throw new Error('Hệ thống AI đang có lượng lớn người truy cập hoặc đang cập nhật. Vui lòng thử lại sau ít phút.');
       }

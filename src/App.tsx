@@ -35,8 +35,8 @@ const AdminPetsRecordsView = lazyWithRetry(() => import('./components/admin/Admi
 const AdminClinicsView = lazyWithRetry(() => import('./components/admin/AdminClinicsView').then(m => ({ default: m.AdminClinicsView })));
 const AdminArticlesView = lazyWithRetry(() => import('./components/admin/AdminArticlesView').then(m => ({ default: m.AdminArticlesView })));
 const AdminSystemConfigView = lazyWithRetry(() => import('./components/admin/AdminSystemConfigView').then(m => ({ default: m.AdminSystemConfigView })));
-const AdminHealthCheckView  = lazyWithRetry(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
-const AdminLogView          = lazyWithRetry(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
+const AdminHealthCheckView = lazyWithRetry(() => import('./components/admin/AdminHealthCheckView').then(m => ({ default: m.AdminHealthCheckView })));
+const AdminLogView = lazyWithRetry(() => import('./components/admin/AdminLogView').then(m => ({ default: m.AdminLogView })));
 const AdminAiEvaluationView = lazyWithRetry(() => import('./components/admin/AdminAiEvaluationView').then(m => ({ default: m.AdminAiEvaluationView })));
 
 const AUTH_USER_STORAGE_KEY = 'vethic_auth_user';
@@ -61,7 +61,7 @@ function getInitialUser(): UserProfile {
         return parsed;
       }
     }
-  } catch {}
+  } catch { }
   return guestUser;
 }
 
@@ -110,7 +110,7 @@ export function App() {
       clearInterval(interval);
     };
   }, []);
-  
+
   // Sync tab with clean modern URL & Dynamic Document Title
   useEffect(() => {
     // Do not interfere if Supabase is processing an OAuth redirect
@@ -127,7 +127,7 @@ export function App() {
     }
 
     // Update document title & meta description dynamically
-    document.title = TAB_TITLES[currentTab] || 'Vethic AI — Tư Vấn Bệnh Lý & Sơ Cứu Thú Cưng';
+    document.title = TAB_TITLES[currentTab] || 'Vethic AI | Tư Vấn Bệnh Lý & Sơ Cứu Thú Cưng';
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc && TAB_DESCRIPTIONS[currentTab]) {
       metaDesc.setAttribute('content', TAB_DESCRIPTIONS[currentTab]);
@@ -171,7 +171,7 @@ export function App() {
   // Proactively warm up Render Python AI service in background
   useEffect(() => {
     const warmUp = () => {
-      authFetch('/api/keep-alive?service=render').catch(() => {});
+      authFetch('/api/keep-alive?service=render').catch(() => { });
     };
     warmUp();
     const interval = setInterval(warmUp, 10 * 60 * 1000);
@@ -187,7 +187,7 @@ export function App() {
       e.preventDefault();
       setDeferredPrompt(e);
       (window as any).deferredPrompt = e; // make it accessible globally for AccountSettingsView
-      
+
       const hasDismissed = localStorage.getItem('petcare_pwa_dismissed');
       // If not dismissed and not already installed (standalone mode)
       if (!hasDismissed && !window.matchMedia('(display-mode: standalone)').matches) {
@@ -317,7 +317,7 @@ export function App() {
         clearAuthHash();
       }
     };
-    
+
     checkUser();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -337,12 +337,12 @@ export function App() {
         syncedUserIdRef.current = null;
         try {
           localStorage.removeItem(AUTH_USER_STORAGE_KEY);
-        } catch {}
+        } catch { }
         setCurrentUser(guestUser);
         setPets([]);
         setSelectedPet(null);
         setIsAuthLoading(false);
-        
+
         // If guest is on a protected route, redirect to chat
         const currentPath = window.location.pathname.substring(1);
         if (currentPath.startsWith('admin') || ['account', 'pets', 'records'].includes(currentPath)) {
@@ -364,7 +364,7 @@ export function App() {
         name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
         avatar: authUser.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(authUser.email || 'User')}`
       };
-      
+
       let syncedUser: UserProfile;
       try {
         syncedUser = await api.syncGoogleUser(payload);
@@ -387,12 +387,12 @@ export function App() {
       setCurrentUser(syncedUser);
       try {
         localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(syncedUser));
-      } catch {}
+      } catch { }
       clearAuthHash();
-      
+
       const currentPath = window.location.pathname.substring(1);
       const isAdminRoute = currentPath.startsWith('admin') || currentTab.startsWith('admin_');
-      
+
       if (syncedUser.role !== 'admin' && syncedUser.role !== 'subadmin' && isAdminRoute) {
         // Kick non-admins out of admin routes
         setCurrentTab('chat');
@@ -468,7 +468,7 @@ export function App() {
               <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-sm z-30 shrink-0">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping shrink-0" />
-                  <span>⚠️ CHẾ ĐỘ BẢO TRÌ ĐANG BẬT — Người dùng thông thường và khách đang bị chuyển hướng đến trang bảo trì.</span>
+                  <span>⚠️ CHẾ ĐỘ BẢO TRÌ ĐANG BẬT | Người dùng thông thường và khách đang bị chuyển hướng đến trang bảo trì.</span>
                 </div>
                 <button
                   type="button"
@@ -479,31 +479,30 @@ export function App() {
                 </button>
               </div>
             )}
-          <main
-            className={`flex-1 min-h-0 w-full mx-auto ${
-              currentTab === 'chat'
-                ? 'flex flex-col overflow-hidden pt-0'
-                : currentTab.startsWith('admin_')
-                  ? 'overflow-y-auto p-3 sm:p-6 pt-14 lg:pt-6 scrollbar-page'
-                  : 'overflow-y-auto p-3 sm:p-6 max-w-7xl pt-14 lg:pt-6 scrollbar-page'
-            }`}
-          >
-            <Suspense fallback={<UniversalPageLoader currentTab={currentTab} />}>
-            {/* User Navigation Views */}
-            {currentTab === 'chat' && (
-              <PetChatView
-                pets={pets}
-                selectedPet={selectedPet}
-                setSelectedPet={setSelectedPet}
-                onNavigateToRecords={() => setCurrentTab('records')}
-                onNavigateToPets={() => setCurrentTab('pets')}
-                onNavigateToClinics={() => setCurrentTab('clinics')}
-                currentUser={currentUser}
-                onOpenLogin={() => setIsLoginModalOpen(true)}
-              />
-            )}
+            <main
+              className={`flex-1 min-h-0 w-full mx-auto ${currentTab === 'chat'
+                  ? 'flex flex-col overflow-hidden pt-0'
+                  : currentTab.startsWith('admin_')
+                    ? 'overflow-y-auto p-3 sm:p-6 pt-14 lg:pt-6 scrollbar-page'
+                    : 'overflow-y-auto p-3 sm:p-6 max-w-7xl pt-14 lg:pt-6 scrollbar-page'
+                }`}
+            >
+              <Suspense fallback={<UniversalPageLoader currentTab={currentTab} />}>
+                {/* User Navigation Views */}
+                {currentTab === 'chat' && (
+                  <PetChatView
+                    pets={pets}
+                    selectedPet={selectedPet}
+                    setSelectedPet={setSelectedPet}
+                    onNavigateToRecords={() => setCurrentTab('records')}
+                    onNavigateToPets={() => setCurrentTab('pets')}
+                    onNavigateToClinics={() => setCurrentTab('clinics')}
+                    currentUser={currentUser}
+                    onOpenLogin={() => setIsLoginModalOpen(true)}
+                  />
+                )}
 
-            {/* Quản lý hồ sơ bệnh án của User tạm thời tắt theo yêu cầu, có thể mở lại khi cần:
+                {/* Quản lý hồ sơ bệnh án của User tạm thời tắt theo yêu cầu, có thể mở lại khi cần:
             {currentTab === 'records' && (
               <MedicalHistoryView
                 pets={pets}
@@ -537,65 +536,65 @@ export function App() {
             )}
             */}
 
-            {(currentTab === 'news' || currentTab === 'emergency') && (
-              <ArticlesNewsView />
-            )}
+                {(currentTab === 'news' || currentTab === 'emergency') && (
+                  <ArticlesNewsView />
+                )}
 
-            {currentTab === 'clinics' && (
-              <NearestClinicsView />
-            )}
+                {currentTab === 'clinics' && (
+                  <NearestClinicsView />
+                )}
 
-            {currentTab === 'pets' && (
-              <PetManagementView
-                pets={pets}
-                currentUser={currentUser}
-                onRefreshPets={refreshPets}
-              />
-            )}
+                {currentTab === 'pets' && (
+                  <PetManagementView
+                    pets={pets}
+                    currentUser={currentUser}
+                    onRefreshPets={refreshPets}
+                  />
+                )}
 
-            {currentTab === 'account' && (
-              <AccountSettingsView 
-                currentUser={currentUser} 
-                onUpdateUser={handleUpdateUser}
-                onOpenOnboardingTour={() => {
-                  setCurrentTab('chat');
-                  setIsOpenOnboardingTour(true);
-                }}
-              />
-            )}
+                {currentTab === 'account' && (
+                  <AccountSettingsView
+                    currentUser={currentUser}
+                    onUpdateUser={handleUpdateUser}
+                    onOpenOnboardingTour={() => {
+                      setCurrentTab('chat');
+                      setIsOpenOnboardingTour(true);
+                    }}
+                  />
+                )}
 
-            {/* Admin Navigation Views - Protected by Role Guard */}
-            {currentTab.startsWith('admin_') && (
-              isAuthLoading ? (
-                <AdminPageSkeleton />
-              ) : (currentUser.role === 'admin' || currentUser.role === 'subadmin') ? (
-                <>
-                  {/* Subadmin blocked tabs: useEffect will redirect to dashboard */}
-                  {currentUser.role === 'subadmin' && (currentTab === 'admin_users' || currentTab === 'admin_config') && null}
-                  {currentTab === 'admin_dashboard' && <AdminDashboardView />}
-                  {currentTab === 'admin_users'     && currentUser.role === 'admin' && <AdminUsersView currentUser={currentUser} />}
-                  {/* Quản lý bệnh án tạm thời tắt theo yêu cầu, có thể mở lại khi cần:
+                {/* Admin Navigation Views - Protected by Role Guard */}
+                {currentTab.startsWith('admin_') && (
+                  isAuthLoading ? (
+                    <AdminPageSkeleton />
+                  ) : (currentUser.role === 'admin' || currentUser.role === 'subadmin') ? (
+                    <>
+                      {/* Subadmin blocked tabs: useEffect will redirect to dashboard */}
+                      {currentUser.role === 'subadmin' && (currentTab === 'admin_users' || currentTab === 'admin_config') && null}
+                      {currentTab === 'admin_dashboard' && <AdminDashboardView />}
+                      {currentTab === 'admin_users' && currentUser.role === 'admin' && <AdminUsersView currentUser={currentUser} />}
+                      {/* Quản lý bệnh án tạm thời tắt theo yêu cầu, có thể mở lại khi cần:
                   {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
                   */}
-                  {currentTab === 'admin_clinics'   && <AdminClinicsView />}
-                  {currentTab === 'admin_articles'  && <AdminArticlesView />}
-                  {currentTab === 'admin_eval'      && <AdminAiEvaluationView />}
-                  {currentTab === 'admin_config'    && currentUser.role === 'admin' && <AdminSystemConfigView />}
-                  {currentTab === 'admin_health'    && <AdminHealthCheckView />}
-                  {currentTab === 'admin_logs'      && <AdminLogView />}
-                </>
-              ) : (
-                <AdminAccessDeniedView
-                  currentUser={currentUser}
-                  onOpenLoginModal={() => setIsLoginModalOpen(true)}
-                  onGoHome={() => setCurrentTab('chat')}
-                />
-              )
-            )}
+                      {currentTab === 'admin_clinics' && <AdminClinicsView />}
+                      {currentTab === 'admin_articles' && <AdminArticlesView />}
+                      {currentTab === 'admin_eval' && <AdminAiEvaluationView />}
+                      {currentTab === 'admin_config' && currentUser.role === 'admin' && <AdminSystemConfigView />}
+                      {currentTab === 'admin_health' && <AdminHealthCheckView />}
+                      {currentTab === 'admin_logs' && <AdminLogView />}
+                    </>
+                  ) : (
+                    <AdminAccessDeniedView
+                      currentUser={currentUser}
+                      onOpenLoginModal={() => setIsLoginModalOpen(true)}
+                      onGoHome={() => setCurrentTab('chat')}
+                    />
+                  )
+                )}
 
-            {currentTab === 'not_found' && <NotFoundView />}
-            </Suspense>
-          </main>
+                {currentTab === 'not_found' && <NotFoundView />}
+              </Suspense>
+            </main>
           </div>
         </div>
       </div>

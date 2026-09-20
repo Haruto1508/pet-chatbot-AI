@@ -1,15 +1,19 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Vethic AI — Hệ Thống Đang Bảo Trì Nâng Cấp</title>
+  <title>Vethic AI | Hệ Thống Đang Bảo Trì Nâng Cấp</title>
   <link rel="icon" type="image/png" href="/logo.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet">
   <style>
-    *, *::before, *::after {
+    *,
+    *::before,
+    *::after {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
@@ -80,6 +84,7 @@
         opacity: 0;
         transform: translateY(12px) scale(0.98);
       }
+
       to {
         opacity: 1;
         transform: translateY(0) scale(1);
@@ -128,13 +133,25 @@
     }
 
     @keyframes pulseAura {
-      0% { opacity: 0.4; transform: scale(0.96); }
-      100% { opacity: 0.8; transform: scale(1.05); }
+      0% {
+        opacity: 0.4;
+        transform: scale(0.96);
+      }
+
+      100% {
+        opacity: 0.8;
+        transform: scale(1.05);
+      }
     }
 
     @keyframes floatSmooth {
-      0% { transform: translateY(0px); }
-      100% { transform: translateY(-5px); }
+      0% {
+        transform: translateY(0px);
+      }
+
+      100% {
+        transform: translateY(-5px);
+      }
     }
 
     /* Brand Name */
@@ -185,8 +202,15 @@
     }
 
     @keyframes blinkDot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.35; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.35;
+      }
     }
 
     /* Clean Heading & Message */
@@ -236,6 +260,7 @@
     }
   </style>
 </head>
+
 <body>
   <!-- Ambient background lighting -->
   <div class="bg-decor">
@@ -248,7 +273,8 @@
     <div class="logo-wrapper">
       <div class="logo-halo"></div>
       <div class="logo-box">
-        <img src="logo.png" alt="Vethic AI" onerror="if(!this.dataset.triedRoot){this.dataset.triedRoot='1'; this.src='/logo.png';}" />
+        <img src="logo.png" alt="Vethic AI"
+          onerror="if(!this.dataset.triedRoot){this.dataset.triedRoot='1'; this.src='/logo.png';}" />
       </div>
     </div>
 
@@ -270,11 +296,13 @@
 
     <!-- Simple Clean Reload Button -->
     <button class="btn-reload" onclick="window.location.reload()">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
       </svg>
       <span>Tải lại trang</span>
     </button>
   </div>
 </body>
+
 </html>

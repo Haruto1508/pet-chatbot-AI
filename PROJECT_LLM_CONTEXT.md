@@ -7,7 +7,7 @@
 
 ## 🚀 1. SYSTEM OVERVIEW & ARCHITECTURE
 
-- **Application Name**: Vethic AI — Veterinary Triage & Medical Management System
+- **Application Name**: Vethic AI | Veterinary Triage & Medical Management System
 - **Core Purpose**: AI-powered pet medical triage, RAG knowledge consultation, medical record generation, pet management, emergency first aid, clinic map locator, and an admin management dashboard.
 - **Tech Stack**:
   - **Frontend**: React 19, TypeScript, Vite 6, Tailwind CSS v4, Lucide React icons, Motion animations, React Markdown, `@vis.gl/react-google-maps`.

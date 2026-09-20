@@ -140,13 +140,13 @@ export const AdminPetsRecordsView: React.FC = () => {
 
               <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-xs">
                 <span className="font-bold text-emerald-950 block">Phác đồ & Lời khuyên:</span>
-                <p className="text-emerald-900 mt-1">{rec.treatmentPlan} — {rec.dietaryAdvice}</p>
+                <p className="text-emerald-900 mt-1">{rec.treatmentPlan} | {rec.dietaryAdvice}</p>
               </div>
             </div>
           ))
         )}
       </div>
-    
+
       {/* Delete Confirmation Modal */}
       {recordToDelete && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">

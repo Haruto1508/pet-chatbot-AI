@@ -124,7 +124,7 @@ print(f"   Valid: {len(image_datasets['valid'])} ảnh")
 print("\n🔧 Đang khởi tạo ResNet50 pretrained...")
 model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
 
-# Thay lớp fc cuối (simple fc — dễ load trong main.py)
+# Thay lớp fc cuối (simple fc | dễ load trong main.py)
 num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, num_classes)
 model = model.to(device)

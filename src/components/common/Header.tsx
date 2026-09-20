@@ -84,8 +84,8 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2">
             <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping flex-shrink-0"></span>
             <span className="font-medium text-[11px] sm:text-xs">
-              <span className="hidden sm:inline">Vethic AI — Hệ Thống Tư Vấn Bệnh Lý & Sơ Cứu Khẩn Cấp Thú Cưng 24/7</span>
-              <span className="sm:hidden">Vethic AI — Tư Vấn Thú Cưng 24/7</span>
+              <span className="hidden sm:inline">Vethic AI | Hệ Thống Tư Vấn Bệnh Lý & Sơ Cứu Khẩn Cấp Thú Cưng 24/7</span>
+              <span className="sm:hidden">Vethic AI | Tư Vấn Thú Cưng 24/7</span>
             </span>
           </div>
 
@@ -117,11 +117,10 @@ export const Header: React.FC<HeaderProps> = ({
               {currentTabMeta.title}
             </h1>
             <span
-              className={`hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                currentTab.startsWith('admin')
+              className={`hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${currentTab.startsWith('admin')
                   ? 'bg-amber-100 text-amber-800 border border-amber-200'
                   : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-              }`}
+                }`}
             >
               {currentTabMeta.badge}
             </span>
@@ -139,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({
           ) : (
             <>
               {isAdmin && <AdminNotifications onNavigateToTab={onNavigateToTab} />}
-              
+
               {/* Quick role status badge */}
               <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-[11px] font-bold">
                 <span className="text-slate-500">Google Auth:</span>
@@ -165,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               ) : (
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-left shadow-2xs" title={`${currentUser.name} — ${currentUser.email}`}>
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white text-left shadow-2xs" title={`${currentUser.name} | ${currentUser.email}`}>
                     <img
                       src={currentUser.avatar}
                       alt={currentUser.name}

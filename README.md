@@ -1,4 +1,4 @@
-# 🐾 Vethic AI — Hệ Thống Y Tế & Chẩn Đoán Sơ Cứu Thú Cưng 24/7
+# 🐾 Vethic AI | Hệ Thống Y Tế & Chẩn Đoán Sơ Cứu Thú Cưng 24/7
 
 > **Vethic AI** là nền tảng y tế thú y số toàn diện (Full-stack Web App) tích hợp trí tuệ nhân tạo đa phương thức **Google Gemini 2.5 Flash**, dịch vụ thị giác máy tính **PyTorch ResNet**, và cơ sở tri thức chuyên sâu **RAG (pgvector 768 dimensions)**. Ứng dụng cung cấp khả năng phân loại khẩn cấp (Triage 3 cấp độ), tư vấn điều trị sơ cứu thời gian thực, quản lý bệnh án điện tử, bản đồ phòng khám 24/7 và giao diện quản trị phân quyền nâng cao.
 

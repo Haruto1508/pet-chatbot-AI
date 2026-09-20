@@ -5,7 +5,7 @@
 /**
  * Extracts and cleans a list of unique API keys from a comma-separated,
  * newline-separated, or array source.
- * Only accepts real Gemini API keys (AIzaSy...) — NOT OAuth tokens (AQ....).
+ * Only accepts real Gemini API keys (AIzaSy...) | NOT OAuth tokens (AQ....).
  */
 export function parseApiKeys(input?: any): string[] {
   if (!input) return [];

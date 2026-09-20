@@ -160,7 +160,7 @@ export const PetChatView: React.FC<Props> = ({
           setGuestMsgCount(quota.messageCount);
           localStorage.setItem('petcare_guest_msg_count', quota.messageCount.toString());
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [isGuest]);
 
@@ -179,7 +179,7 @@ export const PetChatView: React.FC<Props> = ({
   const [selectedImageMeta, setSelectedImageMeta] = useState<{ name: string; size: number } | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
-  
+
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [editRecordDraft, setEditRecordDraft] = useState<Partial<MedicalRecord> | null>(null);
@@ -212,7 +212,7 @@ export const PetChatView: React.FC<Props> = ({
             setUserLocation({ lat: data.latitude, lng: data.longitude });
           }
         })
-        .catch(() => {});
+        .catch(() => { });
     };
 
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -590,7 +590,7 @@ export const PetChatView: React.FC<Props> = ({
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
       const initialTitle = queryText.length > 30 ? queryText.substring(0, 30) + '...' : queryText;
-      
+
       try {
         const newSession = await api.createChatSession({
           userId: currentUser.id,
@@ -614,13 +614,13 @@ export const PetChatView: React.FC<Props> = ({
         // Generate smart title in the background
         api.generateTitle(queryText).then(async ({ title }) => {
           if (title && activeSessionId) {
-             await api.updateChatSession(activeSessionId, { title });
-             if (!isGuest) {
-               setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title } : s));
-             }
+            await api.updateChatSession(activeSessionId, { title });
+            if (!isGuest) {
+              setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, title } : s));
+            }
           }
         }).catch(console.error);
-        
+
       } catch (e) {
         console.error('Error creating chat session:', e);
       }
@@ -669,8 +669,8 @@ export const PetChatView: React.FC<Props> = ({
                 status: wasFallbackUsed ? 'fallback' : 'success'
               }];
             }
-            return prev.map(msg => 
-              msg.id === aiMessageId 
+            return prev.map(msg =>
+              msg.id === aiMessageId
                 ? { ...msg, text: finalText, status: wasFallbackUsed ? 'fallback' : 'success' }
                 : msg
             );
@@ -692,8 +692,8 @@ export const PetChatView: React.FC<Props> = ({
                 status: wasFallbackUsed ? 'fallback' : 'success'
               }];
             }
-            return prev.map(msg => 
-              msg.id === aiMessageId 
+            return prev.map(msg =>
+              msg.id === aiMessageId
                 ? { ...msg, triageLevel: triageLevel, triageDetails: triageDetails }
                 : msg
             );
@@ -729,9 +729,9 @@ export const PetChatView: React.FC<Props> = ({
             : msg
         );
         if (activeSessionId && finalText.trim()) {
-          api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(() => {});
+          api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(() => { });
           if (!isGuest) {
-            setSessions(currentSessions => 
+            setSessions(currentSessions =>
               currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s)
             );
           }
@@ -748,9 +748,9 @@ export const PetChatView: React.FC<Props> = ({
                 ? { ...msg, status: 'success' as const, latencyMs: Date.now() - sendStartTime }
                 : msg
             );
-            api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(() => {});
+            api.updateChatSession(activeSessionId, { messages: finalMessages }).catch(() => { });
             if (!isGuest) {
-              setSessions(currentSessions => 
+              setSessions(currentSessions =>
                 currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: finalMessages } : s)
               );
             }
@@ -760,25 +760,25 @@ export const PetChatView: React.FC<Props> = ({
       } else {
         const isTimeout = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('timeout') || err?.message?.toLowerCase().includes('quá thời gian');
         const isRateLimit = err?.message?.includes('giới hạn 8 tin nhắn') ||
-                           err?.message?.includes('đạt giới hạn') ||
-                           err?.message?.includes('dùng thử miễn phí') ||
-                           (err as any)?.guestLimitReached;
-        
+          err?.message?.includes('đạt giới hạn') ||
+          err?.message?.includes('dùng thử miễn phí') ||
+          (err as any)?.guestLimitReached;
+
         if (isRateLimit && isGuest) {
           setGuestMsgCount(GUEST_MESSAGE_LIMIT); // Trigger banner immediately
           localStorage.setItem('petcare_guest_msg_count', GUEST_MESSAGE_LIMIT.toString());
         }
 
         const isOverload = err?.message?.toLowerCase().includes('quá tải') ||
-                           err?.message?.toLowerCase().includes('lưu lượng') ||
-                           err?.message?.toLowerCase().includes('lượng lớn người truy cập') ||
-                           err?.message?.toLowerCase().includes('tải lại trang');
+          err?.message?.toLowerCase().includes('lưu lượng') ||
+          err?.message?.toLowerCase().includes('lượng lớn người truy cập') ||
+          err?.message?.toLowerCase().includes('tải lại trang');
 
         const errorText = isTimeout
           ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại sau ít phút.'
           : isOverload
-          ? 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
-          : (err?.message || 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
+            ? 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
+            : (err?.message || 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
 
         const errMsg: ChatMessage = {
           id: `err_${Date.now()}`,
@@ -795,9 +795,9 @@ export const PetChatView: React.FC<Props> = ({
           const cleaned = prev.filter(m => m.id !== aiMessageId);
           const updatedWithErr = [...cleaned, errMsg];
           if (activeSessionId) {
-            api.updateChatSession(activeSessionId, { messages: updatedWithErr }).catch(() => {});
+            api.updateChatSession(activeSessionId, { messages: updatedWithErr }).catch(() => { });
             if (!isGuest) {
-              setSessions(currentSessions => 
+              setSessions(currentSessions =>
                 currentSessions.map(s => s.id === activeSessionId ? { ...s, messages: updatedWithErr } : s)
               );
             }
@@ -813,7 +813,7 @@ export const PetChatView: React.FC<Props> = ({
           level: 'error',
           message: errorText,
           metadata: { query: queryText.slice(0, 80), error: err?.message || err?.name }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } finally {
       setIsLoading(false);
@@ -936,20 +936,17 @@ export const PetChatView: React.FC<Props> = ({
                   <div
                     key={session.id}
                     onClick={() => handleSelectSession(session)}
-                    className={`group relative flex flex-col gap-1 p-2.5 mx-1 rounded-xl cursor-pointer transition-all duration-200 ${
-                      isActive
+                    className={`group relative flex flex-col gap-1 p-2.5 mx-1 rounded-xl cursor-pointer transition-all duration-200 ${isActive
                         ? 'bg-emerald-50 border border-emerald-200/80 shadow-sm'
                         : 'hover:bg-slate-50 border border-transparent'
-                    }`}
+                      }`}
                   >
                     {/* Title row */}
                     <div className="flex items-start gap-2">
-                      <MessageSquare className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 transition-colors ${
-                        isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-500'
-                      }`} />
-                      <span className={`text-[13px] font-medium leading-snug line-clamp-2 flex-1 ${
-                        isActive ? 'text-emerald-900' : 'text-slate-700'
-                      }`}>
+                      <MessageSquare className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 transition-colors ${isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-500'
+                        }`} />
+                      <span className={`text-[13px] font-medium leading-snug line-clamp-2 flex-1 ${isActive ? 'text-emerald-900' : 'text-slate-700'
+                        }`}>
                         {session.title}
                       </span>
                       <button
@@ -964,18 +961,16 @@ export const PetChatView: React.FC<Props> = ({
                     {/* Metadata row */}
                     <div className="flex items-center gap-1.5 pl-5.5 ml-[22px]">
                       {petName && (
-                        <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
-                          isActive
+                        <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${isActive
                             ? 'bg-emerald-100 text-emerald-700'
                             : 'bg-slate-100 text-slate-500'
-                        }`}>
+                          }`}>
                           <PawPrint className="w-2.5 h-2.5" />
                           {petName}
                         </span>
                       )}
-                      <span className={`text-[10px] flex items-center gap-0.5 ${
-                        isActive ? 'text-emerald-500' : 'text-slate-400'
-                      }`}>
+                      <span className={`text-[10px] flex items-center gap-0.5 ${isActive ? 'text-emerald-500' : 'text-slate-400'
+                        }`}>
                         <Clock className="w-2.5 h-2.5" />
                         {formatRelativeTime(session.updatedAt || session.createdAt)}
                       </span>
@@ -1041,7 +1036,7 @@ export const PetChatView: React.FC<Props> = ({
         <div className="fixed inset-0 z-50 md:hidden" onClick={() => setIsMobileHistoryOpen(false)}>
           {/* Backdrop */}
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
-          
+
           {/* Sheet */}
           <div
             className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[75vh]"
@@ -1052,7 +1047,7 @@ export const PetChatView: React.FC<Props> = ({
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-slate-300" />
             </div>
-            
+
             {/* Mobile Sheet Header */}
             <div className="flex items-center justify-between px-4 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -1091,7 +1086,7 @@ export const PetChatView: React.FC<Props> = ({
         className="flex-1 min-w-0 flex flex-col h-full w-full bg-white overflow-hidden relative"
       >
 
-        {/* Floating sidebar toggle — only when sidebar is closed on desktop */}
+        {/* Floating sidebar toggle | only when sidebar is closed on desktop */}
         {!isSidebarOpen && (
           <button
             onClick={() => setIsSidebarOpen(true)}
@@ -1125,7 +1120,7 @@ export const PetChatView: React.FC<Props> = ({
 
         {messages.filter(m => m.sender === 'user').length === 0 && !isLoading ? (
           /* ══════════════════════════════════════════════════════════════════════
-             EMPTY STATE — input + greeting centered on screen
+             EMPTY STATE | input + greeting centered on screen
              ══════════════════════════════════════════════════════════════════════ */
           <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 gap-6">
             {/* Greeting (Image 1 style) */}
@@ -1199,384 +1194,376 @@ export const PetChatView: React.FC<Props> = ({
 
         ) : (
           /* ══════════════════════════════════════════════════════════════════════
-             CHAT MODE — scrollable messages + floating input bar
+             CHAT MODE | scrollable messages + floating input bar
              ══════════════════════════════════════════════════════════════════════ */
           <>
-        {/* Scrollable Messages — full height */}
-        <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-32">
-            {messages.filter(m => m.id !== 'msg_welcome').map((msg, idx) => {
-              const isUser = msg.sender === 'user';
+            {/* Scrollable Messages | full height */}
+            <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
+              <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-32">
+                {messages.filter(m => m.id !== 'msg_welcome').map((msg, idx) => {
+                  const isUser = msg.sender === 'user';
 
-              if (isUser) {
-                return (
-                  <div key={msg.id} className="group py-4 flex justify-end">
-                    <div className="max-w-[80%] flex flex-col items-end gap-1.5">
-                      {msg.imageUrl && (
-                        <img
-                          src={msg.imageUrl}
-                          alt="Triệu chứng thú cưng"
-                          className="max-w-[280px] rounded-2xl border border-slate-200 object-cover shadow-sm"
-                        />
-                      )}
-                      {msg.text && (
-                        <div className="bg-slate-100 text-slate-900 rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
-                          {msg.text}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1.5 pr-1">
-                        <button
-                          onClick={() => {
-                            if (msg.text) {
-                              navigator.clipboard.writeText(msg.text);
-                              setCopiedMsgId(msg.id);
-                              setTimeout(() => setCopiedMsgId(null), 2000);
-                            }
-                          }}
-                          title="Sao chép câu hỏi"
-                          className={`flex items-center gap-1 p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-all cursor-pointer ${
-                            copiedMsgId === msg.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
-                          }`}
-                        >
-                          {copiedMsgId === msg.id ? (
-                            <>
-                              <CheckCircle className="w-3 h-3 text-emerald-600" />
-                              <span className="text-[10px] text-emerald-600 font-medium">Đã sao chép</span>
-                            </>
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                        <span className="text-[10px] text-slate-400">{msg.timestamp}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              // AI message — full width, clean, ChatGPT style
-              const triageTooltip = msg.triageDetails
-                ? `${msg.triageDetails.riskTitle}\n${msg.triageDetails.urgency}${
-                    msg.triageDetails.immediateActions?.length
-                      ? '\n• ' + msg.triageDetails.immediateActions.join('\n• ')
-                      : ''
-                  }`
-                : '';
-
-              return (
-                <div key={msg.id} className="group py-6">
-                  {/* AI Header: logo + name + triage badge */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
-                      <img
-                        src="/logo.png"
-                        alt="Vethic AI"
-                        className="w-full h-full object-contain p-0.5"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    </div>
-                    <span className="text-sm font-semibold text-slate-900">Vethic AI</span>
-
-                    {msg.triageLevel && (
-                      <span
-                        title={triageTooltip}
-                        className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full cursor-help select-none ${
-                          msg.triageLevel === 'RED'
-                            ? 'bg-red-100 text-red-700'
-                            : msg.triageLevel === 'YELLOW'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-emerald-100 text-emerald-700'
-                        }`}
-                      >
-                        {msg.triageLevel === 'RED' ? '🔴' : msg.triageLevel === 'YELLOW' ? '🟡' : '🟢'}
-                        <span className="hidden sm:inline">
-                          {msg.triageDetails?.riskTitle || (msg.triageLevel === 'GREEN' ? 'Bình thường' : msg.triageLevel)}
-                        </span>
-                      </span>
-                    )}
-
-                    <span className="text-[10px] text-slate-400 ml-auto">{msg.timestamp}</span>
-                  </div>
-
-                  {/* AI Content */}
-                  <div className="pl-8 markdown-body text-slate-800">
-                    {msg.imageUrl && (
-                      <img
-                        src={msg.imageUrl}
-                        alt="Triệu chứng thú cưng"
-                        className="max-w-[280px] rounded-xl border border-slate-200 mb-4 object-cover shadow-sm"
-                      />
-                    )}
-                    <Markdown
-                      components={{
-                        a: ({ node, ...props }) => (
-                          <a {...props} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline font-medium hover:text-emerald-700" />
-                        ),
-                        table: ({ node, ...props }) => (
-                          <div className="overflow-x-auto my-3 rounded-xl border border-slate-200 shadow-2xs">
-                            <table {...props} className="w-full text-xs border-collapse" />
-                          </div>
-                        )
-                      }}
-                    >
-                      {msg.text}
-                    </Markdown>
-                    {isLoading && idx === messages.length - 1 && (
-                      <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />
-                    )}
-                  </div>
-
-                  {/* 🏥 Khuyến nghị cơ sở thú y phù hợp theo Triage Level (Đồng bộ theo trạng thái, Trung tính & Tinh tế) */}
-                  {(() => {
-                    const isRed = msg.triageLevel === 'RED' ||
-                      (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /cấp cứu|nguy kịch|khẩn cấp/i.test(msg.triageDetails.urgency)));
-                    
-                    const isYellow = msg.triageLevel === 'YELLOW' ||
-                      (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /theo dõi|thăm khám|cần khám/i.test(msg.triageDetails.urgency)));
-
-                    if (msg.status === 'error' || (!isRed && !isYellow) || emergencyClinics.length === 0) return null;
-
+                  if (isUser) {
                     return (
-                      <div className="pl-8 mt-2.5">
-                        <div className={`rounded-xl border p-2.5 sm:p-3 shadow-2xs ${
-                          isRed 
-                            ? 'border-rose-200/90 bg-rose-50/30' 
-                            : 'border-slate-200/90 bg-slate-50/70'
-                        }`}>
-                          {/* Compact Header */}
-                          <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-200/60">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <MapPin className={`w-3.5 h-3.5 shrink-0 ${isRed ? 'text-rose-600' : 'text-slate-600'}`} />
-                              <span className="text-xs font-bold text-slate-800 truncate">
-                                {isRed ? 'Cơ sở thú y trực cấp cứu 24/7' : 'Phòng khám thú y đề xuất'}
-                              </span>
-                              {isRed && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 border border-rose-200/70 shrink-0">
-                                  Cấp cứu
-                                </span>
-                              )}
+                      <div key={msg.id} className="group py-4 flex justify-end">
+                        <div className="max-w-[80%] flex flex-col items-end gap-1.5">
+                          {msg.imageUrl && (
+                            <img
+                              src={msg.imageUrl}
+                              alt="Triệu chứng thú cưng"
+                              className="max-w-[280px] rounded-2xl border border-slate-200 object-cover shadow-sm"
+                            />
+                          )}
+                          {msg.text && (
+                            <div className="bg-slate-100 text-slate-900 rounded-2xl rounded-br-md px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
+                              {msg.text}
                             </div>
-
-                            {onNavigateToClinics && (
-                              <button
-                                type="button"
-                                onClick={onNavigateToClinics}
-                                className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-0.5 shrink-0 cursor-pointer"
-                              >
-                                Xem bản đồ →
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Clinic Cards List - Clean & Compact */}
-                          <div className="space-y-1.5">
-                            {emergencyClinics.slice(0, 2).map((clinic) => (
-                              <div
-                                key={clinic.id}
-                                className="bg-white rounded-lg p-2 sm:px-2.5 border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-slate-300 transition-colors"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <h4 className="text-xs font-bold text-slate-800 truncate" title={clinic.name}>
-                                      {clinic.name}
-                                    </h4>
-                                    {clinic.isEmergency247 && (
-                                      <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-rose-50 text-rose-600 border border-rose-200/60 shrink-0">
-                                        24/7
-                                      </span>
-                                    )}
-                                    {clinic.distanceKm !== undefined && (
-                                      <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded shrink-0">
-                                        📍 {clinic.distanceKm.toFixed(1)} km
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[11px] text-slate-500 truncate mt-0.5">
-                                    {clinic.address}
-                                  </p>
-                                </div>
-
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {clinic.phone && (
-                                    <a
-                                      href={`tel:${clinic.phone}`}
-                                      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors ${
-                                        isRed
-                                          ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
-                                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                                      }`}
-                                      style={{
-                                        color: isRed ? '#be123c' : '#334155',
-                                        textDecoration: 'none'
-                                      }}
-                                      title={`Gọi ${clinic.phone}`}
-                                    >
-                                      <Phone className={`w-3 h-3 ${isRed ? 'text-rose-600' : 'text-slate-600'}`} />
-                                      <span className="hidden sm:inline">Gọi</span>
-                                    </a>
-                                  )}
-                                  <a
-                                    href={getClinicDirectionsUrl(clinic)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-2xs transition-colors ${
-                                      isRed
-                                        ? 'bg-rose-600 hover:bg-rose-700 text-white'
-                                        : 'bg-slate-800 hover:bg-slate-900 text-white'
-                                    }`}
-                                    style={{
-                                      color: '#ffffff',
-                                      textDecoration: 'none'
-                                    }}
-                                    title="Chỉ đường trên Google Maps"
-                                  >
-                                    <Navigation className="w-3 h-3 text-white" />
-                                    <span>Chỉ đường</span>
-                                  </a>
-                                </div>
-                              </div>
-                            ))}
+                          )}
+                          <div className="flex items-center gap-1.5 pr-1">
+                            <button
+                              onClick={() => {
+                                if (msg.text) {
+                                  navigator.clipboard.writeText(msg.text);
+                                  setCopiedMsgId(msg.id);
+                                  setTimeout(() => setCopiedMsgId(null), 2000);
+                                }
+                              }}
+                              title="Sao chép câu hỏi"
+                              className={`flex items-center gap-1 p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-all cursor-pointer ${copiedMsgId === msg.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+                                }`}
+                            >
+                              {copiedMsgId === msg.id ? (
+                                <>
+                                  <CheckCircle className="w-3 h-3 text-emerald-600" />
+                                  <span className="text-[10px] text-emerald-600 font-medium">Đã sao chép</span>
+                                </>
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                            <span className="text-[10px] text-slate-400">{msg.timestamp}</span>
                           </div>
                         </div>
                       </div>
                     );
-                  })()}
+                  }
 
-                  {/* Action buttons — appear on hover */}
-                  <div className="pl-8 mt-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(msg.text);
-                        setCopiedMsgId(msg.id);
-                        setTimeout(() => setCopiedMsgId(null), 2000);
-                      }}
-                      title="Sao chép"
-                      className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                    >
-                      {copiedMsgId === msg.id ? (
-                        <><CheckCircle className="w-3.5 h-3.5 text-emerald-600" /><span className="text-[11px] text-emerald-600 font-medium">Đã sao chép</span></>
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleDownloadMarkdown(msg.text, msg.triageDetails?.riskTitle)}
-                      title="Tải câu trả lời về file .md"
-                      className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                    </button>
-                    <button title="Hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
-                      <ThumbsUp className="w-3.5 h-3.5" />
-                    </button>
-                    <button title="Không hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
-                      <ThumbsDown className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+                  // AI message | full width, clean, ChatGPT style
+                  const triageTooltip = msg.triageDetails
+                    ? `${msg.triageDetails.riskTitle}\n${msg.triageDetails.urgency}${msg.triageDetails.immediateActions?.length
+                      ? '\n• ' + msg.triageDetails.immediateActions.join('\n• ')
+                      : ''
+                    }`
+                    : '';
 
-            {/* Dynamic AI Reasoning & Thinking Indicator */}
-            {isLoading && !hasReceivedFirstChunk && (
-              <div className="py-6 animate-in fade-in duration-300">
-                <div className="flex items-center gap-2.5 mb-3.5">
-                  <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-xs">
-                    <img src="/logo.png" alt="Vethic AI" className="w-full h-full object-contain p-0.5" />
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900">Vethic AI</span>
-                  
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    Bác sĩ AI đang suy luận
-                  </span>
+                  return (
+                    <div key={msg.id} className="group py-6">
+                      {/* AI Header: logo + name + triage badge */}
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
+                          <img
+                            src="/logo.png"
+                            alt="Vethic AI"
+                            className="w-full h-full object-contain p-0.5"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
+                        <span className="text-sm font-semibold text-slate-900">Vethic AI</span>
 
-                  {isRetrying && (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 text-teal-700 border border-teal-200/80 animate-pulse shadow-2xs">
-                      <Sparkles className="w-3 h-3 text-teal-600 animate-spin" />
-                      {THINKING_STEPS[thinkingStep]?.title || 'Truy tìm kiến thức...'}
-                    </span>
-                  )}
-                </div>
+                        {msg.triageLevel && (
+                          <span
+                            title={triageTooltip}
+                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full cursor-help select-none ${msg.triageLevel === 'RED'
+                                ? 'bg-red-100 text-red-700'
+                                : msg.triageLevel === 'YELLOW'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-emerald-100 text-emerald-700'
+                              }`}
+                          >
+                            {msg.triageLevel === 'RED' ? '🔴' : msg.triageLevel === 'YELLOW' ? '🟡' : '🟢'}
+                            <span className="hidden sm:inline">
+                              {msg.triageDetails?.riskTitle || (msg.triageLevel === 'GREEN' ? 'Bình thường' : msg.triageLevel)}
+                            </span>
+                          </span>
+                        )}
 
-                {/* Reasoning Steps Card */}
-                <div className="pl-8 max-w-lg">
-                  <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-50/90 to-white/95 border border-slate-200/80 shadow-xs backdrop-blur-xs space-y-3">
-                    <div className="space-y-2.5">
-                      {THINKING_STEPS.map((step, sIdx) => {
-                        const isCompleted = sIdx < thinkingStep;
-                        const isCurrent = sIdx === thinkingStep;
-                        const StepIcon = step.icon;
+                        <span className="text-[10px] text-slate-400 ml-auto">{msg.timestamp}</span>
+                      </div>
+
+                      {/* AI Content */}
+                      <div className="pl-8 markdown-body text-slate-800">
+                        {msg.imageUrl && (
+                          <img
+                            src={msg.imageUrl}
+                            alt="Triệu chứng thú cưng"
+                            className="max-w-[280px] rounded-xl border border-slate-200 mb-4 object-cover shadow-sm"
+                          />
+                        )}
+                        <Markdown
+                          components={{
+                            a: ({ node, ...props }) => (
+                              <a {...props} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline font-medium hover:text-emerald-700" />
+                            ),
+                            table: ({ node, ...props }) => (
+                              <div className="overflow-x-auto my-3 rounded-xl border border-slate-200 shadow-2xs">
+                                <table {...props} className="w-full text-xs border-collapse" />
+                              </div>
+                            )
+                          }}
+                        >
+                          {msg.text}
+                        </Markdown>
+                        {isLoading && idx === messages.length - 1 && (
+                          <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />
+                        )}
+                      </div>
+
+                      {/* 🏥 Khuyến nghị cơ sở thú y phù hợp theo Triage Level (Đồng bộ theo trạng thái, Trung tính & Tinh tế) */}
+                      {(() => {
+                        const isRed = msg.triageLevel === 'RED' ||
+                          (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /cấp cứu|nguy kịch|khẩn cấp/i.test(msg.triageDetails.urgency)));
+
+                        const isYellow = msg.triageLevel === 'YELLOW' ||
+                          (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /theo dõi|thăm khám|cần khám/i.test(msg.triageDetails.urgency)));
+
+                        if (msg.status === 'error' || (!isRed && !isYellow) || emergencyClinics.length === 0) return null;
 
                         return (
-                          <div
-                            key={sIdx}
-                            className={`flex items-start gap-3 text-xs transition-all duration-300 ${
-                              isCurrent
-                                ? 'text-slate-900 font-semibold'
-                                : isCompleted
-                                ? 'text-slate-500 font-medium'
-                                : 'text-slate-300 font-normal opacity-60'
-                            }`}
-                          >
-                            <div
-                              className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-all duration-300 ${
-                                isCompleted
-                                  ? 'bg-emerald-500 text-white shadow-2xs'
-                                  : isCurrent
-                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-300 shadow-xs ring-2 ring-emerald-400/25'
-                                  : 'bg-slate-100 text-slate-300 border border-slate-200/60'
-                              }`}
-                            >
-                              {isCompleted ? (
-                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                              ) : isCurrent ? (
-                                <StepIcon className="w-3.5 h-3.5 animate-pulse" />
-                              ) : (
-                                <span className="text-[10px] font-bold">{sIdx + 1}</span>
-                              )}
-                            </div>
-
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate">{step.title}</span>
-                                {isCurrent && (
-                                  <span className="inline-flex gap-1">
-                                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:0ms]"></span>
-                                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:150ms]"></span>
-                                    <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:300ms]"></span>
+                          <div className="pl-8 mt-2.5">
+                            <div className={`rounded-xl border p-2.5 sm:p-3 shadow-2xs ${isRed
+                                ? 'border-rose-200/90 bg-rose-50/30'
+                                : 'border-slate-200/90 bg-slate-50/70'
+                              }`}>
+                              {/* Compact Header */}
+                              <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-slate-200/60">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <MapPin className={`w-3.5 h-3.5 shrink-0 ${isRed ? 'text-rose-600' : 'text-slate-600'}`} />
+                                  <span className="text-xs font-bold text-slate-800 truncate">
+                                    {isRed ? 'Cơ sở thú y trực cấp cứu 24/7' : 'Phòng khám thú y đề xuất'}
                                   </span>
+                                  {isRed && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-rose-100 text-rose-700 border border-rose-200/70 shrink-0">
+                                      Cấp cứu
+                                    </span>
+                                  )}
+                                </div>
+
+                                {onNavigateToClinics && (
+                                  <button
+                                    type="button"
+                                    onClick={onNavigateToClinics}
+                                    className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-0.5 shrink-0 cursor-pointer"
+                                  >
+                                    Xem bản đồ →
+                                  </button>
                                 )}
                               </div>
-                              {isCurrent && (
-                                <p className="text-[11px] text-slate-400 font-normal mt-0.5 animate-in fade-in duration-200">
-                                  {step.detail}
-                                </p>
-                              )}
+
+                              {/* Clinic Cards List - Clean & Compact */}
+                              <div className="space-y-1.5">
+                                {emergencyClinics.slice(0, 2).map((clinic) => (
+                                  <div
+                                    key={clinic.id}
+                                    className="bg-white rounded-lg p-2 sm:px-2.5 border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:border-slate-300 transition-colors"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <h4 className="text-xs font-bold text-slate-800 truncate" title={clinic.name}>
+                                          {clinic.name}
+                                        </h4>
+                                        {clinic.isEmergency247 && (
+                                          <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-rose-50 text-rose-600 border border-rose-200/60 shrink-0">
+                                            24/7
+                                          </span>
+                                        )}
+                                        {clinic.distanceKm !== undefined && (
+                                          <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded shrink-0">
+                                            📍 {clinic.distanceKm.toFixed(1)} km
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                        {clinic.address}
+                                      </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      {clinic.phone && (
+                                        <a
+                                          href={`tel:${clinic.phone}`}
+                                          className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors ${isRed
+                                              ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                            }`}
+                                          style={{
+                                            color: isRed ? '#be123c' : '#334155',
+                                            textDecoration: 'none'
+                                          }}
+                                          title={`Gọi ${clinic.phone}`}
+                                        >
+                                          <Phone className={`w-3 h-3 ${isRed ? 'text-rose-600' : 'text-slate-600'}`} />
+                                          <span className="hidden sm:inline">Gọi</span>
+                                        </a>
+                                      )}
+                                      <a
+                                        href={getClinicDirectionsUrl(clinic)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-2xs transition-colors ${isRed
+                                            ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                                            : 'bg-slate-800 hover:bg-slate-900 text-white'
+                                          }`}
+                                        style={{
+                                          color: '#ffffff',
+                                          textDecoration: 'none'
+                                        }}
+                                        title="Chỉ đường trên Google Maps"
+                                      >
+                                        <Navigation className="w-3 h-3 text-white" />
+                                        <span>Chỉ đường</span>
+                                      </a>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         );
-                      })}
+                      })()}
+
+                      {/* Action buttons | appear on hover */}
+                      <div className="pl-8 mt-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(msg.text);
+                            setCopiedMsgId(msg.id);
+                            setTimeout(() => setCopiedMsgId(null), 2000);
+                          }}
+                          title="Sao chép"
+                          className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                        >
+                          {copiedMsgId === msg.id ? (
+                            <><CheckCircle className="w-3.5 h-3.5 text-emerald-600" /><span className="text-[11px] text-emerald-600 font-medium">Đã sao chép</span></>
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleDownloadMarkdown(msg.text, msg.triageDetails?.riskTitle)}
+                          title="Tải câu trả lời về file .md"
+                          className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                        </button>
+                        <button title="Hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
+                          <ThumbsUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button title="Không hữu ích" className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer">
+                          <ThumbsDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Dynamic AI Reasoning & Thinking Indicator */}
+                {isLoading && !hasReceivedFirstChunk && (
+                  <div className="py-6 animate-in fade-in duration-300">
+                    <div className="flex items-center gap-2.5 mb-3.5">
+                      <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden shadow-xs">
+                        <img src="/logo.png" alt="Vethic AI" className="w-full h-full object-contain p-0.5" />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-900">Vethic AI</span>
+
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        Bác sĩ AI đang suy luận
+                      </span>
+
+                      {isRetrying && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-teal-50 text-teal-700 border border-teal-200/80 animate-pulse shadow-2xs">
+                          <Sparkles className="w-3 h-3 text-teal-600 animate-spin" />
+                          {THINKING_STEPS[thinkingStep]?.title || 'Truy tìm kiến thức...'}
+                        </span>
+                      )}
                     </div>
 
-                    {/* Shimmer progress bar */}
-                    <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden mt-3">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 rounded-full transition-all duration-500 ease-out"
-                        style={{ width: `${Math.min(100, (thinkingStep + 1) * 25)}%` }}
-                      />
+                    {/* Reasoning Steps Card */}
+                    <div className="pl-8 max-w-lg">
+                      <div className="p-4 rounded-2xl bg-gradient-to-b from-slate-50/90 to-white/95 border border-slate-200/80 shadow-xs backdrop-blur-xs space-y-3">
+                        <div className="space-y-2.5">
+                          {THINKING_STEPS.map((step, sIdx) => {
+                            const isCompleted = sIdx < thinkingStep;
+                            const isCurrent = sIdx === thinkingStep;
+                            const StepIcon = step.icon;
+
+                            return (
+                              <div
+                                key={sIdx}
+                                className={`flex items-start gap-3 text-xs transition-all duration-300 ${isCurrent
+                                    ? 'text-slate-900 font-semibold'
+                                    : isCompleted
+                                      ? 'text-slate-500 font-medium'
+                                      : 'text-slate-300 font-normal opacity-60'
+                                  }`}
+                              >
+                                <div
+                                  className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 mt-0.5 transition-all duration-300 ${isCompleted
+                                      ? 'bg-emerald-500 text-white shadow-2xs'
+                                      : isCurrent
+                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-300 shadow-xs ring-2 ring-emerald-400/25'
+                                        : 'bg-slate-100 text-slate-300 border border-slate-200/60'
+                                    }`}
+                                >
+                                  {isCompleted ? (
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                  ) : isCurrent ? (
+                                    <StepIcon className="w-3.5 h-3.5 animate-pulse" />
+                                  ) : (
+                                    <span className="text-[10px] font-bold">{sIdx + 1}</span>
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="truncate">{step.title}</span>
+                                    {isCurrent && (
+                                      <span className="inline-flex gap-1">
+                                        <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:0ms]"></span>
+                                        <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:150ms]"></span>
+                                        <span className="w-1 h-1 bg-emerald-500 rounded-full animate-bounce [animation-delay:300ms]"></span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isCurrent && (
+                                    <p className="text-[11px] text-slate-400 font-normal mt-0.5 animate-in fade-in duration-200">
+                                      {step.detail}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Shimmer progress bar */}
+                        <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden mt-3">
+                          <div
+                            className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 rounded-full transition-all duration-500 ease-out"
+                            style={{ width: `${Math.min(100, (thinkingStep + 1) * 25)}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            <div ref={messagesEndRef} className="h-36" />
-          </div>
-        </div>
+                <div ref={messagesEndRef} className="h-36" />
+              </div>
+            </div>
             {/* Floating Bottom Bar */}
             <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-white via-white/95 to-transparent pt-6 pb-3">
               <div className="max-w-3xl mx-auto px-4 sm:px-6">
@@ -1695,9 +1682,8 @@ export const PetChatView: React.FC<Props> = ({
                   onDragEnter={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border shadow-md px-2.5 py-1.5 transition-all ${
-                    isDraggingOver ? 'border-emerald-500 ring-2 ring-emerald-400/30' : 'border-slate-200'
-                  }`}
+                  className={`flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border shadow-md px-2.5 py-1.5 transition-all ${isDraggingOver ? 'border-emerald-500 ring-2 ring-emerald-400/30' : 'border-slate-200'
+                    }`}
                 >
                   <button
                     type="button"
@@ -1731,9 +1717,9 @@ export const PetChatView: React.FC<Props> = ({
                       isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT
                         ? 'Bạn đã hết lượt dùng thử miễn phí. Vui lòng đăng nhập để tiếp tục...'
                         : isRetrying ? 'Bác sĩ AI đang đối chiếu thông tin & tổng hợp phác đồ...'
-                        : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
-                        : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}... (Có thể dán Ctrl+V hoặc kéo ảnh vào)`
-                        : 'Mô tả triệu chứng, tình trạng... (Có thể dán Ctrl+V hoặc kéo ảnh vào)'
+                          : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
+                            : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}... (Có thể dán Ctrl+V hoặc kéo ảnh vào)`
+                              : 'Mô tả triệu chứng, tình trạng... (Có thể dán Ctrl+V hoặc kéo ảnh vào)'
                     }
                     className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 disabled:text-slate-400 py-1.5 px-2"
                   />
@@ -1776,7 +1762,7 @@ export const PetChatView: React.FC<Props> = ({
               {isDeletingAll ? 'Xóa tất cả lịch sử' : 'Xóa đoạn chat'}
             </h3>
             <p className="text-slate-600 text-sm mb-6">
-              {isDeletingAll 
+              {isDeletingAll
                 ? 'Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện không? Hành động này không thể hoàn tác.'
                 : 'Bạn có chắc chắn muốn xóa đoạn chat này không? Hành động này không thể hoàn tác.'}
             </p>

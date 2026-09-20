@@ -265,7 +265,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
                 Kiểm soát danh sách tài khoản, khóa / ban vi phạm và chỉ định SubAdmin trong hệ thống.
                 {!isFullAdmin && (
                   <span className="ml-2 text-purple-600 font-semibold">
-                    (Chế độ SubAdmin — không thể thay đổi quyền hoặc xóa tài khoản)
+                    (Chế độ SubAdmin | không thể thay đổi quyền hoặc xóa tài khoản)
                   </span>
                 )}
               </p>
@@ -341,51 +341,46 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
           </span>
           <button
             onClick={() => setRoleFilter('all')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              roleFilter === 'all'
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${roleFilter === 'all'
                 ? 'bg-slate-900 text-white shadow-xs'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+              }`}
           >
             Tất cả ({totalUsers})
           </button>
           <button
             onClick={() => setRoleFilter('admin')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              roleFilter === 'admin'
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${roleFilter === 'admin'
                 ? 'bg-amber-500 text-slate-950 shadow-xs'
                 : 'bg-amber-50 text-amber-800 hover:bg-amber-100'
-            }`}
+              }`}
           >
             <Crown className="w-3.5 h-3.5" /> Admin ({adminOnlyCount})
           </button>
           <button
             onClick={() => setRoleFilter('subadmin')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              roleFilter === 'subadmin'
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${roleFilter === 'subadmin'
                 ? 'bg-purple-600 text-white shadow-xs'
                 : 'bg-purple-50 text-purple-800 hover:bg-purple-100'
-            }`}
+              }`}
           >
             <Shield className="w-3.5 h-3.5" /> SubAdmin ({subAdminCount})
           </button>
           <button
             onClick={() => setRoleFilter('user')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-              roleFilter === 'user'
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${roleFilter === 'user'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
-            }`}
+              }`}
           >
             Người dùng ({normalUserCount})
           </button>
           <button
             onClick={() => setRoleFilter('suspended')}
-            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              roleFilter === 'suspended'
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${roleFilter === 'suspended'
                 ? 'bg-red-600 text-white shadow-xs'
                 : 'bg-red-50 text-red-800 hover:bg-red-100'
-            }`}
+              }`}
           >
             <Ban className="w-3.5 h-3.5" /> Bị khóa ({suspendedCount})
           </button>
@@ -410,153 +405,150 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
             ) : (
               <tbody className="divide-y divide-slate-100">
                 {filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center p-8 text-slate-500">
-                    Không tìm thấy tài khoản nào phù hợp bộ lọc.
-                  </td>
-                </tr>
-              ) : (
-                paginatedUsers.map((u) => {
-                  const isSelf = u.id === currentUser.id;
-                  const isTargetAdmin = u.role === 'admin';
+                  <tr>
+                    <td colSpan={5} className="text-center p-8 text-slate-500">
+                      Không tìm thấy tài khoản nào phù hợp bộ lọc.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedUsers.map((u) => {
+                    const isSelf = u.id === currentUser.id;
+                    const isTargetAdmin = u.role === 'admin';
 
-                  return (
-                    <tr
-                      key={u.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${
-                        isSelf ? 'bg-amber-50/25' : ''
-                      }`}
-                    >
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={u.avatar}
-                            alt={u.name}
-                            className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
-                          />
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-slate-900">{u.name}</span>
-                              {isSelf && (
-                                <span className="text-[10px] font-extrabold bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded shadow-2xs">
-                                  Bạn (Hiện tại)
-                                </span>
-                              )}
+                    return (
+                      <tr
+                        key={u.id}
+                        className={`hover:bg-slate-50/80 transition-colors ${isSelf ? 'bg-amber-50/25' : ''
+                          }`}
+                      >
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={u.avatar}
+                              alt={u.name}
+                              className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+                            />
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-slate-900">{u.name}</span>
+                                {isSelf && (
+                                  <span className="text-[10px] font-extrabold bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded shadow-2xs">
+                                    Bạn (Hiện tại)
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-slate-500 block">{u.email}</span>
+                              {(() => {
+                                const req = unlockRequests.find(r => r.userId === u.id || r.userEmail === u.email);
+                                if (!req || u.status !== 'suspended') return null;
+                                return (
+                                  <div className="mt-1 bg-amber-50 border border-amber-200 text-amber-900 text-[10px] p-1.5 rounded-lg max-w-xs shadow-2xs">
+                                    <span className="font-bold block text-amber-800">📩 Đã gửi yêu cầu mở khóa:</span>
+                                    <span className="italic line-clamp-2">"{req.reason}"</span>
+                                  </div>
+                                );
+                              })()}
                             </div>
-                            <span className="text-[11px] text-slate-500 block">{u.email}</span>
-                            {(() => {
-                              const req = unlockRequests.find(r => r.userId === u.id || r.userEmail === u.email);
-                              if (!req || u.status !== 'suspended') return null;
-                              return (
-                                <div className="mt-1 bg-amber-50 border border-amber-200 text-amber-900 text-[10px] p-1.5 rounded-lg max-w-xs shadow-2xs">
-                                  <span className="font-bold block text-amber-800">📩 Đã gửi yêu cầu mở khóa:</span>
-                                  <span className="italic line-clamp-2">"{req.reason}"</span>
-                                </div>
-                              );
-                            })()}
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="p-4">
-                        <RoleBadge role={u.role} />
-                      </td>
+                        <td className="p-4">
+                          <RoleBadge role={u.role} />
+                        </td>
 
-                      <td className="p-4">
-                        {u.status === 'active' ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full text-[11px] border border-emerald-200">
-                            <UserCheck className="w-3 h-3" /> Hoạt động
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-red-700 font-bold bg-red-50 px-2.5 py-0.5 rounded-full text-[11px] border border-red-200">
-                            <Lock className="w-3 h-3" /> Đã bị khóa (Ban)
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="p-4 text-slate-500">
-                        {new Date(u.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                      </td>
-
-                      <td className="p-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {/* 1. View chat history / sessions */}
-                          <button
-                            onClick={() => { setChatModalUserId(u.id); setIsChatModalOpen(true); }}
-                            title="Xem hội thoại & tin nhắn của người dùng"
-                            className="p-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 font-semibold text-[11px] flex items-center gap-1 transition-all cursor-pointer"
-                          >
-                            <MessageSquare className="w-3.5 h-3.5" />
-                            <span>Tin nhắn</span>
-                          </button>
-
-                          {/* 2. Lock / Unlock (Ban / Unban) */}
-                          {isSelf ? (
-                            <span className="text-[11px] text-slate-400 italic px-1">Chính bạn</span>
-                          ) : isTargetAdmin ? (
-                            <span className="text-[11px] text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                              Admin bảo vệ
+                        <td className="p-4">
+                          {u.status === 'active' ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full text-[11px] border border-emerald-200">
+                              <UserCheck className="w-3 h-3" /> Hoạt động
                             </span>
                           ) : (
-                            <>
-                              {/* Full Admin can ban/unban non-admin users */}
-                              {isFullAdmin && (
-                                <button
-                                  onClick={() => handleToggleClick(u)}
-                                  title={u.status === 'active' ? 'Khóa tài khoản (Ban)' : 'Mở khóa tài khoản'}
-                                  className={`p-1.5 rounded-lg border font-semibold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
-                                    u.status === 'active'
-                                      ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
-                                      : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
-                                  }`}
-                                >
-                                  {u.status === 'active' ? (
-                                    <><Lock className="w-3.5 h-3.5" /> Khóa / Ban</>
-                                  ) : (
-                                    <><Unlock className="w-3.5 h-3.5" /> Mở khóa</>
-                                  )}
-                                </button>
-                              )}
-
-                              {/* 3. Role toggle: Set SubAdmin or demote to User */}
-                              {isFullAdmin && (
-                                <button
-                                  onClick={() => handleRoleClick(u)}
-                                  title={u.role === 'subadmin' ? 'Hạ về User thông thường' : 'Thăng lên SubAdmin'}
-                                  className={`p-1.5 rounded-lg border font-semibold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
-                                    u.role === 'subadmin'
-                                      ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
-                                      : 'border-purple-300 text-purple-700 hover:bg-purple-50'
-                                  }`}
-                                >
-                                  {u.role === 'subadmin' ? (
-                                    <><ShieldOff className="w-3.5 h-3.5" /> Hạ về User</>
-                                  ) : (
-                                    <><ShieldCheck className="w-3.5 h-3.5" /> Thăng SubAdmin</>
-                                  )}
-                                </button>
-                              )}
-
-                              {/* 4. Delete user account */}
-                              {isFullAdmin && (
-                                <button
-                                  onClick={() => handleDeleteClick(u.id)}
-                                  title="Xóa người dùng vĩnh viễn"
-                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </>
+                            <span className="inline-flex items-center gap-1 text-red-700 font-bold bg-red-50 px-2.5 py-0.5 rounded-full text-[11px] border border-red-200">
+                              <Lock className="w-3 h-3" /> Đã bị khóa (Ban)
+                            </span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          )}
+                        </td>
+
+                        <td className="p-4 text-slate-500">
+                          {new Date(u.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </td>
+
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {/* 1. View chat history / sessions */}
+                            <button
+                              onClick={() => { setChatModalUserId(u.id); setIsChatModalOpen(true); }}
+                              title="Xem hội thoại & tin nhắn của người dùng"
+                              className="p-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 font-semibold text-[11px] flex items-center gap-1 transition-all cursor-pointer"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>Tin nhắn</span>
+                            </button>
+
+                            {/* 2. Lock / Unlock (Ban / Unban) */}
+                            {isSelf ? (
+                              <span className="text-[11px] text-slate-400 italic px-1">Chính bạn</span>
+                            ) : isTargetAdmin ? (
+                              <span className="text-[11px] text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                Admin bảo vệ
+                              </span>
+                            ) : (
+                              <>
+                                {/* Full Admin can ban/unban non-admin users */}
+                                {isFullAdmin && (
+                                  <button
+                                    onClick={() => handleToggleClick(u)}
+                                    title={u.status === 'active' ? 'Khóa tài khoản (Ban)' : 'Mở khóa tài khoản'}
+                                    className={`p-1.5 rounded-lg border font-semibold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${u.status === 'active'
+                                        ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                                        : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'
+                                      }`}
+                                  >
+                                    {u.status === 'active' ? (
+                                      <><Lock className="w-3.5 h-3.5" /> Khóa / Ban</>
+                                    ) : (
+                                      <><Unlock className="w-3.5 h-3.5" /> Mở khóa</>
+                                    )}
+                                  </button>
+                                )}
+
+                                {/* 3. Role toggle: Set SubAdmin or demote to User */}
+                                {isFullAdmin && (
+                                  <button
+                                    onClick={() => handleRoleClick(u)}
+                                    title={u.role === 'subadmin' ? 'Hạ về User thông thường' : 'Thăng lên SubAdmin'}
+                                    className={`p-1.5 rounded-lg border font-semibold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${u.role === 'subadmin'
+                                        ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                                        : 'border-purple-300 text-purple-700 hover:bg-purple-50'
+                                      }`}
+                                  >
+                                    {u.role === 'subadmin' ? (
+                                      <><ShieldOff className="w-3.5 h-3.5" /> Hạ về User</>
+                                    ) : (
+                                      <><ShieldCheck className="w-3.5 h-3.5" /> Thăng SubAdmin</>
+                                    )}
+                                  </button>
+                                )}
+
+                                {/* 4. Delete user account */}
+                                {isFullAdmin && (
+                                  <button
+                                    onClick={() => handleDeleteClick(u.id)}
+                                    title="Xóa người dùng vĩnh viễn"
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            )}
           </table>
         </div>
 
@@ -630,11 +622,10 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ currentUser }) =
                     <button
                       key={p}
                       onClick={() => setCurrentPage(p)}
-                      className={`min-w-[28px] h-7 px-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                        isActive
+                      className={`min-w-[28px] h-7 px-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${isActive
                           ? 'bg-slate-900 text-amber-400 shadow-2xs'
                           : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
-                      }`}
+                        }`}
                     >
                       {p}
                     </button>

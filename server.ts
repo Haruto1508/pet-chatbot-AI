@@ -15,16 +15,16 @@ let appInstance: express.Express | null = null;
 // 📋 STRUCTURED SERVER LOG UTILITY
 // ─────────────────────────────────────────
 const COLORS = {
-  reset:   '\x1b[0m',
-  bold:    '\x1b[1m',
-  green:   '\x1b[32m',
-  yellow:  '\x1b[33m',
-  red:     '\x1b[31m',
-  cyan:    '\x1b[36m',
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  cyan: '\x1b[36m',
   magenta: '\x1b[35m',
-  blue:    '\x1b[34m',
-  gray:    '\x1b[90m',
-  white:   '\x1b[97m',
+  blue: '\x1b[34m',
+  gray: '\x1b[90m',
+  white: '\x1b[97m',
 };
 
 type LogLevel = 'OK' | 'WARN' | 'ERROR' | 'INFO';
@@ -40,28 +40,28 @@ function serverLog(
   const ts = new Date().toLocaleTimeString('vi-VN', { hour12: false });
 
   const catColors: Record<LogCategory, string> = {
-    SUPABASE:  COLORS.cyan,
+    SUPABASE: COLORS.cyan,
     RENDER_AI: COLORS.magenta,
-    GEMINI:    COLORS.blue,
-    SYSTEM:    COLORS.gray,
+    GEMINI: COLORS.blue,
+    SYSTEM: COLORS.gray,
   };
   const levelColors: Record<LogLevel, string> = {
-    OK:    COLORS.green,
-    WARN:  COLORS.yellow,
+    OK: COLORS.green,
+    WARN: COLORS.yellow,
     ERROR: COLORS.red,
-    INFO:  COLORS.white,
+    INFO: COLORS.white,
   };
   const levelIcons: Record<LogLevel, string> = {
-    OK:    '✅',
-    WARN:  '⚠️ ',
+    OK: '✅',
+    WARN: '⚠️ ',
     ERROR: '❌',
-    INFO:  'ℹ️ ',
+    INFO: 'ℹ️ ',
   };
 
-  const catStr   = `${catColors[category]}${COLORS.bold}[${category}]${COLORS.reset}`;
-  const lvlStr   = `${levelColors[level]}${levelIcons[level]} ${level}${COLORS.reset}`;
-  const latStr   = latencyMs != null ? `${COLORS.gray}+${latencyMs}ms${COLORS.reset}` : '';
-  const detStr   = detail ? ` ${COLORS.gray}→ ${detail}${COLORS.reset}` : '';
+  const catStr = `${catColors[category]}${COLORS.bold}[${category}]${COLORS.reset}`;
+  const lvlStr = `${levelColors[level]}${levelIcons[level]} ${level}${COLORS.reset}`;
+  const latStr = latencyMs != null ? `${COLORS.gray}+${latencyMs}ms${COLORS.reset}` : '';
+  const detStr = detail ? ` ${COLORS.gray}→ ${detail}${COLORS.reset}` : '';
 
   console.log(`${COLORS.gray}[${ts}]${COLORS.reset} ${catStr} ${lvlStr} ${action}${detStr} ${latStr}`);
 
@@ -88,8 +88,8 @@ function serverLog(
         latency_ms: latencyMs != null ? Math.round(latencyMs) : null,
         metadata: { action, detail, source: 'server' }
       }]);
-    } catch {}
-  })().catch(() => {});
+    } catch { }
+  })().catch(() => { });
 }
 // ─────────────────────────────────────────
 
@@ -454,7 +454,7 @@ async function startServer(isVercel = false) {
       const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
       const key = options.keyGenerator ? options.keyGenerator(req) : `${clientIp}:${req.baseUrl || req.path}`;
       const now = Date.now();
-      
+
       const max = typeof options.maxRequests === 'function' ? options.maxRequests(req) : options.maxRequests;
       let record = hits.get(key);
 
@@ -607,7 +607,7 @@ async function startServer(isVercel = false) {
       apiKey = pool[0] || process.env.GEMINI_API_KEY;
     }
     if (!apiKey) {
-      serverLog('GEMINI', 'ERROR', 'getGeminiClient()', 'GEMINI_API_KEY bị thiếu — sẽ dùng dummy-key');
+      serverLog('GEMINI', 'ERROR', 'getGeminiClient()', 'GEMINI_API_KEY bị thiếu | sẽ dùng dummy-key');
     }
     return new GoogleGenAI({
       apiKey: apiKey || 'dummy-key-for-dev',
@@ -652,10 +652,10 @@ async function startServer(isVercel = false) {
   // Helper for RAG Knowledge Search (Upgraded to Vector Search)
   async function searchRAGKnowledge(queryText: string): Promise<string> {
     if (!queryText.trim()) return '';
-    
+
     // 1. Generate embedding for the query
     const queryEmbedding = await generateEmbedding(queryText);
-    
+
     if (queryEmbedding) {
       // 2. Perform Vector Search using Supabase RPC (pgvector)
       const t0 = Date.now();
@@ -677,7 +677,7 @@ async function startServer(isVercel = false) {
 - Nội dung chuyên môn: ${art.content}
 `).join('\n\n');
       } else {
-        serverLog('SUPABASE', 'WARN', 'RAG vector search', error ? `Lỗi RPC: ${error.message}` : 'Không có kết quả — chuyển sang fallback keyword', Date.now() - t0);
+        serverLog('SUPABASE', 'WARN', 'RAG vector search', error ? `Lỗi RPC: ${error.message}` : 'Không có kết quả | chuyển sang fallback keyword', Date.now() - t0);
       }
     }
 
@@ -699,21 +699,21 @@ async function startServer(isVercel = false) {
       if (titleLower.includes(queryLower) || summaryLower.includes(queryLower)) return true;
 
       // 2. Symptom overlap
-      const symptomOverlap = symptoms.some((s: string) => 
+      const symptomOverlap = symptoms.some((s: string) =>
         queryLower.includes(s) || s.split(' ').some(w => w.length > 3 && queryLower.includes(w))
       );
       if (symptomOverlap) return true;
 
       // 3. Keyword matching (tokens of length >= 3)
       const keywords = queryLower.split(/[\s,.;!?]+/).filter((w: string) => w.length >= 3);
-      const matchesCount = keywords.filter((k: string) => 
+      const matchesCount = keywords.filter((k: string) =>
         titleLower.includes(k) || summaryLower.includes(k) || symptoms.some((s: string) => s.includes(k))
       ).length;
       return matchesCount >= 2;
     });
 
     if (matched.length === 0) {
-      serverLog('SUPABASE', 'INFO', 'RAG fallback keyword', `Không tìm thấy bài nào cho "${queryText.substring(0, 40)}" — kích hoạt Ragas Out-of-Knowledge Fallback`, Date.now() - ft0);
+      serverLog('SUPABASE', 'INFO', 'RAG fallback keyword', `Không tìm thấy bài nào cho "${queryText.substring(0, 40)}" | kích hoạt Ragas Out-of-Knowledge Fallback`, Date.now() - ft0);
       return `
 [RAG QUY TẮC AN TOÀN Y TẾ - BỆNH LÝ CHƯA CÓ TRONG PHÁC ĐỒ NỘI BỘ VETHIC]:
 - THÔNG BÁO TỪ HỆ THỐNG KIỂM ĐỊNH RAG: Triệu chứng hoặc bệnh lý này hiện CHƯA có bài viết chuyên sâu chính thức trong Cơ sở tri thức thú y Vethic đã được phê duyệt.
@@ -726,7 +726,7 @@ async function startServer(isVercel = false) {
 `;
     }
     serverLog('SUPABASE', 'OK', 'RAG fallback keyword', `${matched.length} bài khớp`, Date.now() - ft0);
-    
+
     return matched.slice(0, 3).map((art: any) => `
 [KIẾN THỨC RAG THAM KHẢO (Cơ bản)]:
 - Tiêu đề: ${art.title}
@@ -781,7 +781,7 @@ async function startServer(isVercel = false) {
         if (cfg.render_service_url) customRenderUrl = cfg.render_service_url;
         if (cfg.gemini_api_key) customGeminiKey = cfg.gemini_api_key;
       }
-    } catch {}
+    } catch { }
 
     // 1. Check Supabase connection
     try {
@@ -815,7 +815,7 @@ async function startServer(isVercel = false) {
         url: customRenderUrl
       };
     } catch (e: any) {
-      const msg = e.name === 'TimeoutError' ? 'Timeout — Render đang cold start (bình thường)' : e.message;
+      const msg = e.name === 'TimeoutError' ? 'Timeout | Render đang cold start (bình thường)' : e.message;
       serverLog('RENDER_AI', e.name === 'TimeoutError' ? 'WARN' : 'ERROR', '/api/health-check ping', msg);
       results.render = {
         status: 'error',
@@ -858,8 +858,8 @@ async function startServer(isVercel = false) {
         geminiMsg = isQuotaErr
           ? `Hết quota: ${errMsg}`
           : isAuthErr
-          ? `Key không hợp lệ: ${errMsg}`
-          : `API phản hồi: ${errMsg}`;
+            ? `Key không hợp lệ: ${errMsg}`
+            : `API phản hồi: ${errMsg}`;
         serverLog('GEMINI', geminiStatus === 'error' ? 'ERROR' : 'WARN', '/api/health-check ping', geminiMsg, geminiLatency);
       }
     }
@@ -915,7 +915,7 @@ async function startServer(isVercel = false) {
         if (cfg.render_service_url) renderUrl = cfg.render_service_url;
         if (cfg.gemini_api_key) geminiKey = cfg.gemini_api_key;
       }
-    } catch {}
+    } catch { }
 
     const tasks: Record<string, Promise<any>> = {};
 
@@ -968,7 +968,7 @@ async function startServer(isVercel = false) {
           };
         } catch (err: any) {
           const latencyMs = Date.now() - t0;
-          const msg = err.name === 'TimeoutError' ? 'Cold start — Đã gửi tín hiệu đánh thức' : err.message;
+          const msg = err.name === 'TimeoutError' ? 'Cold start | Đã gửi tín hiệu đánh thức' : err.message;
           serverLog('RENDER_AI', 'WARN', 'keep-alive ping', msg, latencyMs);
           return {
             name: 'Render Python AI (ResNet)',
@@ -976,7 +976,7 @@ async function startServer(isVercel = false) {
             status: 'error',
             latencyMs,
             message: err.name === 'TimeoutError'
-              ? 'Đang khởi động (Cold Start 30-50s) — Đã gửi tín hiệu đánh thức'
+              ? 'Đang khởi động (Cold Start 30-50s) | Đã gửi tín hiệu đánh thức'
               : err.message
           };
         }
@@ -1313,7 +1313,7 @@ async function startServer(isVercel = false) {
           signal: AbortSignal.timeout(6000)
         });
         if (resp.ok) visionPred = await resp.json();
-      } catch {}
+      } catch { }
     }
 
     // 2. Try real Gemini clinical evaluation
@@ -1389,8 +1389,8 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         protocolApplied: geminiResult.protocolApplied || (oodDetected
           ? 'Quy trình Khuyến nghị Cận Lâm Sàng 4 Bước (Liu et al. OOD Rejection)'
           : isOutOfRAG
-          ? 'Quy tắc An toàn Y tế RAG Fallback (Zero-Context Medical Protection)'
-          : 'Phác đồ Điều trị Chuẩn Vethic AI'),
+            ? 'Quy tắc An toàn Y tế RAG Fallback (Zero-Context Medical Protection)'
+            : 'Phác đồ Điều trị Chuẩn Vethic AI'),
         notes: geminiResult.notes || 'Kiểm định chất lượng hoàn tất qua Gemini AI Studio.',
         ragSnippet: ragContext ? ragContext.substring(0, 250) + '...' : 'Không cần dữ liệu RAG'
       };
@@ -1402,13 +1402,13 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     const isRingwormOrMange = testType === 'in_distribution' || /nấm|ringworm|ghẻ|demodex|đốm tròn có vảy|rụng lông thành đốm/i.test(cleanMessage);
 
     const triage = isEmergency ? 'RED' : isOod ? 'YELLOW/RED' : isRingwormOrMange ? 'YELLOW' : 'GREEN';
-    const predictedClass = isEmergency 
+    const predictedClass = isEmergency
       ? 'Ngộ độc cấp tính / Nguy kịch thần kinh'
-      : isOod 
-      ? 'Bệnh chưa xác định / Nằm ngoài danh mục'
-      : isRingwormOrMange 
-      ? (/ghẻ/i.test(cleanMessage) ? 'Ghẻ Demodex' : 'Nấm vòng (Ringworm)')
-      : 'Bệnh lý da liễu chung';
+      : isOod
+        ? 'Bệnh chưa xác định / Nằm ngoài danh mục'
+        : isRingwormOrMange
+          ? (/ghẻ/i.test(cleanMessage) ? 'Ghẻ Demodex' : 'Nấm vòng (Ringworm)')
+          : 'Bệnh lý da liễu chung';
 
     const confidence = isOod ? 38.5 : isEmergency ? 98.5 : 89.2;
     const energyScore = isOod ? -0.4 : -4.5;
@@ -1432,15 +1432,15 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       protocolApplied: isOod
         ? 'Quy trình Khuyến nghị Cận Lâm Sàng 4 Bước (Liu et al. OOD Rejection)'
         : isOutOfRAG
-        ? 'Quy tắc An toàn Y tế RAG Fallback (Zero-Context Medical Protection)'
-        : 'Phác đồ Điều trị Chuẩn Vethic AI',
+          ? 'Quy tắc An toàn Y tế RAG Fallback (Zero-Context Medical Protection)'
+          : 'Phác đồ Điều trị Chuẩn Vethic AI',
       notes: isEmergency
         ? 'G-Eval đạt 99/100: Kích hoạt cảnh báo đỏ RED, hướng dẫn giữ đường thở và sơ cứu ngộ độc khẩn cấp.'
         : isOod
-        ? 'Phát hiện bệnh lạ ngoài danh mục huấn luyện: AI từ chối phỏng đoán bừa bãi và yêu cầu làm sinh thiết tại thú y.'
-        : isOutOfRAG
-        ? 'Áp dụng quy tắc Zero-Context Medical Protection: Không kê đơn bừa bãi khi chưa có dữ liệu chính thức.'
-        : 'Mô hình nhận diện chính xác bệnh lý trong danh mục huấn luyện và trích xuất đúng RAG nội bộ.',
+          ? 'Phát hiện bệnh lạ ngoài danh mục huấn luyện: AI từ chối phỏng đoán bừa bãi và yêu cầu làm sinh thiết tại thú y.'
+          : isOutOfRAG
+            ? 'Áp dụng quy tắc Zero-Context Medical Protection: Không kê đơn bừa bãi khi chưa có dữ liệu chính thức.'
+            : 'Mô hình nhận diện chính xác bệnh lý trong danh mục huấn luyện và trích xuất đúng RAG nội bộ.',
       ragSnippet: ragContext ? ragContext.substring(0, 250) + '...' : 'Không có tri thức RAG nội bộ'
     };
   }
@@ -1733,14 +1733,14 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         const raw = fs.readFileSync(GUEST_LIMITS_FILE, 'utf-8');
         return JSON.parse(raw) || {};
       }
-    } catch {}
+    } catch { }
     return {};
   }
 
   function saveGuestLimitsStore(data: Record<string, GuestLimitRecord>): void {
     try {
       fs.writeFileSync(GUEST_LIMITS_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    } catch {}
+    } catch { }
   }
 
   async function getGuestQuota(clientIp: string): Promise<{ messageCount: number; maxLimit: number; remaining: number }> {
@@ -1830,14 +1830,14 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
           events: Array.isArray(parsed.events) ? parsed.events : []
         };
       }
-    } catch {}
+    } catch { }
     return { pageViews: 0, visitors: {}, events: [] };
   }
 
   function saveAnalyticsStore(data: AnalyticsStoreData): void {
     try {
       fs.writeFileSync(ANALYTICS_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    } catch {}
+    } catch { }
   }
 
   // Endpoint: Query current guest chat quota by client machine / IP
@@ -1885,7 +1885,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       const role = (metadata?.role || '').toLowerCase();
 
       // 🛡️ STRICTLY EXCLUDE ADMIN: Never record pageviews or activities from admin routes or admin roles
-      const isAdminAreaOrRole = 
+      const isAdminAreaOrRole =
         cleanPath.startsWith('/admin') ||
         tab.startsWith('admin_') ||
         role === 'admin' ||
@@ -1961,7 +1961,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         } catch (dbErr: any) {
           serverLog('SUPABASE', 'WARN', 'analytics_events insert', dbErr.message);
         }
-      })().catch(() => {});
+      })().catch(() => { });
 
       return res.json(secureResponse({ success: true }));
     } catch (e: any) {
@@ -2065,7 +2065,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       // Realtime Analytics metrics directly from Supabase & store
       const store = getAnalyticsStore();
       const dbEvents = analyticsEventsRes.data || [];
-      
+
       const distinctVisitorIds = new Set<string>();
       dbEvents.forEach(e => {
         if (e.visitor_id && !adminUserIds.has(e.visitor_id.replace('usr_', ''))) {
@@ -2082,7 +2082,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       (async () => {
         try {
           await supabase.from('analytics_events').delete().like('path', '/admin%');
-        } catch {}
+        } catch { }
       })();
 
       // Pure DB counts for user page views - strictly non-admin
@@ -2137,14 +2137,14 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       // Recent live events directly from Supabase
       const recentEvents = (recentEventsRes.data && recentEventsRes.data.length > 0)
         ? recentEventsRes.data.map((e: any) => ({
-            id: e.id,
-            eventType: e.event_type,
-            visitorId: e.visitor_id,
-            userId: e.user_id,
-            path: e.path,
-            metadata: e.metadata,
-            createdAt: e.created_at
-          }))
+          id: e.id,
+          eventType: e.event_type,
+          visitorId: e.visitor_id,
+          userId: e.user_id,
+          path: e.path,
+          metadata: e.metadata,
+          createdAt: e.created_at
+        }))
         : (store.events || []).slice(0, 15);
 
       const statsPayload: any = {
@@ -2255,7 +2255,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     }
   });
 
-  // Users Management — Full Admin only (Supports pagination via ?page=&limit=)
+  // Users Management | Full Admin only (Supports pagination via ?page=&limit=)
   app.get('/api/users', requireFullAdminAuth, async (req: Request, res: Response) => {
     const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
@@ -2306,7 +2306,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
   app.put('/api/users/:id/role', requireFullAdminAuth, async (req: Request, res: Response) => {
     const { id } = req.params;
     const { role } = req.body;
-    // Admin can only assign 'subadmin' or demote back to 'user' — never self-assign 'admin' via this route
+    // Admin can only assign 'subadmin' or demote back to 'user' | never self-assign 'admin' via this route
     if (!['user', 'subadmin'].includes(role)) {
       return res.status(400).json({ error: 'Chỉ có thể đặt role là "subadmin" hoặc "user"' });
     }
@@ -2369,7 +2369,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     res.json({ success: true, id });
   });
 
-  // System & API Logs (Admin & SubAdmin — Secure Server-Side DB Access with Pagination)
+  // System & API Logs (Admin & SubAdmin | Secure Server-Side DB Access with Pagination)
   app.get('/api/logs', requireAdminAuth, async (req: Request, res: Response) => {
     try {
       const { log_type, level, limit, page, search } = req.query;
@@ -2452,7 +2452,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     if (targetUserId) query = query.eq('user_id', targetUserId);
     const { data, error } = await query;
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
+
     const mapped = (data || []).map(p => ({
       ...p,
       userId: p.user_id,
@@ -2480,10 +2480,10 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       allergies: req.body.allergies || [],
       avatarurl: req.body.avatarUrl || 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=400'
     };
-    
+
     const { data, error } = await supabase.from('pets').insert([payload]).select().single();
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
+
     res.json(secureResponse({
       ...data,
       userId: data.user_id,
@@ -2514,7 +2514,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     const { data, error } = await supabase.from('pets').update(payload).eq('id', id).select().single();
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
     if (!data) return res.status(404).json(secureResponse({ error: 'Pet not found' }));
-    
+
     res.json(secureResponse({
       ...data,
       userId: data.user_id,
@@ -2565,10 +2565,10 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     let query = supabase.from('medical_records').select('*').order('created_at', { ascending: false });
     if (petId) query = query.eq('pet_id', petId);
     if (targetUserId) query = query.eq('user_id', targetUserId);
-    
+
     const { data, error } = await query;
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
+
     const mapped = (data || []).map(r => ({
       ...r,
       petId: r.pet_id,
@@ -2602,10 +2602,10 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       follow_up_notes: req.body.followUpNotes || '',
       chat_snippet: req.body.chatSnippet || ''
     };
-    
+
     const { data, error } = await supabase.from('medical_records').insert([payload]).select().single();
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
+
     res.json(secureResponse({
       ...data,
       petId: data.pet_id,
@@ -2634,7 +2634,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     if (!isAdmin && callerUserId && data.user_id !== callerUserId && data.user_id !== 'guest') {
       return res.status(403).json(secureResponse({ error: 'Không có quyền truy cập hồ sơ này' }));
     }
-    
+
     res.json(secureResponse({
       ...data,
       petId: data.pet_id,
@@ -2672,15 +2672,15 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
   app.get('/api/articles', async (req: Request, res: Response) => {
     const search = req.query.search as string;
     const category = req.query.category as string;
-    
+
     let query = supabase.from('articles').select('*').order('updated_at', { ascending: false });
     if (category && category !== 'all') {
       query = query.eq('category', category);
     }
-    
+
     const { data, error } = await query;
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
+
     let filtered = data;
     if (search) {
       const q = search.toLowerCase();
@@ -2690,7 +2690,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         (a.symptoms || []).some((s: string) => s.toLowerCase().includes(q))
       );
     }
-    
+
     const mapped = filtered.map((a: any) => ({
       ...a,
       firstAidSteps: a.first_aid_steps,
@@ -2717,7 +2717,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         image_url: req.body.imageUrl || '',
         content: req.body.content || ''
       };
-      
+
       // Generate embedding for the new article
       const textToEmbed = `${payload.title} ${payload.summary} ${(payload.symptoms || []).join(' ')} ${payload.content}`;
       const embedding = await generateEmbedding(textToEmbed);
@@ -2727,7 +2727,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
       const { data, error } = await supabase.from('articles').insert([payload]).select().single();
       if (error) return res.status(500).json(secureResponse({ error: error.message }));
-      
+
       res.json(secureResponse({
         ...data,
         firstAidSteps: data.first_aid_steps,
@@ -2765,7 +2765,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
       const { data, error } = await supabase.from('articles').update(payload).eq('id', id).select().single();
       if (error) return res.status(500).json(secureResponse({ error: error.message }));
-      
+
       res.json(secureResponse({
         ...data,
         firstAidSteps: data.first_aid_steps,
@@ -2796,7 +2796,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       try {
         const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
         if (!error && data) dbData = data;
-      } catch {}
+      } catch { }
 
       const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
       const rawAiModel = dbData?.ai_model || local.aiModel || 'gemini-3.6-flash';
@@ -2854,7 +2854,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
           if (typeof data.maintenance_mode === 'boolean') isMaintenance = data.maintenance_mode;
           if (data.maintenance_message) msg = data.maintenance_message;
         }
-      } catch {}
+      } catch { }
 
       res.json(secureResponse({ maintenanceMode: isMaintenance, message: msg }));
     } catch {
@@ -2867,17 +2867,17 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       const local = getLocalConfig();
 
       // Only accept incoming keys if they don't contain mask characters (***)
-      const cleanGeminiKey = (req.body.geminiApiKey && !req.body.geminiApiKey.includes('***')) 
-        ? req.body.geminiApiKey 
+      const cleanGeminiKey = (req.body.geminiApiKey && !req.body.geminiApiKey.includes('***'))
+        ? req.body.geminiApiKey
         : (local.geminiApiKey || process.env.GEMINI_API_KEY || '');
-      const cleanBackupKey = (req.body.backupGeminiApiKey && !req.body.backupGeminiApiKey.includes('***')) 
-        ? req.body.backupGeminiApiKey 
+      const cleanBackupKey = (req.body.backupGeminiApiKey && !req.body.backupGeminiApiKey.includes('***'))
+        ? req.body.backupGeminiApiKey
         : (local.backupGeminiApiKey || '');
-      const cleanOpenAiKey = (req.body.openaiApiKey && !req.body.openaiApiKey.includes('***')) 
-        ? req.body.openaiApiKey 
+      const cleanOpenAiKey = (req.body.openaiApiKey && !req.body.openaiApiKey.includes('***'))
+        ? req.body.openaiApiKey
         : (local.openaiApiKey || '');
-      const cleanFallbackKey = (req.body.fallbackGeminiApiKey && !req.body.fallbackGeminiApiKey.includes('***')) 
-        ? req.body.fallbackGeminiApiKey 
+      const cleanFallbackKey = (req.body.fallbackGeminiApiKey && !req.body.fallbackGeminiApiKey.includes('***'))
+        ? req.body.fallbackGeminiApiKey
         : (local.fallbackGeminiApiKey || cleanBackupKey);
 
       const updated = {
@@ -2947,7 +2947,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       }
       const { data, error } = await query;
       if (error) return res.status(500).json(secureResponse({ error: error.message }));
-      
+
       const mapped = (data || []).map((c: any) => ({
         id: c.id,
         name: c.name,
@@ -3089,10 +3089,10 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       let query = supabase.from('chat_sessions').select('*').order('updated_at', { ascending: false });
       if (targetUserId) query = query.eq('user_id', targetUserId);
       if (petId) query = query.eq('pet_id', petId);
-      
+
       const { data, error } = await query;
       if (error) return res.status(500).json({ error: error.message });
-      
+
       // Fetch users to enrich session info for Admin inspection
       let userMap = new Map<string, any>();
       try {
@@ -3152,7 +3152,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     if (!isAdmin && callerUserId && data.user_id !== callerUserId && data.user_id !== 'guest') {
       return res.status(403).json(secureResponse({ error: 'Không có quyền truy cập phiên chat này' }));
     }
-    
+
     const isSoftDeleted = data.is_deleted === true || (typeof data.title === 'string' && data.title.startsWith('[HIDDEN_USER]'));
     const cleanTitle = typeof data.title === 'string' ? data.title.replace(/^\[HIDDEN_USER\]\s*/, '') : data.title;
 
@@ -3178,7 +3178,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       title: req.body.title || 'Chat mới',
       messages: req.body.messages || []
     };
-    
+
     // If guest user, guarantee user row exists to prevent foreign key violation
     if (payload.user_id === 'guest') {
       try {
@@ -3197,7 +3197,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
     const { data, error } = await supabase.from('chat_sessions').insert([payload]).select().single();
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
+
     res.json(secureResponse({
       ...data,
       userId: data.user_id,
@@ -3226,7 +3226,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
     const { data, error } = await supabase.from('chat_sessions').update(payload).eq('id', id).select().single();
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
-    
+
     res.json(secureResponse({
       ...data,
       userId: data.user_id,
@@ -3259,7 +3259,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     // Soft delete: try updating is_deleted & deleted_at columns in DB
     const currentTitle = session.title || 'Phiên chat';
     const updatedTitle = currentTitle.startsWith('[HIDDEN_USER]') ? currentTitle : `[HIDDEN_USER] ${currentTitle}`;
-    
+
     let { error } = await supabase.from('chat_sessions').update({
       is_deleted: true,
       deleted_at: new Date().toISOString(),
@@ -3325,7 +3325,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       const { message } = req.body;
       const cleanMessage = (message || '').trim().substring(0, 500);
       if (!cleanMessage) return res.json(secureResponse({ title: 'Phiên khám thú cưng' }));
-      
+
       const prompt = `Tạo một tiêu đề SIÊU NGẮN (tối đa 4-6 chữ) tóm tắt nội dung sau (nếu là chào hỏi thì ghi "Trò chuyện chung", không dùng ngoặc kép): "${cleanMessage}"`;
       const keyPool = getGeminiKeyPool();
       let title = 'Phiên khám thú cưng';
@@ -3376,7 +3376,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
           isMaintenance = data.maintenance_mode;
           if (data.maintenance_message) maintMsg = data.maintenance_message;
         }
-      } catch {}
+      } catch { }
 
       if (isMaintenance) {
         const isUserAdmin = (req as any).user?.role === 'admin';
@@ -3387,7 +3387,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
           }));
         }
       }
-    } catch {}
+    } catch { }
 
     try {
       // 1. GUEST RATE LIMIT CHECK (Server-side & Machine-Enforced)
@@ -3469,26 +3469,26 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
             const resnetData = await resnetRes.json();
 
             if (resnetData.success) {
-              const pred       = resnetData.prediction;
-              const isMock     = resnetData.is_mock;
+              const pred = resnetData.prediction;
+              const isMock = resnetData.is_mock;
               const confidence = pred.confidence as number;
-              const top3List   = (pred.top3 || []) as Array<{ class_name: string; class_name_vi: string; confidence: number }>;
-              const top3Text   = top3List.map((p, i) => `  ${i + 1}. ${p.class_name_vi} (${p.class_name}): ${p.confidence}%`).join('\n');
+              const top3List = (pred.top3 || []) as Array<{ class_name: string; class_name_vi: string; confidence: number }>;
+              const top3Text = top3List.map((p, i) => `  ${i + 1}. ${p.class_name_vi} (${p.class_name}): ${p.confidence}%`).join('\n');
 
               // Enhance RAG với tên bệnh để lấy kiến thức liên quan
               const diseaseForRAG = `${message} ${pred.class_name} ${pred.class_name_vi}`;
-              const enhancedRAG   = await searchRAGKnowledge(diseaseForRAG);
+              const enhancedRAG = await searchRAGKnowledge(diseaseForRAG);
               if (enhancedRAG) ragContext = enhancedRAG;
 
               // ✅ BẮT BUỘC: LUÔN LUÔN gửi ảnh vào Gemini để Gemini Vision trực tiếp đánh giá hình thể toàn diện
               imageForGemini = imageBase64;
               serverLog('RENDER_AI', 'INFO', '/predict ResNet result',
-                `${pred.class_name_vi} (${confidence}%) — gửi kèm ảnh gốc cho Gemini Vision`, Date.now() - rnT0);
+                `${pred.class_name_vi} (${confidence}%) | gửi kèm ảnh gốc cho Gemini Vision`, Date.now() - rnT0);
 
               const isHealthyPred = pred.class_name === 'Healthy' || pred.class_name_vi === 'Khỏe mạnh';
               const isOod = !!pred.is_unrecognized_or_ood;
-              
-              const labelNote = isHealthyPred 
+
+              const labelNote = isHealthyPred
                 ? '⚠️ LƯU Ý Y KHOA: Mô hình ResNet chỉ quét tổn thương bề mặt da (nấm/ghẻ), hoàn toàn KHÔNG có khả năng nhận diện thể trạng toàn thân, gầy còm, suy dinh dưỡng hay bệnh nội khoa.'
                 : '';
 
@@ -3507,7 +3507,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
               resnetPrediction = `
 [KẾT QUẢ THAM KHẢO TỪ MÔ HÌNH NHẬN DIỆN DA LIỄU CỤC BỘ (ResNet18)]:
-- Dự đoán ngoài da tham khảo: ${pred.class_name_vi} (${pred.class_name}) — ${confidence}%
+- Dự đoán ngoài da tham khảo: ${pred.class_name_vi} (${pred.class_name}) | ${confidence}%
 ${labelNote ? `- ${labelNote}\n` : ''}${oodAlert ? `${oodAlert}\n` : ''}- Top-3 chẩn đoán ngoài da tham khảo:
 ${top3Text}
 🚨 NGUYÊN TẮC KHÁM LÂM SÀNG TỐI CAO DÀNH CHO BÁC SĨ AI:
@@ -3520,12 +3520,12 @@ ${top3Text}
         } catch (e: any) {
           serverLog('RENDER_AI', 'ERROR', '/predict ResNet FAILED', e?.message?.substring(0, 80), Date.now() - rnT0);
           // Giữ imageForGemini = imageBase64, Gemini tự phân tích ảnh
-          resnetPrediction = '\n(Hệ thống nhận diện ảnh chuyên biệt đang không phản hồi — Gemini sẽ phân tích ảnh trực tiếp.)\n';
+          resnetPrediction = '\n(Hệ thống nhận diện ảnh chuyên biệt đang không phản hồi | Gemini sẽ phân tích ảnh trực tiếp.)\n';
         }
       }
 
       let promptContent = '';
-      
+
       if (isCasualGreeting && !imageBase64) {
         promptContent = `
 Người dùng đang giao tiếp thông thường: "${cleanMessage}".
@@ -3819,7 +3819,7 @@ YÊU CẦU:
 
       let response: any = null;
       const analyzeCandidates = [...new Set([analyzeModel, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.6-flash'])];
-      
+
       summaryKeyLoop: for (const k of keyPool) {
         const ai = getGeminiClient(k);
         for (const m of analyzeCandidates) {
@@ -4005,7 +4005,7 @@ YÊU CẦU:
     const renderUrl = 'https://pet-chatbot-ai.onrender.com';
     serverLog('RENDER_AI', 'INFO', 'Startup wake-up call', renderUrl);
     fetch(`${renderUrl}/docs`)
-      .then(r => serverLog('RENDER_AI', r.ok ? 'OK' : 'WARN', 'Startup wake-up call', `HTTP ${r.status} — Render AI đang sống`))
+      .then(r => serverLog('RENDER_AI', r.ok ? 'OK' : 'WARN', 'Startup wake-up call', `HTTP ${r.status} | Render AI đang sống`))
       .catch(e => serverLog('RENDER_AI', 'WARN', 'Startup wake-up call', `Render đang ngủ/cold start: ${e.message}`));
   });
 

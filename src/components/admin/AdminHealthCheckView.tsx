@@ -19,17 +19,17 @@ interface PingLogItem {
 
 export const AdminHealthCheckView: React.FC = () => {
   const { showSuccess, showError, showInfo } = useNotification();
-  
+
   const [health, setHealth] = useState<any>(null);
   const [loadingHealth, setLoadingHealth] = useState(true);
   const [pinging, setPinging] = useState(false);
   const [pingTarget, setPingTarget] = useState<string | null>(null);
-  
+
   // Auto Keep-Alive State
   const [autoKeepAlive, setAutoKeepAlive] = useState(true);
   const [keepAliveIntervalMinutes, setKeepAliveIntervalMinutes] = useState(10);
   const [nextPingSeconds, setNextPingSeconds] = useState(600);
-  
+
   // Ping logs
   const [pingLogs, setPingLogs] = useState<PingLogItem[]>([]);
   const [showEnvKeyPreview, setShowEnvKeyPreview] = useState(false);
@@ -79,7 +79,7 @@ export const AdminHealthCheckView: React.FC = () => {
       }
 
       setPingLogs(prev => [...newLogs, ...prev].slice(0, 50));
-      
+
       // Update health summary
       await fetchHealthCheck(true);
 
@@ -198,14 +198,12 @@ export const AdminHealthCheckView: React.FC = () => {
               </div>
               <button
                 onClick={() => setAutoKeepAlive(!autoKeepAlive)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  autoKeepAlive ? 'bg-emerald-600' : 'bg-slate-700'
-                }`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoKeepAlive ? 'bg-emerald-600' : 'bg-slate-700'
+                  }`}
               >
                 <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    autoKeepAlive ? 'translate-x-6' : 'translate-x-1'
-                  }`}
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoKeepAlive ? 'translate-x-6' : 'translate-x-1'
+                    }`}
                 />
               </button>
             </div>
@@ -271,7 +269,7 @@ export const AdminHealthCheckView: React.FC = () => {
               <div className="flex items-center justify-between text-slate-600">
                 <span>Độ trễ truy vấn:</span>
                 <span className="font-bold text-slate-900">
-                  {health?.supabase?.latencyMs !== null ? `${health?.supabase?.latencyMs}ms` : '—'}
+                  {health?.supabase?.latencyMs !== null ? `${health?.supabase?.latencyMs}ms` : '|'}
                 </span>
               </div>
               <div className="text-[11px] text-slate-500 truncate">
@@ -369,7 +367,7 @@ export const AdminHealthCheckView: React.FC = () => {
               <div className="flex items-center justify-between text-slate-600">
                 <span>Độ trễ API:</span>
                 <span className="font-bold text-slate-900">
-                  {health?.gemini?.latencyMs !== null && health?.gemini?.latencyMs !== undefined ? `${health?.gemini?.latencyMs}ms` : '—'}
+                  {health?.gemini?.latencyMs !== null && health?.gemini?.latencyMs !== undefined ? `${health?.gemini?.latencyMs}ms` : '|'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-slate-600">

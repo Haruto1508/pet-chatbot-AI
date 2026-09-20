@@ -49,7 +49,7 @@ export const AdminAccessDeniedView: React.FC<AdminAccessDeniedViewProps> = ({
         {/* Badge */}
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/20 mb-3">
           <Lock className="w-3 h-3" />
-          403 Forbidden — Quyền Truy Cập Bị Giới Hạn
+          403 Forbidden | Quyền Truy Cập Bị Giới Hạn
         </div>
 
         {/* Heading */}

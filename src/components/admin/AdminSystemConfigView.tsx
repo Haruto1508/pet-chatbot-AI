@@ -13,7 +13,7 @@ import { parseApiKeys, maskApiKey } from '../../utils/apiKeys';
 
 export const AdminSystemConfigView: React.FC = () => {
   const { showError, showSuccess, showInfo } = useNotification();
-  
+
   const [config, setConfig] = useState<SystemConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -302,18 +302,16 @@ export const AdminSystemConfigView: React.FC = () => {
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Section 0: Maintenance Mode (Chế Độ Bảo Trì) */}
-        <div className={`p-6 rounded-2xl border transition-all ${
-          config.maintenanceMode 
-            ? 'bg-amber-50/50 border-amber-300 ring-2 ring-amber-400/20' 
+        <div className={`p-6 rounded-2xl border transition-all ${config.maintenanceMode
+            ? 'bg-amber-50/50 border-amber-300 ring-2 ring-amber-400/20'
             : 'bg-white border-slate-200/80 shadow-xs'
-        }`}>
+          }`}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div className="flex items-center gap-3">
-              <div className={`p-2.5 rounded-xl border ${
-                config.maintenanceMode 
-                  ? 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse' 
+              <div className={`p-2.5 rounded-xl border ${config.maintenanceMode
+                  ? 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse'
                   : 'bg-slate-100 text-slate-600 border-slate-200'
-              }`}>
+                }`}>
                 <Wrench className="w-5 h-5" />
               </div>
               <div>
@@ -347,14 +345,12 @@ export const AdminSystemConfigView: React.FC = () => {
                 role="switch"
                 aria-checked={config.maintenanceMode ?? false}
                 onClick={() => setConfig({ ...config, maintenanceMode: !config.maintenanceMode })}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                  config.maintenanceMode ? 'bg-amber-500' : 'bg-slate-300 hover:bg-slate-400'
-                }`}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${config.maintenanceMode ? 'bg-amber-500' : 'bg-slate-300 hover:bg-slate-400'
+                  }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    config.maintenanceMode ? 'translate-x-5' : 'translate-x-0'
-                  }`}
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${config.maintenanceMode ? 'translate-x-5' : 'translate-x-0'
+                    }`}
                 />
               </button>
             </div>
@@ -457,11 +453,10 @@ export const AdminSystemConfigView: React.FC = () => {
 
               {testResult && (
                 <div
-                  className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
-                    testResult.ok
+                  className={`p-3 rounded-xl text-xs flex items-center gap-2 ${testResult.ok
                       ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                       : 'bg-red-50 text-red-800 border border-red-200'
-                  }`}
+                    }`}
                 >
                   {testResult.ok ? (
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
@@ -664,7 +659,7 @@ export const AdminSystemConfigView: React.FC = () => {
                 onChange={(e) => setConfig({ ...config, apiProvider: e.target.value as any })}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
               >
-                <option value="gemini">Google Gemini AI (Khuyên dùng — Đầy đủ Multimodal & Tốc độ cao)</option>
+                <option value="gemini">Google Gemini AI (Khuyên dùng | Đầy đủ Multimodal & Tốc độ cao)</option>
                 <option value="openai">OpenAI (GPT-4o, GPT-4o-mini)</option>
                 <option value="custom">Custom / Groq / Ollama (OpenAI Compatible API)</option>
               </select>
@@ -728,10 +723,10 @@ export const AdminSystemConfigView: React.FC = () => {
                 onChange={(e) => setConfig({ ...config, aiModel: e.target.value })}
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-900 bg-slate-50/50 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400"
               >
-                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (⚡ Chống 503 tốt nhất — Phản hồi ~900ms)</option>
-                <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (⚡ Thế hệ mới — Tốc độ cao ~850ms)</option>
+                <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (⚡ Chống 503 tốt nhất | Phản hồi ~900ms)</option>
+                <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (⚡ Thế hệ mới | Tốc độ cao ~850ms)</option>
                 <option value="gemini-flash-lite-latest">Gemini Flash Lite Latest (Bản Lite ổn định)</option>
-                <option value="gemini-3.6-flash">Gemini 3.6 Flash (🧠 Thông minh nhất — Dễ nghẽn 503)</option>
+                <option value="gemini-3.6-flash">Gemini 3.6 Flash (🧠 Thông minh nhất | Dễ nghẽn 503)</option>
               </select>
               <p className="text-[11px] text-slate-400">
                 Mẹo: Chọn <strong>Gemini 3.1 Flash Lite</strong> hoặc <strong>3.5 Flash Lite</strong> để hoàn toàn né lỗi quá tải HTTP 503 và có tốc độ phản hồi nhanh nhất.
@@ -860,13 +855,11 @@ export const AdminSystemConfigView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setConfig({ ...config, enableGeminiFallback: !config.enableGeminiFallback })}
-                className={`relative inline-flex h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none ${
-                  config.enableGeminiFallback ? 'bg-orange-500' : 'bg-slate-200'
-                }`}
+                className={`relative inline-flex h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none ${config.enableGeminiFallback ? 'bg-orange-500' : 'bg-slate-200'
+                  }`}
               >
-                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform duration-200 mt-0.5 ${
-                  config.enableGeminiFallback ? 'translate-x-5.5' : 'translate-x-0.5'
-                }`} />
+                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transform transition-transform duration-200 mt-0.5 ${config.enableGeminiFallback ? 'translate-x-5.5' : 'translate-x-0.5'
+                  }`} />
               </button>
             </div>
           </div>
@@ -920,7 +913,7 @@ export const AdminSystemConfigView: React.FC = () => {
                     onChange={(e) => setConfig({ ...config, fallbackModel: e.target.value })}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
                   >
-                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Khuyên dùng — Chống 503)</option>
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Khuyên dùng | Chống 503)</option>
                     <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Siêu nhẹ)</option>
                     <option value="gemini-flash-lite-latest">gemini-flash-lite-latest</option>
                     <option value="gemini-3.6-flash">gemini-3.6-flash</option>

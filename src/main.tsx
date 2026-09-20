@@ -1,5 +1,5 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import './index.css';
@@ -8,10 +8,10 @@ import './index.css';
 if (typeof window !== 'undefined') {
   try {
     console.clear();
-  } catch {}
+  } catch { }
 
   console.log(
-    '%c🛡️ VETHIC AI — HỆ THỐNG AN NINH & BẢO MẬT%c\n\n' +
+    '%c🛡️ VETHIC AI | HỆ THỐNG AN NINH & BẢO MẬT%c\n\n' +
     '%c⚠️ CẢNH BÁO: KHÔNG ĐƯỢC CHỈNH SỬA HOẶC CAN THIỆP MÃ NGUỒN TẠI ĐÂY!\n\n' +
     '%cKhu vực Console này được thiết kế dành riêng cho đội ngũ kỹ thuật Vethic AI.\n' +
     'Nghiêm cấm dán các đoạn mã script lạ (Self-XSS / Console Code Injection) hoặc can thiệp dữ liệu.\n' +
@@ -24,7 +24,7 @@ if (typeof window !== 'undefined') {
 
   // Silence noisy logs in production
   if (import.meta.env.PROD) {
-    const noop = () => {};
+    const noop = () => { };
     console.log = noop;
     console.info = noop;
     console.debug = noop;
