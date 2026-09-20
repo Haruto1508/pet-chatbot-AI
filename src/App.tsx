@@ -63,7 +63,12 @@ const guestUser: UserProfile = {
 
 export function App() {
   const getInitialTab = () => {
-    return getTabFromPath(window.location.pathname);
+    const tab = getTabFromPath(window.location.pathname);
+    // Quản lý bệnh án tạm thời tắt theo yêu cầu, chuyển hướng an toàn về dashboard/chat
+    if (tab === 'records' || tab === 'record_detail' || tab === 'admin_records') {
+      return tab.startsWith('admin') ? 'admin_dashboard' : 'chat';
+    }
+    return tab;
   };
 
   const [currentUser, setCurrentUser] = useState<UserProfile>(guestUser);
@@ -465,6 +470,7 @@ export function App() {
               />
             )}
 
+            {/* Quản lý hồ sơ bệnh án của User tạm thời tắt theo yêu cầu, có thể mở lại khi cần:
             {currentTab === 'records' && (
               <MedicalHistoryView
                 pets={pets}
@@ -496,6 +502,7 @@ export function App() {
                 <PageLoader />
               )
             )}
+            */}
 
             {currentTab === 'news' && (
               <ArticlesNewsView />
@@ -536,7 +543,9 @@ export function App() {
                 <>
                   {currentTab === 'admin_dashboard' && <AdminDashboardView />}
                   {currentTab === 'admin_users'     && <AdminUsersView currentUser={currentUser} />}
+                  {/* Quản lý bệnh án tạm thời tắt theo yêu cầu, có thể mở lại khi cần:
                   {currentTab === 'admin_records'   && <AdminPetsRecordsView />}
+                  */}
                   {currentTab === 'admin_clinics'   && <AdminClinicsView />}
                   {currentTab === 'admin_rag'       && <AdminKnowledgeRAGView />}
                   {currentTab === 'admin_eval'      && <AdminAiEvaluationView />}

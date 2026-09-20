@@ -415,15 +415,20 @@ export const AdminDashboardView: React.FC = () => {
           <div className="p-4 rounded-2xl bg-gradient-to-br from-rose-50/70 to-rose-100/30 border border-rose-200 flex flex-col justify-between space-y-3">
             <div className="flex items-center justify-between">
               <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase bg-rose-600 text-white tracking-wider">
-                Bước 5: Tin Nhắn & Bệnh Án
+                Bước 5: Tin Nhắn Trao Đổi
               </span>
-              <FileText className="w-4 h-4 text-rose-600" />
+              <MessageSquare className="w-4 h-4 text-rose-600" />
             </div>
             <div>
               <p className="text-xs font-bold text-slate-600">Total Messages</p>
               <p className="text-2xl font-black text-slate-900">{totalMessages.toLocaleString()}</p>
+              {/* Thống kê bệnh án tạm thời tắt theo yêu cầu:
               <p className="text-[11px] text-slate-500 mt-0.5">
                 {stats.totalMedicalRecords} bệnh án đã lưu
+              </p>
+              */}
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Tổng tương tác hỏi đáp y tế AI
               </p>
             </div>
             <div className="text-[10px] font-bold text-rose-700 bg-white/80 p-2 rounded-xl border border-rose-200/50">
@@ -637,7 +642,7 @@ export const AdminDashboardView: React.FC = () => {
           {activeTab === 'chatbot' && (
             <div className="space-y-6">
               {/* Clinical Metrics Sub-grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
                   <span className="text-[11px] font-bold text-slate-500 uppercase">Tổng Cuộc Chat AI</span>
                   <p className="text-xl font-black text-slate-900 mt-1">{chatSessions.toLocaleString()}</p>
@@ -653,11 +658,13 @@ export const AdminDashboardView: React.FC = () => {
                   <p className="text-xl font-black text-slate-900 mt-1">{stats.totalPets}</p>
                   <span className="text-[10px] text-slate-500">Đang được theo dõi hồ sơ</span>
                 </div>
+                {/* Thống kê bệnh án tạm thời tắt theo yêu cầu, có thể bật lại khi cần:
                 <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
                   <span className="text-[11px] font-bold text-slate-500 uppercase">Bệnh Án Đã Lưu</span>
                   <p className="text-xl font-black text-slate-900 mt-1">{stats.totalMedicalRecords}</p>
                   <span className="text-[10px] text-purple-600 font-bold">Tổng hợp tự động bởi AI</span>
                 </div>
+                */}
               </div>
 
               {/* Triage Proportions Bar */}
@@ -765,7 +772,9 @@ export const AdminDashboardView: React.FC = () => {
 
       {/* ─────────────────────────────────────────────────────────────
           5. Bệnh Án Mới Nhất Trên Hệ Thống (Recent Records Feed)
+          (Tạm thời tắt theo yêu cầu, có thể mở lại khi cần)
           ───────────────────────────────────────────────────────────── */}
+      {/* 
       <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -795,6 +804,7 @@ export const AdminDashboardView: React.FC = () => {
           ))}
         </div>
       </div>
+      */}
     </div>
   );
 };
