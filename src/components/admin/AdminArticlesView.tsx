@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Newspaper, Plus, Edit, Trash2, Search, Eye, X, Check,
@@ -13,21 +13,45 @@ import { CardsGridSkeleton } from '../common/LoadingSkeleton';
 
 const DEFAULT_ARTICLE_IMAGE = 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&q=80&w=800';
 
-export const AdminArticlesView: React.FC = () => {
-  const { showSuccess, showError } = useNotification();
-  const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
+function formatFriendlyDate(dateStr?: string, includeTime = false): string {
+  if (!dateStr) return 'Mới tạo';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (!includeTime) {
+      return `${day}/${month}/${year}`;
+    }
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} lúc ${hours}:${minutes}`;
+  } catch {
+    return dateStr;
+  }
+}
 
-  // Modal states
-  const [isModalOpen, setIsModalOpen] = useState(false);
+// ---------------------------------------------------------------------------
+// Isolated ArticleEditorModal: Keeps local form state so typing in Markdown
+// textarea or inputs never triggers a parent re-render (Zero Input Lag)
+// ---------------------------------------------------------------------------
+interface ArticleEditorModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  editingArticle: KnowledgeArticle | null;
+  onSave: (payload: Partial<KnowledgeArticle>) => Promise<void>;
+  submitting: boolean;
+}
+
+const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
+  isOpen,
+  onClose,
+  editingArticle,
+  onSave,
+  submitting,
+}) => {
   const [modalTab, setModalTab] = useState<'edit' | 'preview'>('edit');
-  const [editingArticle, setEditingArticle] = useState<KnowledgeArticle | null>(null);
-  const [articleToDelete, setClinicToDelete] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Form states
   const [title, setTitle] = useState('');
   const [species, setSpecies] = useState<'Chó' | 'Mèo' | 'Cả hai'>('Cả hai');
   const [category, setCategory] = useState<'symptom' | 'first_aid' | 'prevention' | 'nutrition'>('symptom');
@@ -36,70 +60,49 @@ export const AdminArticlesView: React.FC = () => {
   const [doctorAdvice, setDoctorAdvice] = useState('');
   const [imageUrl, setImageUrl] = useState('');
   const [content, setContent] = useState('');
-
-  // Dynamic tags managers
   const [symptoms, setSymptoms] = useState<string[]>([]);
   const [newSymptom, setNewSymptom] = useState('');
   const [firstAidSteps, setFirstAidSteps] = useState<string[]>([]);
   const [newStep, setNewStep] = useState('');
 
-  const loadArticles = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getArticles();
-      setArticles(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error('Error loading articles from DB:', e);
-      setArticles([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadArticles();
-  }, []);
+    if (isOpen) {
+      setModalTab('edit');
+      if (editingArticle) {
+        setTitle(editingArticle.title || '');
+        setSpecies(editingArticle.species || 'Cả hai');
+        setCategory(editingArticle.category || 'symptom');
+        setUrgencyLevel(editingArticle.urgencyLevel || 'GREEN');
+        setSummary(editingArticle.summary || '');
+        setDoctorAdvice(editingArticle.doctorAdvice || '');
+        setImageUrl(editingArticle.imageUrl || '');
+        setContent(editingArticle.content || '');
+        setSymptoms(Array.isArray(editingArticle.symptoms) ? [...editingArticle.symptoms] : []);
+        setFirstAidSteps(Array.isArray(editingArticle.firstAidSteps) ? [...editingArticle.firstAidSteps] : []);
+      } else {
+        setTitle('');
+        setSpecies('Cả hai');
+        setCategory('symptom');
+        setUrgencyLevel('GREEN');
+        setSummary('');
+        setDoctorAdvice('');
+        setImageUrl('');
+        setContent(`## Tổng quan bệnh lý\n\nMô tả chi tiết nguyên nhân, diễn tiến của bệnh...\n\n### Hướng dẫn theo dõi và chăm sóc\n\n- Theo dõi nhiệt độ thú cưng\n- Đảm bảo uống đủ nước sạch\n- Không tự ý dùng thuốc người`);
+        setSymptoms(['Biếng ăn', 'Ủ rũ']);
+        setFirstAidSteps(['Cách ly bé ở nơi yên tĩnh', 'Đo thân nhiệt']);
+      }
+      setNewSymptom('');
+      setNewStep('');
+    }
+  }, [isOpen, editingArticle]);
 
-  const openAddModal = () => {
-    setEditingArticle(null);
-    setTitle('');
-    setSpecies('Cả hai');
-    setCategory('symptom');
-    setUrgencyLevel('GREEN');
-    setSummary('');
-    setDoctorAdvice('');
-    setImageUrl('');
-    setContent(`## Tổng quan bệnh lý\n\nMô tả chi tiết nguyên nhân, diễn tiến của bệnh...\n\n### Hướng dẫn theo dõi và chăm sóc\n\n- Theo dõi nhiệt độ thú cưng\n- Đảm bảo uống đủ nước sạch\n- Không tự ý dùng thuốc người`);
-    setSymptoms(['Biếng ăn', 'Ủ rũ']);
-    setNewSymptom('');
-    setFirstAidSteps(['Cách ly bé ở nơi yên tĩnh', 'Đo thân nhiệt']);
-    setNewStep('');
-    setModalTab('edit');
-    setIsModalOpen(true);
-  };
+  if (!isOpen) return null;
 
-  const openEditModal = (art: KnowledgeArticle) => {
-    setEditingArticle(art);
-    setTitle(art.title || '');
-    setSpecies(art.species || 'Cả hai');
-    setCategory(art.category || 'symptom');
-    setUrgencyLevel(art.urgencyLevel || 'GREEN');
-    setSummary(art.summary || '');
-    setDoctorAdvice(art.doctorAdvice || '');
-    setImageUrl(art.imageUrl || '');
-    setContent(art.content || '');
-    setSymptoms(Array.isArray(art.symptoms) ? [...art.symptoms] : []);
-    setNewSymptom('');
-    setFirstAidSteps(Array.isArray(art.firstAidSteps) ? [...art.firstAidSteps] : []);
-    setNewStep('');
-    setModalTab('edit');
-    setIsModalOpen(true);
-  };
-
-  // Symptoms tag helpers
+  // Symptom tags helpers
   const handleAddSymptom = () => {
-    if (newSymptom.trim() && !symptoms.includes(newSymptom.trim())) {
-      setSymptoms([...symptoms, newSymptom.trim()]);
+    const trimmed = newSymptom.trim();
+    if (trimmed && !symptoms.includes(trimmed)) {
+      setSymptoms([...symptoms, trimmed]);
       setNewSymptom('');
     }
   };
@@ -110,8 +113,9 @@ export const AdminArticlesView: React.FC = () => {
 
   // First Aid steps helpers
   const handleAddStep = () => {
-    if (newStep.trim()) {
-      setFirstAidSteps([...firstAidSteps, newStep.trim()]);
+    const trimmed = newStep.trim();
+    if (trimmed) {
+      setFirstAidSteps([...firstAidSteps, trimmed]);
       setNewStep('');
     }
   };
@@ -136,18 +140,12 @@ export const AdminArticlesView: React.FC = () => {
     setTimeout(() => {
       textarea.focus();
       textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
-    }, 50);
+    }, 30);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) {
-      showError('Vui lòng nhập tiêu đề bài viết');
-      return;
-    }
-
-    setSubmitting(true);
-    const payload: Partial<KnowledgeArticle> = {
+    await onSave({
       title: title.trim(),
       species,
       category,
@@ -157,9 +155,514 @@ export const AdminArticlesView: React.FC = () => {
       imageUrl: imageUrl.trim() || DEFAULT_ARTICLE_IMAGE,
       content: content.trim(),
       symptoms,
-      firstAidSteps
-    };
+      firstAidSteps,
+    });
+  };
 
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-6 animate-in fade-in duration-150">
+      <div className="bg-white rounded-2xl max-w-4xl w-full h-[90vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden relative">
+        {/* Modal Header */}
+        <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-teal-100 text-teal-700 rounded-xl">
+              <Newspaper className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                {editingArticle ? 'Chỉnh Sửa Bài Viết & Phác Đồ' : 'Soạn Bài Viết Mới Cho RAG & Sơ Cứu'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Lưu trữ vào Supabase CSDL và tự động trích xuất vector embedding cho AI tư vấn.
+              </p>
+            </div>
+          </div>
+
+          {/* Mode Toggle Tabs */}
+          <div className="flex items-center gap-2">
+            <div className="flex bg-slate-200 p-0.5 rounded-xl text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setModalTab('edit')}
+                className={`px-3 py-1.5 rounded-lg transition-colors ${
+                  modalTab === 'edit' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ✏️ Soạn Thảo
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('preview')}
+                className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                  modalTab === 'preview' ? 'bg-white text-teal-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" /> Xem Trước (Như User)
+              </button>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors ml-2"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+          {modalTab === 'edit' ? (
+            <form id="article-editor-form" onSubmit={handleFormSubmit} className="space-y-4 text-xs">
+              {/* Title */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Tiêu đề bài viết y khoa *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Xử Trí Khẩn Cấp Khi Chó Bị Sốc Nhiệt Mùa Hè"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-900 focus:border-teal-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Species, Category, Urgency */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Loài áp dụng</label>
+                  <select
+                    value={species}
+                    onChange={(e) => setSpecies(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 font-medium focus:border-teal-500 focus:outline-hidden"
+                  >
+                    <option value="Cả hai">🐾 Cả hai (Chó & Mèo)</option>
+                    <option value="Chó">🐶 Chó</option>
+                    <option value="Mèo">🐱 Mèo</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Danh mục bài viết</label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 font-medium focus:border-teal-500 focus:outline-hidden"
+                  >
+                    <option value="first_aid">🚨 Sơ cứu khẩn cấp (24/7)</option>
+                    <option value="symptom">🩺 Bệnh lý & Triệu chứng</option>
+                    <option value="prevention">🛡️ Phòng bệnh & Vắc xin</option>
+                    <option value="nutrition">🥗 Dinh dưỡng khoa học</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Mức độ cảnh báo Triage</label>
+                  <select
+                    value={urgencyLevel}
+                    onChange={(e) => setUrgencyLevel(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 font-medium focus:border-teal-500 focus:outline-hidden"
+                  >
+                    <option value="GREEN">🟢 Xanh lá (GREEN - Nhẹ / Chăm sóc tại nhà)</option>
+                    <option value="YELLOW">🟡 Vàng (YELLOW - Cần khám trong 24h)</option>
+                    <option value="RED">🔴 Đỏ (RED - Cấp cứu khẩn cấp tối nguy)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Image URL */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Đường dẫn ảnh bìa (Image URL)</label>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/photo-..."
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Summary */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Tóm tắt ngắn (Dành cho hiển thị trên thẻ card)</label>
+                <textarea
+                  rows={2}
+                  value={summary}
+                  onChange={(e) => setSummary(e.target.value)}
+                  placeholder="Tóm tắt 1-2 câu về nội dung bài viết..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Symptoms Tags */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Tags Triệu Chứng Nhận Biết</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={newSymptom}
+                    onChange={(e) => setNewSymptom(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddSymptom();
+                      }
+                    }}
+                    placeholder="Nhập triệu chứng rồi bấm Thêm (ví dụ: sốt cao, nôn mửa...)"
+                    className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddSymptom}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 rounded-xl transition-colors"
+                  >
+                    + Thêm tag
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {symptoms.map((s, idx) => (
+                    <span
+                      key={idx}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 text-teal-800 border border-teal-200 font-medium text-xs"
+                    >
+                      {s}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSymptom(idx)}
+                        className="text-teal-600 hover:text-red-500 font-bold ml-1"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* First Aid Steps Checklist */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Các Bước Sơ Cứu Ban Đầu (Theo Thứ Tự)</label>
+                <div className="flex gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={newStep}
+                    onChange={(e) => setNewStep(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddStep();
+                      }
+                    }}
+                    placeholder="Nhập bước sơ cứu rồi bấm Thêm..."
+                    className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddStep}
+                    className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 font-bold text-amber-900 rounded-xl transition-colors"
+                  >
+                    + Thêm bước
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {firstAidSteps.map((step, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-2 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-950"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-900 font-black text-[10px] flex items-center justify-center shrink-0">
+                          {idx + 1}
+                        </span>
+                        <span className="font-medium">{step}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStep(idx)}
+                        className="text-slate-400 hover:text-red-600 font-bold px-2 py-0.5"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Doctor Advice */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Lời khuyên chuyên môn từ Bác Sĩ Thú Y</label>
+                <textarea
+                  rows={2}
+                  value={doctorAdvice}
+                  onChange={(e) => setDoctorAdvice(e.target.value)}
+                  placeholder="Khuyến nghị y khoa chính xác từ bác sĩ..."
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:border-teal-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Markdown Content Editor with Toolbar */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-700 block">Nội dung bài viết chi tiết (Định dạng Markdown)</label>
+                  <span className="text-[10px] text-slate-400">Hỗ trợ Heading, Bullet, Bold, Tables</span>
+                </div>
+
+                {/* Format Toolbar */}
+                <div className="flex flex-wrap items-center gap-1 p-2 bg-slate-100 rounded-t-xl border border-slate-200 border-b-0">
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('**', '**')}
+                    className="p-1.5 rounded hover:bg-white text-slate-700 font-bold"
+                    title="In đậm (Bold)"
+                  >
+                    <Bold className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('*', '*')}
+                    className="p-1.5 rounded hover:bg-white text-slate-700 italic"
+                    title="In nghiêng (Italic)"
+                  >
+                    <Italic className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('\n## ', '\n')}
+                    className="px-2 py-1 rounded hover:bg-white text-slate-700 font-bold text-[11px]"
+                    title="Tiêu đề H2"
+                  >
+                    H2
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('\n### ', '\n')}
+                    className="px-2 py-1 rounded hover:bg-white text-slate-700 font-bold text-[11px]"
+                    title="Tiêu đề H3"
+                  >
+                    H3
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('\n- ', '\n')}
+                    className="p-1.5 rounded hover:bg-white text-slate-700"
+                    title="Danh sách gạch đầu dòng"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('\n1. ', '\n')}
+                    className="p-1.5 rounded hover:bg-white text-slate-700"
+                    title="Danh sách có số thứ tự"
+                  >
+                    <ListOrdered className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('\n> **Lưu ý y tế:** ', '\n')}
+                    className="p-1.5 rounded hover:bg-white text-slate-700"
+                    title="Khối trích dẫn lưu ý"
+                  >
+                    <Quote className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('\n| Triệu chứng | Cách xử lý |\n| --- | --- |\n| ', ' | |\n')}
+                    className="px-2 py-1 rounded hover:bg-white text-slate-700 text-[11px]"
+                    title="Chèn bảng dữ liệu"
+                  >
+                    📊 Bảng
+                  </button>
+                </div>
+
+                <textarea
+                  id="article-content-editor"
+                  rows={10}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="Nhập nội dung bài viết định dạng Markdown..."
+                  className="w-full px-3.5 py-3 rounded-b-xl border border-slate-200 font-mono text-xs text-slate-900 leading-relaxed focus:border-teal-500 focus:outline-hidden"
+                />
+              </div>
+            </form>
+          ) : (
+            /* User-like Preview Tab */
+            <div className="space-y-6 max-w-3xl mx-auto pb-6 animate-in fade-in duration-150">
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-2.5 rounded-xl flex items-center gap-2">
+                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                <span><b>Chế độ xem trước (Preview):</b> Đây là giao diện chính xác mà người dùng sẽ thấy khi truy cập bài viết này trên hệ thống.</span>
+              </div>
+
+              <div className="bg-white rounded-3xl shadow-xs border border-slate-200 overflow-hidden">
+                <div className="relative h-64 sm:h-72 w-full bg-slate-100">
+                  <img
+                    src={imageUrl || DEFAULT_ARTICLE_IMAGE}
+                    alt={title || 'Xem trước'}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = DEFAULT_ARTICLE_IMAGE;
+                    }}
+                  />
+                  <div className="absolute top-4 left-4 flex gap-2">
+                    <span className="text-xs font-black px-3 py-1 rounded-full bg-black/70 text-white backdrop-blur-md shadow-md">
+                      Dành cho {species}
+                    </span>
+                    <TriageBadge level={urgencyLevel} compact />
+                  </div>
+                  {category === 'first_aid' && (
+                    <span className="absolute top-4 right-4 text-xs font-black px-3 py-1 rounded-full bg-red-600 text-white shadow-md flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                      SƠ CỨU 24/7
+                    </span>
+                  )}
+                </div>
+
+                <div className="p-6 sm:p-8 space-y-6">
+                  <div className="space-y-2">
+                    <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
+                      {title || 'Tiêu đề bài viết y khoa xem trước'}
+                    </h1>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Cập nhật: {formatFriendlyDate(new Date().toISOString(), true)} • Cơ sở dữ liệu Vethic AI
+                    </p>
+                  </div>
+
+                  {/* Symptoms Box */}
+                  {symptoms.length > 0 && (
+                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm space-y-2.5">
+                      <div className="flex items-center gap-2 font-black text-slate-900 text-sm">
+                        <span className="text-lg">🚨</span> Triệu Chứng Bệnh Cần Nhận Biết
+                      </div>
+                      <ul className="list-disc list-inside space-y-1.5 text-slate-700 pl-2 text-xs">
+                        {symptoms.map((s, i) => (
+                          <li key={i}>{s}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* First Aid Steps Box */}
+                  {firstAidSteps.length > 0 && (
+                    <div className="p-5 bg-amber-50 rounded-2xl border border-amber-200 text-sm space-y-2.5">
+                      <div className="flex items-center gap-2 font-black text-amber-950 text-sm">
+                        <span className="text-lg">⚡</span> Các Bước Sơ Cứu Ban Đầu
+                      </div>
+                      <ol className="list-decimal list-inside space-y-1.5 text-amber-900 pl-2 font-medium text-xs">
+                        {firstAidSteps.map((step, i) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {/* Doctor Advice */}
+                  {doctorAdvice && (
+                    <div className="p-5 bg-blue-50/80 rounded-2xl border border-blue-200 text-sm space-y-1.5">
+                      <div className="flex items-center gap-2 font-black text-blue-950 text-sm">
+                        <span className="text-lg">👨‍⚕️</span> Khuyên Dùng Từ Bác Sĩ Thú Y
+                      </div>
+                      <p className="text-blue-900 font-semibold leading-relaxed text-xs">
+                        {doctorAdvice}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Markdown Content */}
+                  <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed text-sm pt-4 border-t border-slate-100">
+                    <ReactMarkdown>{content || '*Chưa có nội dung chi tiết.*'}</ReactMarkdown>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="text-xs text-slate-500">
+            {modalTab === 'edit' ? (
+              <span>Đang ở chế độ soạn thảo</span>
+            ) : (
+              <span>Đang ở chế độ xem trước (Preview)</span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              form="article-editor-form"
+              disabled={submitting}
+              className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-colors shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {submitting ? 'Đang lưu vào CSDL...' : 'Lưu Bài Viết Vào CSDL'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Main AdminArticlesView Component
+// ---------------------------------------------------------------------------
+export const AdminArticlesView: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
+  const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // Modal and Delete states
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingArticle, setEditingArticle] = useState<KnowledgeArticle | null>(null);
+  const [articleToDelete, setArticleToDelete] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadArticles = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getArticles();
+      setArticles(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error('Error loading articles from DB:', e);
+      setArticles([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadArticles();
+  }, []);
+
+  const openAddModal = () => {
+    setEditingArticle(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (art: KnowledgeArticle) => {
+    setEditingArticle(art);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveArticle = async (payload: Partial<KnowledgeArticle>) => {
+    if (!payload.title?.trim()) {
+      showError('Vui lòng nhập tiêu đề bài viết');
+      return;
+    }
+
+    setSubmitting(true);
     try {
       if (editingArticle) {
         await api.updateArticle(editingArticle.id, payload);
@@ -186,71 +689,94 @@ export const AdminArticlesView: React.FC = () => {
     } catch (err: any) {
       showError('Lỗi khi xóa bài viết.');
     } finally {
-      setClinicToDelete(null);
+      setArticleToDelete(null);
     }
   };
 
-  // Filtering
-  const filteredArticles = articles.filter((a) => {
-    const matchesCategory = selectedCategory === 'all' || a.category === selectedCategory;
-    const matchesSearch =
-      (a.title || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (a.summary || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (a.symptoms || []).some((s) => s.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesCategory && matchesSearch;
-  });
+  // Memoized Category Counts
+  const categoryCounts = useMemo(() => ({
+    all: articles.length,
+    first_aid: articles.filter((a) => a.category === 'first_aid').length,
+    symptom: articles.filter((a) => a.category === 'symptom').length,
+    prevention: articles.filter((a) => a.category === 'prevention').length,
+    nutrition: articles.filter((a) => a.category === 'nutrition').length,
+  }), [articles]);
+
+  // Memoized Filtering (Never re-filters while typing in modal)
+  const filteredArticles = useMemo(() => {
+    const q = searchTerm.toLowerCase().trim();
+    return articles.filter((a) => {
+      const matchesCategory = selectedCategory === 'all' || a.category === selectedCategory;
+      if (!matchesCategory) return false;
+      if (!q) return true;
+      return (
+        (a.title || '').toLowerCase().includes(q) ||
+        (a.summary || '').toLowerCase().includes(q) ||
+        (a.symptoms || []).some((s) => s.toLowerCase().includes(q))
+      );
+    });
+  }, [articles, selectedCategory, searchTerm]);
 
   return (
     <div className="space-y-6 pb-12">
       {/* Header Banner */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center shrink-0">
             <Newspaper className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-900">Quản Lý Bài Viết Y Khoa & Sơ Cứu 24/7</h2>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-teal-50 text-teal-700 border border-teal-200">
-                {articles.length} bài viết (CSDL Supabase)
+            <div className="flex items-center gap-2 mb-1">
+              <h1 className="text-xl font-black text-slate-900">Quản Lý Bài Viết & Hướng Dẫn Sơ Cứu 24/7</h1>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-teal-100 text-teal-800">
+                CRUD & Markdown
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Hỗ trợ soạn thảo Markdown, quản lý checklist sơ cứu và xem trước giao diện người dùng.
+            <p className="text-xs text-slate-500">
+              Quản lý cẩm nang bệnh lý, quy trình sơ cứu khẩn cấp, cập nhật kho tri thức RAG cho AI.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="relative min-w-[220px]">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm bài viết, triệu chứng..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500"
-            />
-          </div>
+        <button
+          onClick={openAddModal}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0"
+        >
+          <Plus className="w-4 h-4" /> Soạn Bài Viết Mới
+        </button>
+      </div>
 
-          <button
-            onClick={openAddModal}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0"
-          >
-            <Plus className="w-4 h-4" /> Soạn Bài Mới
-          </button>
+      {/* Filter & Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Tìm theo tiêu đề, tóm tắt hoặc triệu chứng..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs bg-white text-slate-900 focus:border-teal-500 focus:outline-hidden"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Category Pills Filter */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+      {/* Categories Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-1 text-xs">
         {[
-          { id: 'all', label: 'Tất cả bài viết', count: articles.length },
-          { id: 'first_aid', label: '🚨 Sơ cứu khẩn cấp (24/7)', count: articles.filter(a => a.category === 'first_aid').length },
-          { id: 'symptom', label: '🩺 Tra cứu triệu chứng', count: articles.filter(a => a.category === 'symptom').length },
-          { id: 'prevention', label: '🛡️ Phòng bệnh & Vắc xin', count: articles.filter(a => a.category === 'prevention').length },
-          { id: 'nutrition', label: '🥗 Dinh dưỡng khoa học', count: articles.filter(a => a.category === 'nutrition').length },
-        ].map(cat => (
+          { id: 'all', label: 'Tất cả bài viết', count: categoryCounts.all },
+          { id: 'first_aid', label: '🚨 Sơ cứu khẩn cấp 24/7', count: categoryCounts.first_aid },
+          { id: 'symptom', label: '🩺 Tra cứu triệu chứng', count: categoryCounts.symptom },
+          { id: 'prevention', label: '🛡️ Phòng bệnh & Vắc xin', count: categoryCounts.prevention },
+          { id: 'nutrition', label: '🥗 Dinh dưỡng khoa học', count: categoryCounts.nutrition },
+        ].map((cat) => (
           <button
             key={cat.id}
             onClick={() => setSelectedCategory(cat.id)}
@@ -261,7 +787,11 @@ export const AdminArticlesView: React.FC = () => {
             }`}
           >
             <span>{cat.label}</span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${selectedCategory === cat.id ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-500'}`}>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                selectedCategory === cat.id ? 'bg-slate-700 text-slate-200' : 'bg-slate-100 text-slate-500'
+              }`}
+            >
               {cat.count}
             </span>
           </button>
@@ -354,7 +884,7 @@ export const AdminArticlesView: React.FC = () => {
 
               <div className="p-4 pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
                 <span className="text-[11px] text-slate-400">
-                  {art.updatedAt ? new Date(art.updatedAt).toLocaleDateString('vi-VN') : 'Mới tạo'}
+                  {formatFriendlyDate(art.updatedAt)}
                 </span>
 
                 <div className="flex items-center gap-1.5">
@@ -365,7 +895,7 @@ export const AdminArticlesView: React.FC = () => {
                     <Edit className="w-3.5 h-3.5 text-slate-500" /> Sửa / Preview
                   </button>
                   <button
-                    onClick={() => setClinicToDelete(art.id)}
+                    onClick={() => setArticleToDelete(art.id)}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                     title="Xóa bài viết"
                   >
@@ -378,431 +908,14 @@ export const AdminArticlesView: React.FC = () => {
         </div>
       )}
 
-      {/* Editor & Preview Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-3 sm:p-6 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-4xl w-full h-[90vh] shadow-2xl border border-slate-200 flex flex-col overflow-hidden relative">
-            {/* Modal Header */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-teal-100 text-teal-700 rounded-xl">
-                  <Newspaper className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    {editingArticle ? 'Chỉnh Sửa Bài Viết & Phác Đồ' : 'Soạn Bài Viết Mới Cho RAG & Sơ Cứu'}
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Lưu trữ vào Supabase CSDL và tự động trích xuất vector embedding cho AI tư vấn.
-                  </p>
-                </div>
-              </div>
-
-              {/* Mode Toggle Tabs */}
-              <div className="flex items-center gap-2">
-                <div className="flex bg-slate-200 p-0.5 rounded-xl text-xs font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setModalTab('edit')}
-                    className={`px-3 py-1.5 rounded-lg transition-colors ${
-                      modalTab === 'edit' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    ✏️ Soạn Thảo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalTab('preview')}
-                    className={`px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
-                      modalTab === 'preview' ? 'bg-white text-teal-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Eye className="w-3.5 h-3.5" /> Xem Trước (Như User)
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors ml-2"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-6">
-              {modalTab === 'edit' ? (
-                <form id="article-editor-form" onSubmit={handleSubmit} className="space-y-4 text-xs">
-                  {/* Title & Species & Category */}
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">Tiêu đề bài viết y khoa *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ví dụ: Xử Trí Khẩn Cấp Khi Chó Bị Sốc Nhiệt Mùa Hè"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-900 focus:border-teal-500 focus:outline-hidden"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="font-bold text-slate-700 block mb-1">Loài áp dụng</label>
-                      <select
-                        value={species}
-                        onChange={(e) => setSpecies(e.target.value as any)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 font-medium focus:border-teal-500 focus:outline-hidden"
-                      >
-                        <option value="Cả hai">🐾 Cả hai (Chó & Mèo)</option>
-                        <option value="Chó">🐶 Chó</option>
-                        <option value="Mèo">🐱 Mèo</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="font-bold text-slate-700 block mb-1">Danh mục bài viết</label>
-                      <select
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value as any)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 font-medium focus:border-teal-500 focus:outline-hidden"
-                      >
-                        <option value="first_aid">🚨 Sơ cứu khẩn cấp (24/7)</option>
-                        <option value="symptom">🩺 Tra cứu triệu chứng</option>
-                        <option value="prevention">🛡️ Phòng bệnh & Vắc xin</option>
-                        <option value="nutrition">🥗 Dinh dưỡng khoa học</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="font-bold text-slate-700 block mb-1">Mức độ cảnh báo Triage</label>
-                      <select
-                        value={urgencyLevel}
-                        onChange={(e) => setUrgencyLevel(e.target.value as any)}
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 font-medium focus:border-teal-500 focus:outline-hidden"
-                      >
-                        <option value="GREEN">🟢 Xanh lá (GREEN - Nhẹ / Chăm sóc tại nhà)</option>
-                        <option value="YELLOW">🟡 Vàng (YELLOW - Cần khám trong 24h)</option>
-                        <option value="RED">🔴 Đỏ (RED - Cấp cứu khẩn cấp tối nguy)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Image URL */}
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">Đường dẫn ảnh bìa (Image URL)</label>
-                    <input
-                      type="url"
-                      placeholder="https://images.unsplash.com/photo-..."
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:border-teal-500 focus:outline-hidden"
-                    />
-                  </div>
-
-                  {/* Summary */}
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">Tóm tắt ngắn (Summary hiển thị ngoài danh sách)</label>
-                    <textarea
-                      rows={2}
-                      placeholder="Tóm tắt ngắn gọn triệu chứng và lưu ý quan trọng..."
-                      value={summary}
-                      onChange={(e) => setSummary(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:border-teal-500 focus:outline-hidden"
-                    />
-                  </div>
-
-                  {/* Symptoms Tag Manager */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                    <label className="font-bold text-slate-800 block">🚨 Danh sách triệu chứng nhận biết</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Nhập triệu chứng (vd: Thở dốc, sùi bọt mép, nôn dịch vàng)..."
-                        value={newSymptom}
-                        onChange={(e) => setNewSymptom(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddSymptom(); } }}
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddSymptom}
-                        className="px-3 py-1.5 bg-slate-800 text-white rounded-lg font-bold hover:bg-slate-900"
-                      >
-                        Thêm
-                      </button>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {symptoms.map((s, i) => (
-                        <span key={i} className="inline-flex items-center gap-1 text-[11px] bg-white border border-slate-200 text-slate-700 px-2.5 py-1 rounded-lg">
-                          {s}
-                          <button type="button" onClick={() => handleRemoveSymptom(i)} className="text-slate-400 hover:text-red-500">
-                            <X className="w-3 h-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* First Aid Steps Checklist Manager */}
-                  <div className="bg-amber-50/60 p-4 rounded-xl border border-amber-200 space-y-2">
-                    <label className="font-bold text-amber-950 block">⚡ Các bước sơ cứu khẩn cấp ban đầu (Theo thứ tự)</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Nhập bước sơ cứu tiếp theo..."
-                        value={newStep}
-                        onChange={(e) => setNewStep(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddStep(); } }}
-                        className="flex-1 px-3 py-1.5 rounded-lg border border-amber-200 bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddStep}
-                        className="px-3 py-1.5 bg-amber-600 text-white rounded-lg font-bold hover:bg-amber-700"
-                      >
-                        Thêm bước
-                      </button>
-                    </div>
-
-                    <ol className="list-decimal list-inside space-y-1.5 pt-1">
-                      {firstAidSteps.map((step, i) => (
-                        <li key={i} className="flex items-start justify-between gap-2 text-amber-950 font-medium bg-white p-2 rounded-lg border border-amber-100">
-                          <span className="flex-1"><b className="text-amber-700">Bước {i + 1}:</b> {step}</span>
-                          <button type="button" onClick={() => handleRemoveStep(i)} className="text-slate-400 hover:text-red-500">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-
-                  {/* Doctor Advice */}
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">👨‍⚕️ Lời khuyên của bác sĩ thú y (Doctor Advice)</label>
-                    <textarea
-                      rows={2}
-                      placeholder="Lời dặn của chuyên gia y tế, cảnh báo thuốc chống chỉ định..."
-                      value={doctorAdvice}
-                      onChange={(e) => setDoctorAdvice(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-slate-800 focus:border-teal-500 focus:outline-hidden"
-                    />
-                  </div>
-
-                  {/* Markdown Content Editor with Toolbar */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-slate-700 block">Nội dung bài viết chi tiết (Định dạng Markdown)</label>
-                      <span className="text-[10px] text-slate-400">Hỗ trợ Heading, Bullet, Bold, Tables</span>
-                    </div>
-
-                    {/* Format Toolbar */}
-                    <div className="flex flex-wrap items-center gap-1 p-2 bg-slate-100 rounded-t-xl border border-slate-200 border-b-0">
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('**', '**')}
-                        className="p-1.5 rounded hover:bg-white text-slate-700 font-bold"
-                        title="In đậm (Bold)"
-                      >
-                        <Bold className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('*', '*')}
-                        className="p-1.5 rounded hover:bg-white text-slate-700 italic"
-                        title="In nghiêng (Italic)"
-                      >
-                        <Italic className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-slate-300">|</span>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('\n## ', '\n')}
-                        className="px-2 py-1 rounded hover:bg-white text-slate-700 font-bold text-[11px]"
-                        title="Tiêu đề H2"
-                      >
-                        H2
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('\n### ', '\n')}
-                        className="px-2 py-1 rounded hover:bg-white text-slate-700 font-bold text-[11px]"
-                        title="Tiêu đề H3"
-                      >
-                        H3
-                      </button>
-                      <span className="text-slate-300">|</span>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('\n- ', '\n')}
-                        className="p-1.5 rounded hover:bg-white text-slate-700"
-                        title="Danh sách gạch đầu dòng"
-                      >
-                        <List className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('\n1. ', '\n')}
-                        className="p-1.5 rounded hover:bg-white text-slate-700"
-                        title="Danh sách có số thứ tự"
-                      >
-                        <ListOrdered className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="text-slate-300">|</span>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('\n> **Lưu ý y tế:** ', '\n')}
-                        className="p-1.5 rounded hover:bg-white text-slate-700"
-                        title="Khối trích dẫn lưu ý"
-                      >
-                        <Quote className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('\n| Triệu chứng | Cách xử lý |\n| --- | --- |\n| ', ' | |\n')}
-                        className="px-2 py-1 rounded hover:bg-white text-slate-700 text-[11px]"
-                        title="Chèn bảng dữ liệu"
-                      >
-                        📊 Bảng
-                      </button>
-                    </div>
-
-                    <textarea
-                      id="article-content-editor"
-                      rows={10}
-                      value={content}
-                      onChange={(e) => setContent(e.target.value)}
-                      placeholder="Nhập nội dung bài viết định dạng Markdown..."
-                      className="w-full px-3.5 py-3 rounded-b-xl border border-slate-200 font-mono text-xs text-slate-900 leading-relaxed focus:border-teal-500 focus:outline-hidden"
-                    />
-                  </div>
-                </form>
-              ) : (
-                /* User-like Preview Tab */
-                <div className="space-y-6 max-w-3xl mx-auto pb-6 animate-in fade-in duration-150">
-                  <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-2.5 rounded-xl flex items-center gap-2">
-                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span><b>Chế độ xem trước (Preview):</b> Đây là giao diện chính xác mà người dùng sẽ thấy khi truy cập bài viết này trên hệ thống.</span>
-                  </div>
-
-                  <div className="bg-white rounded-3xl shadow-xs border border-slate-200 overflow-hidden">
-                    <div className="relative h-64 sm:h-72 w-full bg-slate-100">
-                      <img
-                        src={imageUrl || DEFAULT_ARTICLE_IMAGE}
-                        alt={title || 'Xem trước'}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = DEFAULT_ARTICLE_IMAGE;
-                        }}
-                      />
-                      <div className="absolute top-4 left-4 flex gap-2">
-                        <span className="text-xs font-black px-3 py-1 rounded-full bg-black/70 text-white backdrop-blur-md shadow-md">
-                          Dành cho {species}
-                        </span>
-                        <TriageBadge level={urgencyLevel} compact />
-                      </div>
-                      {category === 'first_aid' && (
-                        <span className="absolute top-4 right-4 text-xs font-black px-3 py-1 rounded-full bg-red-600 text-white shadow-md flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                          SƠ CỨU 24/7
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="p-6 sm:p-8 space-y-6">
-                      <div className="space-y-2">
-                        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                          {title || 'Tiêu đề bài viết y khoa xem trước'}
-                        </h1>
-                        <p className="text-xs text-slate-500">
-                          Cập nhật lần cuối: {new Date().toLocaleDateString('vi-VN')} • Cơ sở dữ liệu Vethic AI
-                        </p>
-                      </div>
-
-                      {/* Symptoms Box */}
-                      {symptoms.length > 0 && (
-                        <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 text-sm space-y-2.5">
-                          <div className="flex items-center gap-2 font-black text-slate-900 text-sm">
-                            <span className="text-lg">🚨</span> Triệu Chứng Bệnh Cần Nhận Biết
-                          </div>
-                          <ul className="list-disc list-inside space-y-1.5 text-slate-700 pl-2 text-xs">
-                            {symptoms.map((s, i) => (
-                              <li key={i}>{s}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-
-                      {/* First Aid Steps Box */}
-                      {firstAidSteps.length > 0 && (
-                        <div className="p-5 bg-amber-50 rounded-2xl border border-amber-200 text-sm space-y-2.5">
-                          <div className="flex items-center gap-2 font-black text-amber-950 text-sm">
-                            <span className="text-lg">⚡</span> Các Bước Sơ Cứu Ban Đầu
-                          </div>
-                          <ol className="list-decimal list-inside space-y-1.5 text-amber-900 pl-2 font-medium text-xs">
-                            {firstAidSteps.map((step, i) => (
-                              <li key={i}>{step}</li>
-                            ))}
-                          </ol>
-                        </div>
-                      )}
-
-                      {/* Doctor Advice */}
-                      {doctorAdvice && (
-                        <div className="p-5 bg-blue-50/80 rounded-2xl border border-blue-200 text-sm space-y-1.5">
-                          <div className="flex items-center gap-2 font-black text-blue-950 text-sm">
-                            <span className="text-lg">👨‍⚕️</span> Khuyên Dùng Từ Bác Sĩ Thú Y
-                          </div>
-                          <p className="text-blue-900 font-semibold leading-relaxed text-xs">
-                            {doctorAdvice}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Markdown Content */}
-                      <div className="prose prose-slate max-w-none text-slate-700 leading-relaxed text-sm pt-4 border-t border-slate-100">
-                        <ReactMarkdown>{content || '*Chưa có nội dung chi tiết.*'}</ReactMarkdown>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div className="text-xs text-slate-500">
-                {modalTab === 'edit' ? (
-                  <span>Đang ở chế độ soạn thảo</span>
-                ) : (
-                  <span>Đang ở chế độ xem trước (Preview)</span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
-                >
-                  Hủy
-                </button>
-                <button
-                  type="submit"
-                  form="article-editor-form"
-                  disabled={submitting}
-                  className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-colors shadow-xs disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {submitting ? 'Đang lưu vào CSDL...' : 'Lưu Bài Viết Vào CSDL'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Editor & Preview Modal (Isolated State Component) */}
+      <ArticleEditorModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        editingArticle={editingArticle}
+        onSave={handleSaveArticle}
+        submitting={submitting}
+      />
 
       {/* Delete Confirmation Modal */}
       {articleToDelete && (
@@ -817,7 +930,7 @@ export const AdminArticlesView: React.FC = () => {
             </p>
             <div className="flex gap-3">
               <button
-                onClick={() => setClinicToDelete(null)}
+                onClick={() => setArticleToDelete(null)}
                 className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
               >
                 Hủy

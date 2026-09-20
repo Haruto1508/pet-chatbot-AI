@@ -8,6 +8,25 @@ import { CardsGridSkeleton } from '../common/LoadingSkeleton';
 
 const DEFAULT_ARTICLE_IMAGE = 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&q=80&w=800';
 
+function formatFriendlyDate(dateStr?: string, includeTime = false): string {
+  if (!dateStr) return 'Mới cập nhật';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    if (!includeTime) {
+      return `${day}/${month}/${year}`;
+    }
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} lúc ${hours}:${minutes}`;
+  } catch {
+    return dateStr;
+  }
+}
+
 export const ArticlesNewsView: React.FC = () => {
   const [articles, setArticles] = useState<KnowledgeArticle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +105,7 @@ export const ArticlesNewsView: React.FC = () => {
                   {activeArticle.title}
                 </h1>
                 <p className="text-sm text-slate-500 font-medium">
-                  Cập nhật lần cuối: {activeArticle.updatedAt}
+                  Cập nhật lần cuối: {formatFriendlyDate(activeArticle.updatedAt, true)}
                 </p>
               </div>
 
@@ -237,8 +256,12 @@ export const ArticlesNewsView: React.FC = () => {
                   </div>
 
                   <div className="p-4 pt-0 border-t border-slate-100 mt-2 flex items-center justify-between text-xs font-semibold text-emerald-600">
-                    <span>Đọc kiến thức chi tiết →</span>
-                    <span className="text-[10px] text-slate-400 font-normal">{art.updatedAt}</span>
+                    <span className="flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                      Đọc kiến thức chi tiết →
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-normal">
+                      {formatFriendlyDate(art.updatedAt)}
+                    </span>
                   </div>
                 </div>
               ))}
