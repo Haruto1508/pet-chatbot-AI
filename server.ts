@@ -348,18 +348,11 @@ async function startServer(isVercel = false) {
         .single();
 
       const userEmail = (user.email || profile?.email || '').trim().toLowerCase();
-      const isAdminEmail = userEmail === 'thaivinh2344@gmail.com' ||
-        userEmail.endsWith('@vethic.ai') ||
-        userEmail.endsWith('@petcare.ai');
-
-      // Determine effective role: hard-coded admin emails always get 'admin'.
-      // Otherwise trust the DB role which can be 'user', 'admin', or 'subadmin'.
+      // Determine effective role: strictly trust the DB role ('user', 'admin', or 'subadmin')
       const dbRole = profile?.role as string | undefined;
-      const effectiveRole: 'user' | 'admin' | 'subadmin' = isAdminEmail
-        ? 'admin'
-        : (dbRole === 'admin' || dbRole === 'subadmin')
-          ? dbRole as 'admin' | 'subadmin'
-          : 'user';
+      const effectiveRole: 'user' | 'admin' | 'subadmin' = (dbRole === 'admin' || dbRole === 'subadmin')
+        ? dbRole as 'admin' | 'subadmin'
+        : 'user';
 
       return {
         user,
@@ -1563,7 +1556,7 @@ async function startServer(isVercel = false) {
       const vid = isGuest ? `machine_${clientIp.replace(/[^a-zA-Z0-9]/g, '_')}` : (visitorId || `usr_${metadata.userId}`);
 
       // Exclude Admin from public visitor counts & pageViews
-      const isAdmin = metadata?.role === 'admin' || metadata?.email === 'thaivinh2344@gmail.com' || (metadata?.email || '').endsWith('@vethic.ai');
+      const isAdmin = metadata?.role === 'admin' || metadata?.role === 'subadmin';
       if (isAdmin) {
         return res.json(secureResponse({ success: true, ignored: 'admin' }));
       }
@@ -1654,8 +1647,7 @@ async function startServer(isVercel = false) {
       // Identify all Admin user IDs so they are completely excluded from stats
       const adminUserIds = new Set<string>();
       allUsers.forEach(u => {
-        const email = (u.email || '').trim().toLowerCase();
-        if (u.role === 'admin' || u.role === 'subadmin' || email === 'thaivinh2344@gmail.com' || email.endsWith('@vethic.ai') || email.endsWith('@petcare.ai')) {
+        if (u.id !== 'guest' && (u.role === 'admin' || u.role === 'subadmin')) {
           adminUserIds.add(u.id);
         }
       });
@@ -1824,14 +1816,8 @@ async function startServer(isVercel = false) {
         return res.status(400).json(secureResponse({ error: 'Missing id or email' }));
       }
 
-      // Determine role: ONLY verified tokens or existing DB roles can get 'admin'
+      // Determine role: strictly defaults to 'user' for new accounts
       let role: 'user' | 'admin' = 'user';
-      const trimmedEmail = userEmail.trim().toLowerCase();
-      if (auth?.user) {
-        if (trimmedEmail === 'thaivinh2344@gmail.com' || trimmedEmail.endsWith('@vethic.ai') || trimmedEmail.endsWith('@petcare.ai')) {
-          role = 'admin';
-        }
-      }
 
       // Check if user exists by id
       const { data: existingUser, error: checkError } = await supabase
@@ -1846,9 +1832,9 @@ async function startServer(isVercel = false) {
 
       if (existingUser) {
         // Keep existing role if already admin or subadmin in database
-        const finalRole: 'user' | 'admin' | 'subadmin' = (existingUser.role === 'admin' || role === 'admin')
-          ? 'admin'
-          : (existingUser.role === 'subadmin' ? 'subadmin' : 'user');
+        const finalRole: 'user' | 'admin' | 'subadmin' = (existingUser.role === 'admin' || existingUser.role === 'subadmin')
+          ? existingUser.role
+          : 'user';
         const { data, error: updateError } = await supabase
           .from('users')
           .update({
@@ -1878,14 +1864,16 @@ async function startServer(isVercel = false) {
 
   // Users Management — Full Admin only
   app.get('/api/users', requireFullAdminAuth, async (_req: Request, res: Response) => {
-    const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .neq('id', 'guest')
+      .order('created_at', { ascending: false });
     if (error) return res.status(500).json({ error: error.message });
     const mapped = (data || []).map(u => {
-      const email = (u.email || '').trim().toLowerCase();
-      const isAdminEmail = email === 'thaivinh2344@gmail.com' || email.endsWith('@vethic.ai') || email.endsWith('@petcare.ai');
-      const role: 'user' | 'admin' | 'subadmin' = (u.role === 'admin' || isAdminEmail)
-        ? 'admin'
-        : (u.role === 'subadmin' ? 'subadmin' : 'user');
+      const role: 'user' | 'admin' | 'subadmin' = (u.role === 'admin' || u.role === 'subadmin')
+        ? u.role
+        : 'user';
       return {
         ...u,
         role,
@@ -2706,7 +2694,7 @@ async function startServer(isVercel = false) {
         await supabase.from('users').upsert({
           id: 'guest',
           name: 'Khách (Guest)',
-          email: 'guest@vethic.ai',
+          email: 'guest@petcare.local',
           avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
           role: 'user',
           status: 'active'

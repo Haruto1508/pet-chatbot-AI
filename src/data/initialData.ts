@@ -3,8 +3,8 @@ import { UserProfile, PetProfile, KnowledgeArticle, VetClinic, MedicalRecord, Sy
 export const initialUsers: UserProfile[] = [
   {
     id: 'user_01',
-    name: 'Thái Vinh (Chủ Pet)',
-    email: 'thaivinh2344@gmail.com',
+    name: 'Người Nuôi Pet (Mẫu)',
+    email: 'user@petcare.local',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
     role: 'user',
     status: 'active',

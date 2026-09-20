@@ -155,9 +155,10 @@ export interface SystemConfig {
 
 ## 🔑 5. AUTHENTICATION & SEPARATE SIDEBAR NAVIGATION
 
-- **Role Evaluation**: `LoginModal.tsx` evaluates the user's Google Account email:
-  - Emails with `@vethic.ai`, `@petcare.ai`, containing `admin`, or matching registered admin emails (`admin@vethic.ai`) are assigned **`admin`** role.
-  - All other Google accounts (e.g. `thaivinh2344@gmail.com`) receive **`user`** role.
+- **Role Evaluation**:
+  - Roles (`admin`, `subadmin`, `user`) are strictly governed by the database (`users.role`).
+  - New sign-ups receive **`user`** role by default. Admin roles can only be granted by an existing Full Admin via the Admin Users panel.
+  - Guests (`id: 'guest'`) are strictly non-admin standard users and filtered out from registered user lists.
 - **Strict Sidebar Separation**:
   - `Sidebar.tsx` dynamically switches between two completely distinct sidebar layouts:
     - **User Sidebar**: 7 User navigation tabs (`chat`, `records`, `news`, `emergency`, `clinics`, `pets`, `account`).

@@ -357,14 +357,14 @@ export function App() {
         syncedUser = await api.syncGoogleUser(payload);
       } catch (syncErr) {
         console.warn('Backend sync failed, using client authenticated session fallback:', syncErr);
-        const trimmedEmail = (authUser.email || '').trim().toLowerCase();
-        const isAdmin = trimmedEmail === 'thaivinh2344@gmail.com' || trimmedEmail.endsWith('@vethic.ai') || trimmedEmail.endsWith('@petcare.ai') || authUser.user_metadata?.role === 'admin';
+        const metaRole = authUser.user_metadata?.role;
+        const role = (metaRole === 'admin' || metaRole === 'subadmin') ? metaRole : 'user';
         syncedUser = {
           id: authUser.id,
           email: authUser.email || '',
           name: payload.name,
           avatar: payload.avatar,
-          role: isAdmin ? 'admin' : 'user',
+          role,
           status: 'active',
           createdAt: new Date().toISOString()
         };
