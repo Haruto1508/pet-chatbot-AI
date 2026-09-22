@@ -5,14 +5,13 @@
 /**
  * Extracts and cleans a list of unique API keys from a comma-separated,
  * newline-separated, or array source.
- * Only accepts real Gemini API keys (AIzaSy...) | NOT OAuth tokens (AQ....).
+ * Accepts both legacy Gemini API keys (AIzaSy...) and modern Auth keys (AQ....).
  */
 export function parseApiKeys(input?: any): string[] {
   if (!input) return [];
 
-  // Only match real Gemini API keys starting with AIzaSy
-  // AQ. keys are short-lived OAuth tokens that are NOT valid for API calls
-  const GEMINI_KEY_REGEX = /AIzaSy[A-Za-z0-9_\-]{30,}/g;
+  // Match legacy Gemini API keys (AIza...) and new Google AI Studio Auth keys (AQ....)
+  const GEMINI_KEY_REGEX = /(?:AIza[A-Za-z0-9_\-]{30,}|AQ\.[A-Za-z0-9._\-]{15,})/g;
 
   let rawList: any[] = [];
   if (Array.isArray(input)) {
@@ -20,13 +19,26 @@ export function parseApiKeys(input?: any): string[] {
     rawList = flattened.flatMap(item => {
       if (typeof item === 'string') {
         const matches = item.match(GEMINI_KEY_REGEX);
-        return matches || [];
+        if (matches && matches.length > 0) {
+          return matches;
+        }
+        const trimmed = item.trim();
+        return (trimmed.length >= 10 && !trimmed.includes(' ') && !trimmed.startsWith('#') && !trimmed.startsWith('//'))
+          ? [trimmed]
+          : [];
       }
       return [item];
     });
   } else if (typeof input === 'string') {
     const matches = input.match(GEMINI_KEY_REGEX);
-    rawList = matches || [];
+    if (matches && matches.length > 0) {
+      rawList = matches;
+    } else {
+      const trimmed = input.trim();
+      if (trimmed.length >= 10 && !trimmed.includes(' ') && !trimmed.startsWith('#') && !trimmed.startsWith('//')) {
+        rawList = [trimmed];
+      }
+    }
   } else {
     return [];
   }

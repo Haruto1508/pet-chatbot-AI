@@ -424,7 +424,7 @@ export const AdminSystemConfigView: React.FC = () => {
                   type={showGeminiKey ? 'text' : 'password'}
                   value={config.geminiApiKey || ''}
                   onChange={(e) => setConfig({ ...config, geminiApiKey: e.target.value })}
-                  placeholder="AIzaSy... (Nếu để trống sẽ dùng GEMINI_API_KEY trong .env)"
+                  placeholder="AIzaSy... hoặc AQ.... (Nếu để trống sẽ dùng GEMINI_API_KEY trong .env)"
                   className="w-full pl-3 pr-20 py-2.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-400 transition-all bg-slate-50/50"
                 />
                 <button
@@ -512,7 +512,7 @@ export const AdminSystemConfigView: React.FC = () => {
                         handleAddKey();
                       }
                     }}
-                    placeholder="Dán Gemini API Key mới vào đây (AIzaSy...)"
+                    placeholder="Dán Gemini API Key mới vào đây (AIzaSy... hoặc AQ....)"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-mono text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all shadow-2xs"
                   />
                 </div>
@@ -886,7 +886,7 @@ export const AdminSystemConfigView: React.FC = () => {
                     type={showBackupKey ? 'text' : 'password'}
                     value={config.fallbackGeminiApiKey ?? ''}
                     onChange={(e) => setConfig({ ...config, fallbackGeminiApiKey: e.target.value, backupGeminiApiKey: e.target.value })}
-                    placeholder="AIzaSy1..., AIzaSy2... (Nhập 1 hoặc nhiều API Key phân cách bằng dấu phẩy)"
+                    placeholder="AIzaSy... hoặc AQ.... (Nhập 1 hoặc nhiều API Key phân cách bằng dấu phẩy)"
                     className="w-full px-4 py-2.5 pr-12 rounded-xl border border-slate-200 text-sm font-mono bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400"
                   />
                   <button
