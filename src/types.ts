@@ -167,6 +167,14 @@ export type AnalyticsEventType =
   | 'CHAT_OPEN'
   | 'CHAT_MESSAGE_SENT'
   | 'CHAT_SESSION_STARTED'
+  | 'IMAGE_UPLOAD'
+  | 'CLINIC_SEARCH'
+  | 'CLINIC_DIRECTIONS_CLICK'
+  | 'CLINIC_CALL_CLICK'
+  | 'EMERGENCY_GUIDE_VIEW'
+  | 'PET_CREATE'
+  | 'PET_UPDATE'
+  | 'QUICK_PROMPT_CLICK'
   | 'LOGIN'
   | 'REGISTER';
 
@@ -178,6 +186,23 @@ export interface AnalyticsEvent {
   path?: string;
   metadata?: Record<string, any>;
   createdAt: string;
+}
+
+export interface TopVisitedPage {
+  path: string;
+  pageName: string;
+  views: number;
+  uniqueVisitors: number;
+  percentage: number;
+}
+
+export interface TopUserAction {
+  actionType: string;
+  actionName: string;
+  category: string;
+  count: number;
+  uniqueUsers: number;
+  percentage: number;
 }
 
 export interface SystemStats {
@@ -217,6 +242,10 @@ export interface SystemStats {
     messages: number;
     users?: number;
   }>;
+
+  // Behavioral & Telemetry Insights
+  topPages?: TopVisitedPage[];
+  topActions?: TopUserAction[];
 
   // Real-time recent event stream
   recentEvents?: AnalyticsEvent[];

@@ -415,6 +415,12 @@ export const PetChatView: React.FC<Props> = ({
         name: file.name || 'anh_trieu_chung.jpg',
         size: file.size
       });
+      trackEvent('IMAGE_UPLOAD', {
+        fileName: file.name || 'anh_trieu_chung.jpg',
+        fileSize: file.size,
+        isGuest,
+        userId: isGuest ? undefined : currentUser.id
+      });
       showSuccess(`Đã đính kèm ảnh: ${file.name || 'Ảnh triệu chứng'} (${(file.size / (1024 * 1024)).toFixed(1)}MB)`);
     };
     reader.readAsDataURL(file);
@@ -1391,6 +1397,7 @@ export const PetChatView: React.FC<Props> = ({
                                       {clinic.phone && (
                                         <a
                                           href={`tel:${clinic.phone}`}
+                                          onClick={() => trackEvent('CLINIC_CALL_CLICK', { clinicName: clinic.name, phone: clinic.phone, fromChat: true })}
                                           className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors ${isRed
                                               ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
                                               : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
@@ -1409,6 +1416,7 @@ export const PetChatView: React.FC<Props> = ({
                                         href={getClinicDirectionsUrl(clinic)}
                                         target="_blank"
                                         rel="noopener noreferrer"
+                                        onClick={() => trackEvent('CLINIC_DIRECTIONS_CLICK', { clinicName: clinic.name, fromChat: true })}
                                         className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-2xs transition-colors ${isRed
                                             ? 'bg-rose-600 hover:bg-rose-700 text-white'
                                             : 'bg-slate-800 hover:bg-slate-900 text-white'

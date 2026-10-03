@@ -3,6 +3,7 @@ import { MapPin, Phone, Star, Clock, AlertCircle, Search, Navigation, ExternalLi
 import { VetClinic } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
+import { trackEvent } from '../../utils/analytics';
 
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -528,6 +529,7 @@ export const NearestClinicsView: React.FC = () => {
                   href={getGoogleMapsDirectionsUrl(selectedClinic)}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={() => trackEvent('CLINIC_DIRECTIONS_CLICK', { clinicName: selectedClinic.name, address: selectedClinic.address })}
                   className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition-all whitespace-nowrap self-start sm:self-auto"
                 >
                   <Navigation className="w-4 h-4" />
@@ -538,7 +540,11 @@ export const NearestClinicsView: React.FC = () => {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
                   <span className="font-bold text-slate-700 block">📞 Số điện thoại:</span>
-                  <a href={`tel:${selectedClinic.phone}`} className="text-emerald-700 font-bold hover:underline">
+                  <a
+                    href={`tel:${selectedClinic.phone}`}
+                    onClick={() => trackEvent('CLINIC_CALL_CLICK', { clinicName: selectedClinic.name, phone: selectedClinic.phone })}
+                    className="text-emerald-700 font-bold hover:underline"
+                  >
                     {selectedClinic.phone}
                   </a>
                 </div>

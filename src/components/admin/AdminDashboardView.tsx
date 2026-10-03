@@ -23,7 +23,15 @@ import {
   CheckCircle2,
   Filter,
   RotateCcw,
-  ShieldCheck
+  ShieldCheck,
+  MousePointerClick,
+  Layers,
+  Compass,
+  PhoneCall,
+  Camera,
+  Flame,
+  Navigation,
+  BookOpen
 } from 'lucide-react';
 import {
   AreaChart,
@@ -35,9 +43,10 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
-  Legend
+  Legend,
+  Cell
 } from 'recharts';
-import { SystemStats, MedicalRecord, AnalyticsEvent } from '../../types';
+import { SystemStats, MedicalRecord, AnalyticsEvent, TopVisitedPage, TopUserAction } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
 import { AdminPageSkeleton } from '../common/LoadingSkeleton';
@@ -47,7 +56,7 @@ import { AdminPageSkeleton } from '../common/LoadingSkeleton';
 const _statsCache: Record<string, { data: SystemStats; loadedAt: number }> = {};
 const STATS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-type TabSection = 'acquisition' | 'users' | 'chatbot' | 'events';
+type TabSection = 'acquisition' | 'pages_actions' | 'users' | 'chatbot' | 'events';
 
 export const AdminDashboardView: React.FC = () => {
   const [stats, setStats] = useState<SystemStats | null>(null);
@@ -56,6 +65,7 @@ export const AdminDashboardView: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [timeRange, setTimeRange] = useState('7days');
   const [activeTab, setActiveTab] = useState<TabSection>('acquisition');
+  const [actionCategoryFilter, setActionCategoryFilter] = useState<string>('all');
   const [isResettingQuota, setIsResettingQuota] = useState(false);
 
   const handleResetGuestQuota = async () => {
@@ -475,6 +485,16 @@ export const AdminDashboardView: React.FC = () => {
             <Globe className="w-4 h-4" /> Tiếp Cận (Acquisition)
           </button>
           <button
+            onClick={() => setActiveTab('pages_actions')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${
+              activeTab === 'pages_actions'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            <MousePointerClick className="w-4 h-4" /> Trang & Thao Tác (Pages & Actions)
+          </button>
+          <button
             onClick={() => setActiveTab('users')}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs transition-all whitespace-nowrap ${
               activeTab === 'users'
@@ -574,6 +594,257 @@ export const AdminDashboardView: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ──── TAB: PAGES & USER ACTIONS (THỐNG KÊ TRANG & THAO TÁC NGƯỜI DÙNG) ──── */}
+          {activeTab === 'pages_actions' && (
+            <div className="space-y-6">
+              {/* Top Overview KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-50/80 to-blue-100/40 border border-blue-200/80 space-y-2">
+                  <div className="flex items-center justify-between text-blue-700">
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Tổng Lượt Xem Trang</span>
+                    <Layers className="w-4 h-4" />
+                  </div>
+                  <p className="text-2xl font-black text-slate-900">{pageViews.toLocaleString()}</p>
+                  <p className="text-[11px] text-slate-600">
+                    Trung bình <strong className="text-blue-700 font-bold">{viewsPerVisitor}</strong> lượt/khách
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50/80 to-emerald-100/40 border border-emerald-200/80 space-y-2">
+                  <div className="flex items-center justify-between text-emerald-700">
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Trang Xem Nhiều Nhất</span>
+                    <Flame className="w-4 h-4" />
+                  </div>
+                  <p className="text-sm font-black text-slate-900 truncate">
+                    {stats.topPages?.[0]?.pageName || 'Tư Vấn Bệnh Lý AI'}
+                  </p>
+                  <p className="text-[11px] text-slate-600">
+                    <strong className="text-emerald-700 font-bold">{stats.topPages?.[0]?.views.toLocaleString() || 0}</strong> lượt xem ({stats.topPages?.[0]?.percentage || 0}% traffic)
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-purple-50/80 to-purple-100/40 border border-purple-200/80 space-y-2">
+                  <div className="flex items-center justify-between text-purple-700">
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Tổng Thao Tác Bấm</span>
+                    <MousePointerClick className="w-4 h-4" />
+                  </div>
+                  <p className="text-2xl font-black text-slate-900">
+                    {(stats.topActions?.reduce((acc, a) => acc + a.count, 0) || totalMessages).toLocaleString()}
+                  </p>
+                  <p className="text-[11px] text-slate-600">
+                    Tương tác chức năng hệ thống
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50/80 to-amber-100/40 border border-amber-200/80 space-y-2">
+                  <div className="flex items-center justify-between text-amber-700">
+                    <span className="text-[11px] font-bold uppercase tracking-wider">Thao Tác Bấm Nhiều Nhất</span>
+                    <Zap className="w-4 h-4" />
+                  </div>
+                  <p className="text-sm font-black text-slate-900 truncate">
+                    {stats.topActions?.[0]?.actionName || 'Gửi Tin Nhắn Hỏi Bệnh AI'}
+                  </p>
+                  <p className="text-[11px] text-slate-600">
+                    <strong className="text-amber-700 font-bold">{stats.topActions?.[0]?.count.toLocaleString() || 0}</strong> lần ({stats.topActions?.[0]?.percentage || 0}% hành vi)
+                  </p>
+                </div>
+              </div>
+
+              {/* Grid 2 Columns: Top Pages & Top User Actions */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* ──── COLUMN 1: TOP VISITED PAGES ──── */}
+                <div className="bg-slate-50/60 rounded-2xl p-5 border border-slate-200 space-y-4 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-blue-600" /> Trang Được Người Dùng Vào Nhiều Nhất
+                      </h3>
+                      <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                        {stats.topPages?.length || 0} Tuyến đường
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Thống kê lưu lượng truy cập thực tế theo từng trang, phân loại theo số lượt xem và khách độc lập.
+                    </p>
+                  </div>
+
+                  {/* List of Top Pages */}
+                  <div className="space-y-3">
+                    {(stats.topPages || []).map((page, idx) => {
+                      const colors = [
+                        'from-blue-500 to-indigo-600',
+                        'from-emerald-500 to-teal-600',
+                        'from-purple-500 to-violet-600',
+                        'from-amber-500 to-orange-600',
+                        'from-slate-600 to-slate-800'
+                      ];
+                      const barColor = colors[idx % colors.length];
+
+                      return (
+                        <div
+                          key={page.path}
+                          className="p-3.5 bg-white rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-black text-white shrink-0 bg-gradient-to-br ${barColor}`}>
+                                #{idx + 1}
+                              </span>
+                              <div className="min-w-0">
+                                <span className="text-xs font-bold text-slate-900 block truncate">
+                                  {page.pageName}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-400">
+                                  {page.path}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="text-xs font-black text-slate-900 block">
+                                {page.views.toLocaleString()} <span className="text-[10px] font-normal text-slate-500">views</span>
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-medium">
+                                {page.uniqueVisitors.toLocaleString()} unique
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Visual Progress Bar */}
+                          <div className="space-y-1">
+                            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                              <div
+                                style={{ width: `${Math.max(4, page.percentage)}%` }}
+                                className={`h-full rounded-full bg-gradient-to-r ${barColor} transition-all duration-500`}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold">
+                              <span>Tỉ trọng lưu lượng truy cập</span>
+                              <span className="text-slate-700 font-bold">{page.percentage}%</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ──── COLUMN 2: TOP USER ACTIONS (BẤM LÀM GÌ NHIỀU NHẤT) ──── */}
+                <div className="bg-slate-50/60 rounded-2xl p-5 border border-slate-200 space-y-4 flex flex-col justify-between">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <MousePointerClick className="w-4 h-4 text-emerald-600" /> Thống Kê Người Dùng Bấm Làm Gì Nhiều Nhất
+                      </h3>
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        {stats.topActions?.length || 0} Thao tác
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      Ghi nhận các thao tác bấm nút, hỏi bệnh, xem bản đồ, gọi điện, gửi ảnh, tra cứu sơ cứu trong hệ thống.
+                    </p>
+
+                    {/* Category Filter Pills */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1">
+                      {['all', 'Chatbot AI', 'Phòng Khám', 'Khám Bệnh', 'Cấp Cứu', 'Tài Khoản'].map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setActionCategoryFilter(cat)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap ${
+                            actionCategoryFilter === cat
+                              ? 'bg-slate-900 text-white shadow-xs'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {cat === 'all' ? 'Tất cả nhóm' : cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* List of Top Actions */}
+                  <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+                    {(stats.topActions || [])
+                      .filter(act => actionCategoryFilter === 'all' || act.category === actionCategoryFilter)
+                      .map((act, idx) => {
+                        let catBadge = 'bg-slate-100 text-slate-700 border-slate-200';
+                        let barGradient = 'from-slate-600 to-slate-800';
+
+                        if (act.category === 'Chatbot AI') {
+                          catBadge = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                          barGradient = 'from-emerald-500 to-teal-600';
+                        } else if (act.category === 'Phòng Khám') {
+                          catBadge = 'bg-purple-50 text-purple-700 border-purple-200';
+                          barGradient = 'from-purple-500 to-violet-600';
+                        } else if (act.category === 'Khám Bệnh') {
+                          catBadge = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                          barGradient = 'from-indigo-500 to-blue-600';
+                        } else if (act.category === 'Cấp Cứu') {
+                          catBadge = 'bg-rose-50 text-rose-700 border-rose-200';
+                          barGradient = 'from-rose-500 to-red-600';
+                        } else if (act.category === 'Hồ Sơ Thú Cưng') {
+                          catBadge = 'bg-sky-50 text-sky-700 border-sky-200';
+                          barGradient = 'from-sky-500 to-blue-600';
+                        } else if (act.category === 'Tài Khoản') {
+                          catBadge = 'bg-amber-50 text-amber-700 border-amber-200';
+                          barGradient = 'from-amber-500 to-orange-600';
+                        }
+
+                        return (
+                          <div
+                            key={act.actionType}
+                            className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs hover:border-slate-300 transition-all space-y-2"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                  #{idx + 1}
+                                </span>
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold text-slate-900 block truncate">
+                                    {act.actionName}
+                                  </span>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold border ${catBadge}`}>
+                                      {act.category}
+                                    </span>
+                                    <span className="text-[9px] font-mono text-slate-400">
+                                      {act.actionType}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-xs font-black text-slate-900 block">
+                                  {act.count.toLocaleString()} <span className="text-[10px] font-normal text-slate-500">lần</span>
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-medium">
+                                  {act.uniqueUsers.toLocaleString()} người
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Action Progress Bar */}
+                            <div className="space-y-0.5">
+                              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                                <div
+                                  style={{ width: `${Math.max(3, act.percentage)}%` }}
+                                  className={`h-full rounded-full bg-gradient-to-r ${barGradient} transition-all duration-500`}
+                                />
+                              </div>
+                              <div className="flex items-center justify-between text-[9px] text-slate-400 font-medium">
+                                <span>Tỉ trọng hành vi</span>
+                                <span className="text-slate-700 font-bold">{act.percentage}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
