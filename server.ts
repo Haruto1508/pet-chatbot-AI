@@ -4124,18 +4124,21 @@ YÊU CẦU:
     serverLog('SYSTEM', 'INFO', 'Gemini', `API_KEY=${process.env.GEMINI_API_KEY ? '✅ Set' : '❌ MISSING'}`);
 
     // Đảm bảo user "guest" luôn tồn tại trong DB để lưu chat_sessions của khách
-    supabase.from('users').upsert({
-      id: 'guest',
-      name: 'Khách (Guest)',
-      email: 'guest@petcare.local',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-      role: 'user',
-      status: 'active'
-    }, { onConflict: 'id' }).then(() => {
-      serverLog('SYSTEM', 'OK', 'Guest User Init', 'Tài khoản guest mặc định đã sẵn sàng');
-    }).catch(e => {
-      serverLog('SYSTEM', 'WARN', 'Guest User Init', e?.message || 'Warning');
-    });
+    (async () => {
+      try {
+        await supabase.from('users').upsert({
+          id: 'guest',
+          name: 'Khách (Guest)',
+          email: 'guest@petcare.local',
+          avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+          role: 'user',
+          status: 'active'
+        }, { onConflict: 'id' });
+        serverLog('SYSTEM', 'OK', 'Guest User Init', 'Tài khoản guest mặc định đã sẵn sàng');
+      } catch (e: any) {
+        serverLog('SYSTEM', 'WARN', 'Guest User Init', e?.message || 'Warning');
+      }
+    })();
 
     // Tự động "đánh thức" Python AI Server trên Render ngay khi khởi động Dev Server
     const renderUrl = 'https://pet-chatbot-ai.onrender.com';
