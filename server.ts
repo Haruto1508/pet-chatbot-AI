@@ -1998,9 +1998,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'RED'),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'YELLOW'),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'GREEN'),
-        supabase.from('chat_sessions').select('id, user_id, messages, created_at'),
+        supabase.from('chat_sessions').select('id, user_id, messages, created_at').gte('created_at', thirtyDaysAgoISO).limit(10000),
         supabase.from('guest_rate_limits').select('ip_address, message_count, first_seen_at, last_message_at'),
-        supabase.from('analytics_events').select('visitor_id, ip_address, event_type, path, created_at').not('path', 'like', '/admin%').limit(1000),
+        supabase.from('analytics_events').select('visitor_id, ip_address, event_type, path, created_at').not('path', 'like', '/admin%').gte('created_at', thirtyDaysAgoISO).limit(10000),
         supabase.from('analytics_events').select('*', { count: 'exact', head: true }).eq('event_type', 'PAGE_VIEW').not('path', 'like', '/admin%'),
         supabase.from('analytics_events').select('*').not('path', 'like', '/admin%').order('created_at', { ascending: false }).limit(20)
       ]);
@@ -2147,26 +2147,22 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         }))
         : (store.events || []).slice(0, 15);
 
-      // ─── AGGREGATE TOP VISITED PAGES (Excluding temporarily disabled pet management) ───
+      // ─── AGGREGATE TOP VISITED PAGES (Only active public pages) ───
       const PAGE_NAME_MAP: Record<string, string> = {
         '/': 'Tư Vấn Bệnh Lý AI',
         '/chat': 'Tư Vấn Bệnh Lý AI',
         '/clinics': 'Tìm Phòng Khám Gần Nhất',
         '/news': 'Tin Tức & Sơ Cứu 24/7',
         '/emergency': 'Tin Tức & Sơ Cứu 24/7',
-        '/records': 'Hồ Sơ Bệnh Án',
-        '/record-detail': 'Chi Tiết Bệnh Án',
         '/account': 'Cài Đặt Tài Khoản'
       };
 
       const normalizePath = (rawPath: string): string => {
         const clean = (rawPath || '/chat').toLowerCase().split('?')[0];
-        if (clean === '/' || clean === '/chat') return '/chat';
         if (clean === '/news' || clean === '/emergency') return '/news';
-        if (clean === '/record-detail' || clean === '/records') return '/records';
         if (clean === '/clinics') return '/clinics';
         if (clean === '/account') return '/account';
-        return clean;
+        return '/chat';
       };
 
       // Aggregate PAGE_VIEW events
