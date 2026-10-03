@@ -31,7 +31,9 @@ import {
   Camera,
   Flame,
   Navigation,
-  BookOpen
+  BookOpen,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import {
   AreaChart,
@@ -50,6 +52,7 @@ import { SystemStats, MedicalRecord, AnalyticsEvent, TopVisitedPage, TopUserActi
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
 import { AdminPageSkeleton } from '../common/LoadingSkeleton';
+import { exportDashboardStatsToExcel } from '../../utils/exportExcel';
 
 // Module-level cache to avoid re-fetching stats when this component briefly
 // remounts (e.g. caused by Supabase token-refresh firing SIGNED_IN event).
@@ -63,10 +66,24 @@ export const AdminDashboardView: React.FC = () => {
   const [recentRecords, setRecentRecords] = useState<MedicalRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [timeRange, setTimeRange] = useState('7days');
   const [activeTab, setActiveTab] = useState<TabSection>('acquisition');
   const [actionCategoryFilter, setActionCategoryFilter] = useState<string>('all');
   const [isResettingQuota, setIsResettingQuota] = useState(false);
+
+  const handleExportExcel = async () => {
+    if (!stats || isExporting) return;
+    setIsExporting(true);
+    try {
+      await exportDashboardStatsToExcel(stats, timeRange);
+    } catch (error) {
+      console.error('Lỗi khi xuất file Excel:', error);
+      alert('Đã xảy ra lỗi khi tạo file Excel. Vui lòng thử lại!');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleResetGuestQuota = async () => {
     if (!window.confirm('Bạn có chắc chắn muốn reset toàn bộ số lượt chat của khách vãng lai? Sau khi reset, tất cả khách sẽ được chat lại 8 lượt.')) {
@@ -178,7 +195,7 @@ export const AdminDashboardView: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 self-start md:self-center">
+          <div className="flex flex-wrap items-center gap-2.5 self-start md:self-center">
             {/* Time Range Selector */}
             <div className="flex items-center bg-slate-800/80 border border-slate-700 rounded-xl p-1 text-xs">
               <button
@@ -198,6 +215,27 @@ export const AdminDashboardView: React.FC = () => {
                 30 Ngày (Tháng)
               </button>
             </div>
+
+            {/* Excel Export Button */}
+            <button
+              onClick={handleExportExcel}
+              disabled={isExporting || !stats}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 border border-emerald-500/50 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Xuất toàn bộ dữ liệu thống kê đa sheet sang file Excel (.xlsx)"
+            >
+              {isExporting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Đang tạo Excel...</span>
+                </>
+              ) : (
+                <>
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>Xuất Excel</span>
+                  <Download className="w-3 h-3 text-emerald-200/80 hidden sm:inline" />
+                </>
+              )}
+            </button>
 
             {/* Refresh Button */}
             <button
