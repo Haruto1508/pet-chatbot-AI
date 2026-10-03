@@ -2,273 +2,342 @@ import ExcelJS from 'exceljs';
 import { SystemStats } from '../types';
 
 /**
- * Xuất toàn bộ báo cáo thống kê chuyên nghiệp sang file Excel (.xlsx)
- * Đầy đủ format màu sắc, border, font chữ, độ rộng cột và công thức tính toán.
+ * Xuất toàn bộ báo cáo thống kê & telemetry chuẩn Data Analyst sang file Excel (.xlsx).
+ * Không sử dụng icon/emoji trong nội dung và sheet name.
+ * Định dạng chuẩn Corporate BI: font chữ Segoe UI, bảng số liệu rõ ràng, đầy đủ công thức SUM/AVERAGE/MAX/MIN,
+ * phân tích tỷ trọng, lũy kế và phân cấp định dạng chuyên nghiệp.
  */
 export async function exportDashboardStatsToExcel(stats: SystemStats, timeRange: string): Promise<void> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Vethic AI Veterinary Healthcare';
-  workbook.lastModifiedBy = 'Admin Vethic AI';
+  workbook.creator = 'Vethic AI Analytics Engine';
+  workbook.lastModifiedBy = 'Data Analyst - Vethic System';
   workbook.created = new Date();
 
-  const nowStr = new Date().toLocaleString('vi-VN');
-  const rangeLabel = timeRange === '30days' ? '30 Ngày Qua' : '7 Ngày Qua';
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('vi-VN');
+  const timeStr = now.toLocaleTimeString('vi-VN');
+  const rangeLabel = timeRange === '30days' ? '30 Ngay Gan Nhat' : '7 Ngay Gan Nhat';
 
   // ─────────────────────────────────────────────────────────────
-  // 1. STYLES & COLOR PALETTES
+  // 1. CORPORATE DESIGN SYSTEM & PALETTE (Classic Navy / Steel Blue)
   // ─────────────────────────────────────────────────────────────
-  const primaryHeaderFill: ExcelJS.Fill = {
+  const FONT_FAMILY = 'Segoe UI';
+
+  const brandNavyFill: ExcelJS.Fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FF1E293B' } // Slate 800
+    fgColor: { argb: 'FF1B365D' } // Deep Corporate Navy
   };
 
-  const blueHeaderFill: ExcelJS.Fill = {
+  const tableHeaderFill: ExcelJS.Fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FF2563EB' } // Blue 600
+    fgColor: { argb: 'FF2C3E50' } // Slate Navy
   };
 
-  const emeraldHeaderFill: ExcelJS.Fill = {
+  const subHeaderFill: ExcelJS.Fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FF059669' } // Emerald 600
+    fgColor: { argb: 'FF34495E' } // Steel Gray
   };
 
-  const purpleHeaderFill: ExcelJS.Fill = {
+  const totalRowFill: ExcelJS.Fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FF7C3AED' } // Violet 600
+    fgColor: { argb: 'FFEAECEE' } // Light Cool Gray
   };
 
-  const tableSubHeaderFill: ExcelJS.Fill = {
+  const zebraRowFill: ExcelJS.Fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FFF1F5F9' } // Slate 100
+    fgColor: { argb: 'FFF8FAFC' } // Soft Off-White
   };
 
   const thinBorder: Partial<ExcelJS.Borders> = {
-    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-    right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+  };
+
+  const totalBorder: Partial<ExcelJS.Borders> = {
+    top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'double', color: { argb: 'FF1E293B' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+  };
+
+  // Helper for Vietnamese Day of Week
+  const getDayOfWeekVN = (dStr: string): string => {
+    try {
+      const parts = dStr.split('/');
+      if (parts.length === 3) {
+        const d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+        const days = ['CN', 'Thu 2', 'Thu 3', 'Thu 4', 'Thu 5', 'Thu 6', 'Thu 7'];
+        return days[d.getDay()] || '';
+      }
+    } catch {
+      return '';
+    }
+    return '';
   };
 
   // ─────────────────────────────────────────────────────────────
-  // SHEET 1: 📊 TỔNG QUAN & KPI (OVERVIEW)
+  // SHEET 1: Executive_Summary (Tong Quan & Chi So Dieu Hanh)
   // ─────────────────────────────────────────────────────────────
-  const wsOverview = workbook.addWorksheet('📊 Tổng Quan & KPI', {
+  const wsSummary = workbook.addWorksheet('Executive_Summary', {
     views: [{ showGridLines: true }]
   });
 
-  wsOverview.columns = [
-    { width: 6 },   // A
-    { width: 36 },  // B: Metric Name
-    { width: 22 },  // C: Value
-    { width: 16 },  // D: Unit
-    { width: 45 }   // E: Description
+  wsSummary.columns = [
+    { width: 4 },   // A
+    { width: 14 },  // B: Code
+    { width: 38 },  // C: Metric Name
+    { width: 22 },  // D: Value
+    { width: 18 },  // E: Unit
+    { width: 45 }   // F: Description
   ];
 
-  // Banner Title
-  wsOverview.mergeCells('B2:E2');
-  const titleCell = wsOverview.getCell('B2');
-  titleCell.value = 'BÁO CÁO THỐNG KÊ & PHÂN TÍCH HỆ THỐNG VETHIC AI';
-  titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+  // Report Title Block
+  wsSummary.mergeCells('B2:F2');
+  const titleCell = wsSummary.getCell('B2');
+  titleCell.value = 'BAO CAO THONG KE & HIEU SUAT HE THONG - VETHIC AI';
+  titleCell.font = { name: FONT_FAMILY, size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
   titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-  titleCell.fill = primaryHeaderFill;
-  wsOverview.getRow(2).height = 36;
+  titleCell.fill = brandNavyFill;
+  wsSummary.getRow(2).height = 36;
 
-  // Metadata Sub-banner
-  wsOverview.mergeCells('B3:E3');
-  const metaCell = wsOverview.getCell('B3');
-  metaCell.value = `Thời gian xuất: ${nowStr} | Phạm vi thống kê: ${rangeLabel} | Trạng thái: Dữ liệu thực tế Live Telemetry`;
-  metaCell.font = { name: 'Arial', size: 10, italic: true, color: { argb: 'FF475569' } };
+  // Metadata Block
+  wsSummary.mergeCells('B3:F3');
+  const metaCell = wsSummary.getCell('B3');
+  metaCell.value = `Pham vi: ${rangeLabel} | Thoi gian xuat: ${dateStr} ${timeStr} | Moi truong: Production Telemetry`;
+  metaCell.font = { name: FONT_FAMILY, size: 9.5, italic: true, color: { argb: 'FF475569' } };
   metaCell.alignment = { vertical: 'middle', horizontal: 'center' };
-  wsOverview.getRow(3).height = 22;
+  wsSummary.getRow(3).height = 20;
 
-  // Section 1: Top KPIs
-  wsOverview.getCell('B5').value = '1. CÁC CHỈ SỐ ĐIỀU HÀNH CỐT LÕI (CORE KPIS)';
-  wsOverview.getCell('B5').font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E293B' } };
+  // Section 1: Core KPIs
+  let curRow = 5;
+  wsSummary.getCell(`B${curRow}`).value = '1. CHI SO HOAT DONG COT LOI (CORE KPIS)';
+  wsSummary.getCell(`B${curRow}`).font = { name: FONT_FAMILY, size: 11, bold: true, color: { argb: 'FF1B365D' } };
+  curRow++;
 
-  const kpiHeaders = ['Chỉ Số Thống Kê', 'Giá Trị', 'Đơn Vị', 'Diễn Giải Chi Tiết'];
-  const kpiHeaderRow = wsOverview.getRow(6);
+  const kpiHeaders = ['Ma Chi So', 'Ten Chi So Thong Ke', 'Gia Tri', 'Don Vi Tinh', 'Dinh Nghia & Y Nghia'];
+  const kpiHeaderRow = wsSummary.getRow(curRow);
   kpiHeaders.forEach((h, idx) => {
     const cell = kpiHeaderRow.getCell(idx + 2);
     cell.value = h;
-    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = blueHeaderFill;
-    cell.alignment = { vertical: 'middle', horizontal: idx === 1 ? 'right' : 'left' };
+    cell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = tableHeaderFill;
+    cell.alignment = { vertical: 'middle', horizontal: idx === 2 ? 'right' : 'left' };
     cell.border = thinBorder;
   });
   kpiHeaderRow.height = 24;
+  curRow++;
 
-  const kpiRowsData = [
-    ['Tổng Lượt Ghé Thăm (Website Visitors)', stats.websiteVisitors || 0, 'Lượt', 'Tổng lưu lượng truy cập toàn hệ thống'],
-    ['Khách Độc Lập (Unique Visitors)', stats.uniqueVisitors || 0, 'Khách (IP/Device)', 'Số người dùng độc lập theo thiết bị'],
-    ['Tổng Lượt Xem Trang (Page Views)', stats.pageViews || 0, 'Lượt xem', 'Tổng số lần tải trang trên các route'],
-    ['Người Dùng Tương Tác Thực (Active Users)', stats.activeUsers || 0, 'Người dùng', 'Người dùng có thao tác bấm hoặc gửi tin nhắn'],
-    ['Người Hỏi Bệnh Chatbot (Chat Users)', stats.chatUsers || 0, 'Người chat', 'Đã đặt câu hỏi chẩn đoán triệu chứng thú cưng'],
-    ['Khách Vãng Lai (Guest Chat Users)', stats.guestChatUsers || 0, 'Khách guest', 'Sử dụng bản dùng thử miễn phí 8 tin'],
-    ['Tài Khoản Đăng Ký (Registered Users)', stats.registeredUsers || 0, 'Tài khoản', 'Người dùng chính thức đã kích hoạt'],
-    ['Tổng Số Cuộc Chat AI (Chat Sessions)', stats.chatSessions || 0, 'Cuộc hội thoại', 'Phiên hỏi đáp y tế lâm sàng được khởi tạo'],
-    ['Tổng Số Tin Nhắn Y Tế (Total Messages)', stats.totalMessages || 0, 'Tin nhắn', 'Số tin nhắn trao đổi 2 chiều giữa User và Bác sĩ AI'],
-    ['Tổng Số Thú Cưng Đang Quản Lý', stats.totalPets || 0, 'Bé cưng', 'Hồ sơ thú cưng đã đăng ký trên hệ thống']
+  const coreKpiData = [
+    ['MET_VISITORS', 'Tong Luot Ghe Tham (Website Visitors)', stats.websiteVisitors || 0, 'Luot truy cap', 'Tong so luot truy cap toan bo he thong web'],
+    ['MET_UNIQUE_VISITORS', 'Nguoi Dung Doc Lap (Unique Visitors)', stats.uniqueVisitors || 0, 'Nguoi dung (IP/Device)', 'So luong thiet bi / dia chi IP truy cap duy nhat'],
+    ['MET_PAGE_VIEWS', 'Tong Luot Xem Trang (Page Views)', stats.pageViews || 0, 'Luot xem', 'Tong so luot xem cac trang chuc nang'],
+    ['MET_ACTIVE_USERS', 'Nguoi Dung Tuong Tac (Active Users)', stats.activeUsers || 0, 'Nguoi dung', 'Nguoi dung co hanh vi bam nut hoac gui tin nhan'],
+    ['MET_CHAT_USERS', 'Nguoi Su Dung Chatbot (Chat Users)', stats.chatUsers || 0, 'Nguoi dung', 'Nguoi dung da khoi tao tu van y te voi AI'],
+    ['MET_GUEST_USERS', 'Khach Vang Lai (Guest Users)', stats.guestChatUsers || 0, 'Khach dung thu', 'Nguoi dung chua dang nhap (gioi han 8 tin nhan)'],
+    ['MET_REGISTERED_USERS', 'Tai Khoan Chinh Thuc (Registered Users)', stats.registeredUsers || 0, 'Tai khoan', 'Nguoi dung da dang ky va xac thuc tai khoan'],
+    ['MET_CHAT_SESSIONS', 'Tong So Phien Hoi Thoai (Chat Sessions)', stats.chatSessions || 0, 'Phien hoi thoai', 'So cuoc tro chuyen chan doan y te duoc tao'],
+    ['MET_TOTAL_MESSAGES', 'Tong So Tin Nhan Y Te (Total Messages)', stats.totalMessages || 0, 'Tin nhan', 'So tin nhan trao doi 2 chieu giua user va AI']
   ];
 
-  let curRow = 7;
-  kpiRowsData.forEach((row, rIdx) => {
-    const rowObj = wsOverview.getRow(curRow);
+  coreKpiData.forEach((row, rIdx) => {
+    const rObj = wsSummary.getRow(curRow);
     row.forEach((val, cIdx) => {
-      const cell = rowObj.getCell(cIdx + 2);
+      const cell = rObj.getCell(cIdx + 2);
       cell.value = val;
-      cell.font = { name: 'Arial', size: 10 };
-      if (cIdx === 1) {
+      cell.font = { name: FONT_FAMILY, size: 9.5 };
+      cell.border = thinBorder;
+
+      if (cIdx === 0) {
+        cell.font = { name: 'Consolas', size: 9, color: { argb: 'FF64748B' } };
+        cell.alignment = { horizontal: 'left' };
+      } else if (cIdx === 1) {
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true };
+      } else if (cIdx === 2) {
         cell.numFmt = '#,##0';
-        cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
         cell.alignment = { horizontal: 'right' };
       }
+
       if (rIdx % 2 === 1) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        cell.fill = zebraRowFill;
       }
-      cell.border = thinBorder;
     });
-    rowObj.height = 20;
+    rObj.height = 20;
     curRow++;
   });
 
   // Section 2: Conversion & Performance Rates
-  curRow += 1;
-  wsOverview.getCell(`B${curRow}`).value = '2. HIỆU SUẤT & TỈ LỆ CHUYỂN ĐỔI (CONVERSION & ENGAGEMENT)';
-  wsOverview.getCell(`B${curRow}`).font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FF1E293B' } };
+  curRow += 2;
+  wsSummary.getCell(`B${curRow}`).value = '2. HIEU SUAT CHUYEN DOI & TUONG TAC (CONVERSION & EFFICIENCY)';
+  wsSummary.getCell(`B${curRow}`).font = { name: FONT_FAMILY, size: 11, bold: true, color: { argb: 'FF1B365D' } };
   curRow++;
 
-  const rateHeaderRow = wsOverview.getRow(curRow);
+  const rateHeaderRow = wsSummary.getRow(curRow);
   kpiHeaders.forEach((h, idx) => {
     const cell = rateHeaderRow.getCell(idx + 2);
     cell.value = h;
-    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = emeraldHeaderFill;
-    cell.alignment = { vertical: 'middle', horizontal: idx === 1 ? 'right' : 'left' };
+    cell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = subHeaderFill;
+    cell.alignment = { vertical: 'middle', horizontal: idx === 2 ? 'right' : 'left' };
     cell.border = thinBorder;
   });
   rateHeaderRow.height = 24;
   curRow++;
 
-  const rateRowsData = [
-    ['Tỉ Lệ Chuyển Đổi Vào Web ➔ Chatbot', (stats.visitorToChatRate || 0) / 100, '% Chuyển đổi', 'Tỉ lệ khách ghé thăm website sử dụng tư vấn AI'],
-    ['Tỉ Lệ Chuyển Đổi Khách Guest ➔ Đăng Ký', (stats.guestToRegisteredRate || 0) / 100, '% Tạo tài khoản', 'Tỉ lệ khách vãng lai đăng ký tài khoản chính thức'],
-    ['Độ Sâu Cuộc Hội Thoại Trung Bình', Number(stats.avgMessagesPerSession) || 0, 'Tin / Phiên', 'Mức độ tương tác chi tiết giữa người dùng và AI'],
-    ['Tốc Độ Tăng Trưởng Người Dùng', (stats.userGrowth || 0) / 100, '% Tăng trưởng', 'So sánh lượng đăng ký mới với chu kỳ trước']
+  const conversionData = [
+    ['RATE_VISITOR_TO_CHAT', 'Ty Le Chuyen Doi Truy Cap Sang Chat', (stats.visitorToChatRate || 0) / 100, '% Chuyen doi', 'Ty le giua so nguoi chat tren tong so luot truy cap'],
+    ['RATE_GUEST_TO_REGISTER', 'Ty Le Chuyen Doi Khach Sang Tai Khoan', (stats.guestToRegisteredRate || 0) / 100, '% Dang ky', 'Ty le khach dung thu chuyen doi tao tai khoan chinh thuc'],
+    ['AVG_MESSAGES_PER_SESSION', 'Do Sau Hoi Thoai Trung Binh (Depth)', Number(stats.avgMessagesPerSession) || 0, 'Tin nhan / Phien', 'So luong tin nhan trung binh trong mot phien hoi benh'],
+    ['RATE_USER_GROWTH', 'Toc Do Tang Truong Nguoi Dung (Growth)', (stats.userGrowth || 0) / 100, '% Tang truong', 'Toc do tang truong tai khoan so voi ky truoc']
   ];
 
-  rateRowsData.forEach((row, rIdx) => {
-    const rowObj = wsOverview.getRow(curRow);
+  conversionData.forEach((row, rIdx) => {
+    const rObj = wsSummary.getRow(curRow);
     row.forEach((val, cIdx) => {
-      const cell = rowObj.getCell(cIdx + 2);
+      const cell = rObj.getCell(cIdx + 2);
       cell.value = val;
-      cell.font = { name: 'Arial', size: 10 };
-      if (cIdx === 1) {
+      cell.font = { name: FONT_FAMILY, size: 9.5 };
+      cell.border = thinBorder;
+
+      if (cIdx === 0) {
+        cell.font = { name: 'Consolas', size: 9, color: { argb: 'FF64748B' } };
+        cell.alignment = { horizontal: 'left' };
+      } else if (cIdx === 1) {
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true };
+      } else if (cIdx === 2) {
         if (typeof val === 'number' && (rIdx === 0 || rIdx === 1 || rIdx === 3)) {
           cell.numFmt = '0.0%';
         } else {
           cell.numFmt = '#,##0.0';
         }
-        cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF047857' } };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true, color: { argb: 'FF1B365D' } };
         cell.alignment = { horizontal: 'right' };
       }
+
       if (rIdx % 2 === 1) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+        cell.fill = zebraRowFill;
       }
-      cell.border = thinBorder;
     });
-    rowObj.height = 20;
+    rObj.height = 20;
     curRow++;
   });
 
   // ─────────────────────────────────────────────────────────────
-  // SHEET 2: 📈 XU HƯỚNG THEO NGÀY (TRENDS)
+  // SHEET 2: Daily_Traffic_Trends (Xu Huong Luu Luong Theo Ngay)
   // ─────────────────────────────────────────────────────────────
-  const wsTrends = workbook.addWorksheet('📈 Xu Hướng Theo Ngày', {
+  const wsTrends = workbook.addWorksheet('Daily_Traffic_Trends', {
     views: [{ showGridLines: true }]
   });
 
   wsTrends.columns = [
-    { width: 6 },   // A
-    { width: 16 },  // B: Date
-    { width: 18 },  // C: Visitors
-    { width: 18 },  // D: Chat Users
-    { width: 18 },  // E: Sessions
-    { width: 18 },  // F: Messages
-    { width: 18 },  // G: New Users
-    { width: 22 }   // H: Conversion %
+    { width: 4 },   // A
+    { width: 8 },   // B: STT
+    { width: 14 },  // C: Ngay
+    { width: 12 },  // D: Thu
+    { width: 18 },  // E: Visitors
+    { width: 18 },  // F: Chat Users
+    { width: 18 },  // G: Sessions
+    { width: 18 },  // H: Messages
+    { width: 18 },  // I: Registrations
+    { width: 18 },  // J: Conversion Rate %
+    { width: 18 }   // K: Msg/Session
   ];
 
-  wsTrends.mergeCells('B2:H2');
+  // Title
+  wsTrends.mergeCells('B2:K2');
   const tTitle = wsTrends.getCell('B2');
-  tTitle.value = 'BẢNG DỮ LIỆU XU HƯỚNG THEO NGÀY (DAILY ENGAGEMENT & RETENTION)';
-  tTitle.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+  tTitle.value = 'CHUOI DU LIEU XU HUONG TRUY CAP & TUONG TAC THEO NGAY';
+  tTitle.font = { name: FONT_FAMILY, size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
   tTitle.alignment = { vertical: 'middle', horizontal: 'center' };
-  tTitle.fill = blueHeaderFill;
+  tTitle.fill = brandNavyFill;
   wsTrends.getRow(2).height = 32;
 
+  // Metadata
+  wsTrends.mergeCells('B3:K3');
+  const tMeta = wsTrends.getCell('B3');
+  tMeta.value = `Chu ky: ${rangeLabel} | Nguon: Log Telemetry Database | Dinh dang: Phuc vu phan tich BI & Data Science`;
+  tMeta.font = { name: FONT_FAMILY, size: 9, italic: true, color: { argb: 'FF64748B' } };
+  tMeta.alignment = { vertical: 'middle', horizontal: 'center' };
+  wsTrends.getRow(3).height = 18;
+
   const trendCols = [
-    'Ngày (Date)',
-    'Lượng Vào Web (Visitors)',
-    'Người Chat (Chat Users)',
-    'Số Cuộc Chat (Chats)',
-    'Tổng Tin Nhắn (Messages)',
-    'Tài Khoản Mới (Users)',
-    'Tỉ Lệ Chat / Visitors'
+    'STT',
+    'Ngay (Date)',
+    'Thu',
+    'Truy Cap (Visitors)',
+    'Nguoi Chat (Users)',
+    'Phien Chat (Sessions)',
+    'Tin Nhan (Messages)',
+    'Dang Ky (Signups)',
+    'Ty Le Chat/Visitor',
+    'Tin Nhan/Phien'
   ];
 
-  const trendHeaderRow = wsTrends.getRow(4);
+  const trendHeaderRow = wsTrends.getRow(5);
   trendCols.forEach((colName, idx) => {
     const cell = trendHeaderRow.getCell(idx + 2);
     cell.value = colName;
-    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = primaryHeaderFill;
-    cell.alignment = { vertical: 'middle', horizontal: idx === 0 ? 'center' : 'right' };
+    cell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = tableHeaderFill;
+    cell.alignment = { vertical: 'middle', horizontal: idx <= 2 ? 'center' : 'right' };
     cell.border = thinBorder;
   });
   trendHeaderRow.height = 24;
 
-  let trendRowIdx = 5;
+  let trendRowIdx = 6;
   const historyList = stats.history || [];
 
   historyList.forEach((h, idx) => {
     const r = wsTrends.getRow(trendRowIdx);
+    const dayOfWeek = getDayOfWeekVN(h.date);
     const convRate = h.visitors > 0 ? (h.chatUsers / h.visitors) : 0;
+    const avgMsg = h.chats > 0 ? (h.messages / h.chats) : 0;
 
     const rowVals = [
+      idx + 1,
       h.date,
+      dayOfWeek,
       h.visitors || 0,
       h.chatUsers || 0,
       h.chats || 0,
       h.messages || 0,
       h.users || 0,
-      convRate
+      convRate,
+      avgMsg
     ];
 
     rowVals.forEach((val, cIdx) => {
       const cell = r.getCell(cIdx + 2);
       cell.value = val;
-      cell.font = { name: 'Arial', size: 10 };
+      cell.font = { name: FONT_FAMILY, size: 9.5 };
       cell.border = thinBorder;
 
-      if (cIdx === 0) {
+      if (cIdx === 0 || cIdx === 2) {
         cell.alignment = { horizontal: 'center' };
-        cell.font = { name: 'Arial', size: 10, bold: true };
-      } else if (cIdx === 6) {
+      } else if (cIdx === 1) {
+        cell.alignment = { horizontal: 'center' };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true };
+      } else if (cIdx === 8) {
         cell.numFmt = '0.0%';
         cell.alignment = { horizontal: 'right' };
-        cell.font = { name: 'Arial', size: 10, color: { argb: 'FF059669' } };
+        cell.font = { name: FONT_FAMILY, size: 9.5, color: { argb: 'FF1B365D' } };
+      } else if (cIdx === 9) {
+        cell.numFmt = '#,##0.0';
+        cell.alignment = { horizontal: 'right' };
       } else {
         cell.numFmt = '#,##0';
         cell.alignment = { horizontal: 'right' };
       }
 
       if (idx % 2 === 1) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        cell.fill = zebraRowFill;
       }
     });
 
@@ -276,126 +345,234 @@ export async function exportDashboardStatsToExcel(stats: SystemStats, timeRange:
     trendRowIdx++;
   });
 
-  // Total Summary Row
+  // Summary Rows: SUM, AVERAGE, MAX, MIN
   if (historyList.length > 0) {
-    const sumRow = wsTrends.getRow(trendRowIdx);
-    sumRow.getCell(2).value = 'TỔNG CỘNG / TB';
-    sumRow.getCell(2).font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF1E293B' } };
-    sumRow.getCell(2).alignment = { horizontal: 'center' };
-    sumRow.getCell(2).fill = tableSubHeaderFill;
-    sumRow.getCell(2).border = thinBorder;
-
-    // Formulas
-    const startR = 5;
+    const startR = 6;
     const endR = trendRowIdx - 1;
 
-    // Sum cols C, D, E, F, G
-    ['C', 'D', 'E', 'F', 'G'].forEach((colLetter, cIdx) => {
-      const cell = sumRow.getCell(cIdx + 3);
+    // 1. TONG CONG (SUM)
+    const sumRow = wsTrends.getRow(trendRowIdx);
+    sumRow.getCell(2).value = '';
+    wsTrends.mergeCells(`B${trendRowIdx}:D${trendRowIdx}`);
+    const sumLabel = sumRow.getCell(2);
+    sumLabel.value = 'TONG CONG (SUM)';
+    sumLabel.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FF1B365D' } };
+    sumLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    ['B', 'C', 'D'].forEach(c => {
+      sumRow.getCell(c).fill = totalRowFill;
+      sumRow.getCell(c).border = thinBorder;
+    });
+
+    ['E', 'F', 'G', 'H', 'I'].forEach((colLetter, cIdx) => {
+      const cell = sumRow.getCell(cIdx + 5);
       cell.value = { formula: `SUM(${colLetter}${startR}:${colLetter}${endR})` };
       cell.numFmt = '#,##0';
-      cell.font = { name: 'Arial', size: 10, bold: true };
+      cell.font = { name: FONT_FAMILY, size: 10, bold: true };
       cell.alignment = { horizontal: 'right' };
-      cell.fill = tableSubHeaderFill;
+      cell.fill = totalRowFill;
       cell.border = thinBorder;
     });
 
-    // Average Conversion Rate col H
-    const avgCell = sumRow.getCell(8);
-    avgCell.value = { formula: `AVERAGE(H${startR}:H${endR})` };
-    avgCell.numFmt = '0.0%';
-    avgCell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF059669' } };
-    avgCell.alignment = { horizontal: 'right' };
-    avgCell.fill = tableSubHeaderFill;
-    avgCell.border = thinBorder;
+    // Conv Rate Overall
+    const convCell = sumRow.getCell(10);
+    convCell.value = { formula: `F${trendRowIdx}/E${trendRowIdx}` };
+    convCell.numFmt = '0.0%';
+    convCell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FF1B365D' } };
+    convCell.alignment = { horizontal: 'right' };
+    convCell.fill = totalRowFill;
+    convCell.border = thinBorder;
+
+    // Msg / Session Overall
+    const msgDepthCell = sumRow.getCell(11);
+    msgDepthCell.value = { formula: `H${trendRowIdx}/G${trendRowIdx}` };
+    msgDepthCell.numFmt = '#,##0.0';
+    msgDepthCell.font = { name: FONT_FAMILY, size: 10, bold: true };
+    msgDepthCell.alignment = { horizontal: 'right' };
+    msgDepthCell.fill = totalRowFill;
+    msgDepthCell.border = thinBorder;
 
     sumRow.height = 22;
+    trendRowIdx++;
+
+    // 2. TRUNG BINH NGAY (AVERAGE)
+    const avgRow = wsTrends.getRow(trendRowIdx);
+    wsTrends.mergeCells(`B${trendRowIdx}:D${trendRowIdx}`);
+    const avgLabel = avgRow.getCell(2);
+    avgLabel.value = 'TRUNG BINH NGAY (AVERAGE)';
+    avgLabel.font = { name: FONT_FAMILY, size: 9.5, bold: true, color: { argb: 'FF334155' } };
+    avgLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    ['B', 'C', 'D'].forEach(c => {
+      avgRow.getCell(c).fill = totalRowFill;
+      avgRow.getCell(c).border = thinBorder;
+    });
+
+    ['E', 'F', 'G', 'H', 'I'].forEach((colLetter, cIdx) => {
+      const cell = avgRow.getCell(cIdx + 5);
+      cell.value = { formula: `AVERAGE(${colLetter}${startR}:${colLetter}${endR})` };
+      cell.numFmt = '#,##0.0';
+      cell.font = { name: FONT_FAMILY, size: 9.5, bold: true };
+      cell.alignment = { horizontal: 'right' };
+      cell.fill = totalRowFill;
+      cell.border = thinBorder;
+    });
+
+    const avgConv = avgRow.getCell(10);
+    avgConv.value = { formula: `AVERAGE(J${startR}:J${endR})` };
+    avgConv.numFmt = '0.0%';
+    avgConv.font = { name: FONT_FAMILY, size: 9.5, bold: true };
+    avgConv.alignment = { horizontal: 'right' };
+    avgConv.fill = totalRowFill;
+    avgConv.border = thinBorder;
+
+    const avgDepth = avgRow.getCell(11);
+    avgDepth.value = { formula: `AVERAGE(K${startR}:K${endR})` };
+    avgDepth.numFmt = '#,##0.0';
+    avgDepth.font = { name: FONT_FAMILY, size: 9.5, bold: true };
+    avgDepth.alignment = { horizontal: 'right' };
+    avgDepth.fill = totalRowFill;
+    avgDepth.border = thinBorder;
+
+    avgRow.height = 20;
+    trendRowIdx++;
+
+    // 3. CAO NHAT (MAX)
+    const maxRow = wsTrends.getRow(trendRowIdx);
+    wsTrends.mergeCells(`B${trendRowIdx}:D${trendRowIdx}`);
+    const maxLabel = maxRow.getCell(2);
+    maxLabel.value = 'CAO NHAT TRONG KY (MAX)';
+    maxLabel.font = { name: FONT_FAMILY, size: 9.5, color: { argb: 'FF64748B' } };
+    maxLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    ['B', 'C', 'D'].forEach(c => {
+      maxRow.getCell(c).border = totalBorder;
+    });
+
+    ['E', 'F', 'G', 'H', 'I'].forEach((colLetter, cIdx) => {
+      const cell = maxRow.getCell(cIdx + 5);
+      cell.value = { formula: `MAX(${colLetter}${startR}:${colLetter}${endR})` };
+      cell.numFmt = '#,##0';
+      cell.font = { name: FONT_FAMILY, size: 9.5 };
+      cell.alignment = { horizontal: 'right' };
+      cell.border = totalBorder;
+    });
+
+    const maxConv = maxRow.getCell(10);
+    maxConv.value = { formula: `MAX(J${startR}:J${endR})` };
+    maxConv.numFmt = '0.0%';
+    maxConv.alignment = { horizontal: 'right' };
+    maxConv.border = totalBorder;
+
+    const maxDepth = maxRow.getCell(11);
+    maxDepth.value = { formula: `MAX(K${startR}:K${endR})` };
+    maxDepth.numFmt = '#,##0.0';
+    maxDepth.alignment = { horizontal: 'right' };
+    maxDepth.border = totalBorder;
+
+    maxRow.height = 20;
   }
 
   // ─────────────────────────────────────────────────────────────
-  // SHEET 3: 🌐 TRANG ĐƯỢC TRUY CẬP (TOP PAGES)
+  // SHEET 3: Page_Analytics (Phan Tich Trang & Luu Luong Tuyet Doi)
   // ─────────────────────────────────────────────────────────────
-  const wsPages = workbook.addWorksheet('🌐 Trang Truy Cập (Pages)', {
+  const wsPages = workbook.addWorksheet('Page_Analytics', {
     views: [{ showGridLines: true }]
   });
 
   wsPages.columns = [
-    { width: 6 },   // A
+    { width: 4 },   // A
     { width: 12 },  // B: Rank
     { width: 32 },  // C: Page Name
-    { width: 24 },  // D: Route Path
-    { width: 18 },  // E: Page Views
-    { width: 20 },  // F: Unique Visitors
-    { width: 20 }   // G: Traffic Share %
+    { width: 24 },  // D: Route
+    { width: 20 },  // E: Page Views
+    { width: 22 },  // F: Unique Visitors
+    { width: 20 },  // G: Traffic Share %
+    { width: 20 }   // H: Cumulative Share %
   ];
 
-  wsPages.mergeCells('B2:G2');
+  // Title
+  wsPages.mergeCells('B2:H2');
   const pTitle = wsPages.getCell('B2');
-  pTitle.value = 'BẢNG XẾP HẠNG TRANG & TUYẾN ĐƯỜNG ĐƯỢC XEM NHIỀU NHẤT';
-  pTitle.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+  pTitle.value = 'PHAN TICH LUU LUONG & HIEN THI TRANG TRUY CAP';
+  pTitle.font = { name: FONT_FAMILY, size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
   pTitle.alignment = { vertical: 'middle', horizontal: 'center' };
-  pTitle.fill = blueHeaderFill;
+  pTitle.fill = brandNavyFill;
   wsPages.getRow(2).height = 32;
 
+  // Metadata
+  wsPages.mergeCells('B3:H3');
+  const pMeta = wsPages.getCell('B3');
+  pMeta.value = `Ghi chu: Chi thong ke cac module dang hoat dong thuc te tren he thong | Chu ky: ${rangeLabel}`;
+  pMeta.font = { name: FONT_FAMILY, size: 9, italic: true, color: { argb: 'FF64748B' } };
+  pMeta.alignment = { vertical: 'middle', horizontal: 'center' };
+  wsPages.getRow(3).height = 18;
+
   const pageCols = [
-    'Xếp Hạng',
-    'Tên Trang Hiển Thị',
-    'Đường Dẫn Tuyến Đường',
-    'Lượt Xem (Pageviews)',
-    'Khách Độc Lập (Unique)',
-    'Tỉ Trọng Lưu Lượng (%)'
+    'Xep Hang',
+    'Ten Trang / Chuc Nang',
+    'Duong Dan (Route)',
+    'Luot Xem (Pageviews)',
+    'Khach Doc Lap (Unique)',
+    'Ty Trong Luu Luong (%)',
+    'Ty Trong Luy Ke (%)'
   ];
 
-  const pageHeaderRow = wsPages.getRow(4);
+  const pageHeaderRow = wsPages.getRow(5);
   pageCols.forEach((colName, idx) => {
     const cell = pageHeaderRow.getCell(idx + 2);
     cell.value = colName;
-    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = primaryHeaderFill;
+    cell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = tableHeaderFill;
     cell.alignment = { vertical: 'middle', horizontal: idx <= 2 ? 'left' : 'right' };
     if (idx === 0) cell.alignment = { vertical: 'middle', horizontal: 'center' };
     cell.border = thinBorder;
   });
   pageHeaderRow.height = 24;
 
-  let pageRowIdx = 5;
+  let pageRowIdx = 6;
   const topPagesList = stats.topPages || [];
+  let cumulativeShare = 0;
 
   topPagesList.forEach((p, idx) => {
     const r = wsPages.getRow(pageRowIdx);
+    const pShare = (p.percentage || 0) / 100;
+    cumulativeShare += pShare;
+
     const rowVals = [
-      `#${idx + 1}`,
+      `Top ${idx + 1}`,
       p.pageName,
       p.path,
       p.views || 0,
       p.uniqueVisitors || 0,
-      (p.percentage || 0) / 100
+      pShare,
+      Math.min(1, cumulativeShare)
     ];
 
     rowVals.forEach((val, cIdx) => {
       const cell = r.getCell(cIdx + 2);
       cell.value = val;
-      cell.font = { name: 'Arial', size: 10 };
+      cell.font = { name: FONT_FAMILY, size: 9.5 };
       cell.border = thinBorder;
 
       if (cIdx === 0) {
         cell.alignment = { horizontal: 'center' };
-        cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF2563EB' } };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true, color: { argb: 'FF1B365D' } };
       } else if (cIdx === 1) {
-        cell.font = { name: 'Arial', size: 10, bold: true };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true };
       } else if (cIdx === 2) {
         cell.font = { name: 'Consolas', size: 9, color: { argb: 'FF64748B' } };
       } else if (cIdx === 3 || cIdx === 4) {
         cell.numFmt = '#,##0';
         cell.alignment = { horizontal: 'right' };
-      } else if (cIdx === 5) {
+      } else if (cIdx === 5 || cIdx === 6) {
         cell.numFmt = '0.0%';
         cell.alignment = { horizontal: 'right' };
-        cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF047857' } };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: cIdx === 5 };
       }
 
       if (idx % 2 === 1) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        cell.fill = zebraRowFill;
       }
     });
 
@@ -403,83 +580,153 @@ export async function exportDashboardStatsToExcel(stats: SystemStats, timeRange:
     pageRowIdx++;
   });
 
+  // Pages Total Row
+  if (topPagesList.length > 0) {
+    const pSumRow = wsPages.getRow(pageRowIdx);
+    wsPages.mergeCells(`B${pageRowIdx}:D${pageRowIdx}`);
+    const pSumLabel = pSumRow.getCell(2);
+    pSumLabel.value = 'TONG CONG';
+    pSumLabel.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FF1B365D' } };
+    pSumLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    ['B', 'C', 'D'].forEach(c => {
+      pSumRow.getCell(c).fill = totalRowFill;
+      pSumRow.getCell(c).border = totalBorder;
+    });
+
+    const startPR = 6;
+    const endPR = pageRowIdx - 1;
+
+    // Sum Views
+    const sumViewsCell = pSumRow.getCell(5);
+    sumViewsCell.value = { formula: `SUM(E${startPR}:E${endPR})` };
+    sumViewsCell.numFmt = '#,##0';
+    sumViewsCell.font = { name: FONT_FAMILY, size: 10, bold: true };
+    sumViewsCell.alignment = { horizontal: 'right' };
+    sumViewsCell.fill = totalRowFill;
+    sumViewsCell.border = totalBorder;
+
+    // Sum Uniques
+    const sumUniqCell = pSumRow.getCell(6);
+    sumUniqCell.value = { formula: `SUM(F${startPR}:F${endPR})` };
+    sumUniqCell.numFmt = '#,##0';
+    sumUniqCell.font = { name: FONT_FAMILY, size: 10, bold: true };
+    sumUniqCell.alignment = { horizontal: 'right' };
+    sumUniqCell.fill = totalRowFill;
+    sumUniqCell.border = totalBorder;
+
+    // Sum Share
+    const sumShareCell = pSumRow.getCell(7);
+    sumShareCell.value = { formula: `SUM(G${startPR}:G${endPR})` };
+    sumShareCell.numFmt = '0.0%';
+    sumShareCell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FF1B365D' } };
+    sumShareCell.alignment = { horizontal: 'right' };
+    sumShareCell.fill = totalRowFill;
+    sumShareCell.border = totalBorder;
+
+    const cumLastCell = pSumRow.getCell(8);
+    cumLastCell.value = 1.0;
+    cumLastCell.numFmt = '0.0%';
+    cumLastCell.font = { name: FONT_FAMILY, size: 10, bold: true };
+    cumLastCell.alignment = { horizontal: 'right' };
+    cumLastCell.fill = totalRowFill;
+    cumLastCell.border = totalBorder;
+
+    pSumRow.height = 22;
+  }
+
   // ─────────────────────────────────────────────────────────────
-  // SHEET 4: 🖱️ THAO TÁC NGƯỜI DÙNG (TOP ACTIONS)
+  // SHEET 4: User_Interaction_Events (Phan Tich Hanh Vi & Su Kien)
   // ─────────────────────────────────────────────────────────────
-  const wsActions = workbook.addWorksheet('🖱️ Thao Tác (Actions)', {
+  const wsActions = workbook.addWorksheet('User_Interaction_Events', {
     views: [{ showGridLines: true }]
   });
 
   wsActions.columns = [
-    { width: 6 },   // A
+    { width: 4 },   // A
     { width: 12 },  // B: Rank
     { width: 36 },  // C: Action Name
-    { width: 20 },  // D: Category
+    { width: 22 },  // D: Category
     { width: 28 },  // E: Event Key
     { width: 20 },  // F: Count
     { width: 20 },  // G: Unique Users
-    { width: 20 }   // H: Share %
+    { width: 18 },  // H: Share %
+    { width: 18 }   // I: Frequency per User
   ];
 
-  wsActions.mergeCells('B2:H2');
+  // Title
+  wsActions.mergeCells('B2:I2');
   const aTitle = wsActions.getCell('B2');
-  aTitle.value = 'BẢNG THỐNG KÊ HÀNH VI & THAO TÁC NGƯỜI DÙNG BẤM NHIỀU NHẤT';
-  aTitle.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+  aTitle.value = 'THONG KE SU KIEN & TUONG TAC NGUOI DUNG (FEATURE INTERACTIONS)';
+  aTitle.font = { name: FONT_FAMILY, size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
   aTitle.alignment = { vertical: 'middle', horizontal: 'center' };
-  aTitle.fill = purpleHeaderFill;
+  aTitle.fill = brandNavyFill;
   wsActions.getRow(2).height = 32;
 
+  // Metadata
+  wsActions.mergeCells('B3:I3');
+  const aMeta = wsActions.getCell('B3');
+  aMeta.value = `Giam sat cac nut bam, hanh vi dieu huong, tim kiem va tra cuu truc tuyen tren nen tang`;
+  aMeta.font = { name: FONT_FAMILY, size: 9, italic: true, color: { argb: 'FF64748B' } };
+  aMeta.alignment = { vertical: 'middle', horizontal: 'center' };
+  wsActions.getRow(3).height = 18;
+
   const actionCols = [
-    'Xếp Hạng',
-    'Tên Hành Vi / Thao Tác',
-    'Nhóm Nghiệp Vụ',
-    'Mã Sự Kiện Telemetry',
-    'Số Lần Bấm (Clicks)',
-    'Số Người Thực Hiện',
-    'Tỉ Trọng Hành Vi (%)'
+    'Xep Hang',
+    'Ten Hanh Vi / Thao Tac',
+    'Nhom Nghiep Vu',
+    'Ma Su Kien Telemetry',
+    'Tong Luot Bam (Clicks)',
+    'Nguoi Thuc Hien (Users)',
+    'Ty Trong (%)',
+    'Tan Suat/Nguoi'
   ];
 
-  const actionHeaderRow = wsActions.getRow(4);
+  const actionHeaderRow = wsActions.getRow(5);
   actionCols.forEach((colName, idx) => {
     const cell = actionHeaderRow.getCell(idx + 2);
     cell.value = colName;
-    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = primaryHeaderFill;
+    cell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = tableHeaderFill;
     cell.alignment = { vertical: 'middle', horizontal: idx <= 3 ? 'left' : 'right' };
     if (idx === 0) cell.alignment = { vertical: 'middle', horizontal: 'center' };
     cell.border = thinBorder;
   });
   actionHeaderRow.height = 24;
 
-  let actRowIdx = 5;
+  let actRowIdx = 6;
   const topActionsList = stats.topActions || [];
 
   topActionsList.forEach((act, idx) => {
     const r = wsActions.getRow(actRowIdx);
+    const uCount = act.uniqueUsers || 1;
+    const avgFreq = act.count ? (act.count / uCount) : 0;
+
     const rowVals = [
-      `#${idx + 1}`,
+      `Top ${idx + 1}`,
       act.actionName,
       act.category,
       act.actionType,
       act.count || 0,
       act.uniqueUsers || 0,
-      (act.percentage || 0) / 100
+      (act.percentage || 0) / 100,
+      avgFreq
     ];
 
     rowVals.forEach((val, cIdx) => {
       const cell = r.getCell(cIdx + 2);
       cell.value = val;
-      cell.font = { name: 'Arial', size: 10 };
+      cell.font = { name: FONT_FAMILY, size: 9.5 };
       cell.border = thinBorder;
 
       if (cIdx === 0) {
         cell.alignment = { horizontal: 'center' };
-        cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF7C3AED' } };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true, color: { argb: 'FF1B365D' } };
       } else if (cIdx === 1) {
-        cell.font = { name: 'Arial', size: 10, bold: true };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true };
       } else if (cIdx === 2) {
         cell.alignment = { horizontal: 'left' };
-        cell.font = { name: 'Arial', size: 10, color: { argb: 'FF334155' } };
+        cell.font = { name: FONT_FAMILY, size: 9.5, color: { argb: 'FF334155' } };
       } else if (cIdx === 3) {
         cell.font = { name: 'Consolas', size: 9, color: { argb: 'FF64748B' } };
       } else if (cIdx === 4 || cIdx === 5) {
@@ -488,11 +735,14 @@ export async function exportDashboardStatsToExcel(stats: SystemStats, timeRange:
       } else if (cIdx === 6) {
         cell.numFmt = '0.0%';
         cell.alignment = { horizontal: 'right' };
-        cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FF7C3AED' } };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true, color: { argb: 'FF1B365D' } };
+      } else if (cIdx === 7) {
+        cell.numFmt = '#,##0.0';
+        cell.alignment = { horizontal: 'right' };
       }
 
       if (idx % 2 === 1) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        cell.fill = zebraRowFill;
       }
     });
 
@@ -500,71 +750,210 @@ export async function exportDashboardStatsToExcel(stats: SystemStats, timeRange:
     actRowIdx++;
   });
 
+  // Actions Total Row
+  if (topActionsList.length > 0) {
+    const aSumRow = wsActions.getRow(actRowIdx);
+    wsActions.mergeCells(`B${actRowIdx}:E${actRowIdx}`);
+    const aSumLabel = aSumRow.getCell(2);
+    aSumLabel.value = 'TONG CONG SU KIEN';
+    aSumLabel.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FF1B365D' } };
+    aSumLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    ['B', 'C', 'D', 'E'].forEach(c => {
+      aSumRow.getCell(c).fill = totalRowFill;
+      aSumRow.getCell(c).border = totalBorder;
+    });
+
+    const startAR = 6;
+    const endAR = actRowIdx - 1;
+
+    // Total clicks
+    const sumClicksCell = aSumRow.getCell(6);
+    sumClicksCell.value = { formula: `SUM(F${startAR}:F${endAR})` };
+    sumClicksCell.numFmt = '#,##0';
+    sumClicksCell.font = { name: FONT_FAMILY, size: 10, bold: true };
+    sumClicksCell.alignment = { horizontal: 'right' };
+    sumClicksCell.fill = totalRowFill;
+    sumClicksCell.border = totalBorder;
+
+    // Total unique users
+    const sumUsersCell = aSumRow.getCell(7);
+    sumUsersCell.value = { formula: `SUM(G${startAR}:G${endAR})` };
+    sumUsersCell.numFmt = '#,##0';
+    sumUsersCell.font = { name: FONT_FAMILY, size: 10, bold: true };
+    sumUsersCell.alignment = { horizontal: 'right' };
+    sumUsersCell.fill = totalRowFill;
+    sumUsersCell.border = totalBorder;
+
+    // Total share %
+    const sumShareCell = aSumRow.getCell(8);
+    sumShareCell.value = { formula: `SUM(H${startAR}:H${endAR})` };
+    sumShareCell.numFmt = '0.0%';
+    sumShareCell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FF1B365D' } };
+    sumShareCell.alignment = { horizontal: 'right' };
+    sumShareCell.fill = totalRowFill;
+    sumShareCell.border = totalBorder;
+
+    // Avg Frequency
+    const avgFreqCell = aSumRow.getCell(9);
+    avgFreqCell.value = { formula: `F${actRowIdx}/G${actRowIdx}` };
+    avgFreqCell.numFmt = '#,##0.0';
+    avgFreqCell.font = { name: FONT_FAMILY, size: 10, bold: true };
+    avgFreqCell.alignment = { horizontal: 'right' };
+    avgFreqCell.fill = totalRowFill;
+    avgFreqCell.border = totalBorder;
+
+    aSumRow.height = 22;
+  }
+
   // ─────────────────────────────────────────────────────────────
-  // SHEET 5: 🏥 LÂM SÀNG & TRIAGE (CLINICAL TRIAGE)
+  // SHEET 5: Clinical_Triage_Analysis (Phan Tich Phan Loai Lam Sang)
   // ─────────────────────────────────────────────────────────────
-  const wsTriage = workbook.addWorksheet('🏥 Lâm Sàng & Triage', {
+  const wsTriage = workbook.addWorksheet('Clinical_Triage_Analysis', {
     views: [{ showGridLines: true }]
   });
 
   wsTriage.columns = [
-    { width: 6 },   // A
-    { width: 28 },  // B: Level
-    { width: 18 },  // C: Cases
-    { width: 18 },  // D: Percentage
-    { width: 45 }   // E: Guide
+    { width: 4 },   // A
+    { width: 18 },  // B: Triage Code
+    { width: 34 },  // C: Level Name
+    { width: 18 },  // D: Case Count
+    { width: 18 },  // E: Percentage
+    { width: 22 },  // F: SLA / Response Target
+    { width: 48 }   // G: Clinical Protocol
   ];
 
-  wsTriage.mergeCells('B2:E2');
+  // Title
+  wsTriage.mergeCells('B2:G2');
   const trTitle = wsTriage.getCell('B2');
-  trTitle.value = 'BÁO CÁO PHÂN LOẠI MỨC ĐỘ NGUY HIỂM LÂM SÀNG (TRIAGE ANALYSIS)';
-  trTitle.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
+  trTitle.value = 'PHAN TICH PHAN LOAI MUC DO CAP CUU LAM SANG (TRIAGE CLASSIFICATION)';
+  trTitle.font = { name: FONT_FAMILY, size: 13, bold: true, color: { argb: 'FFFFFFFF' } };
   trTitle.alignment = { vertical: 'middle', horizontal: 'center' };
-  trTitle.fill = emeraldHeaderFill;
+  trTitle.fill = brandNavyFill;
   wsTriage.getRow(2).height = 32;
+
+  // Metadata
+  wsTriage.mergeCells('B3:G3');
+  const trMeta = wsTriage.getCell('B3');
+  trMeta.value = `Tieu chuan phan luong y te theo phac do hoi benh thu y tu dong hoa bang AI`;
+  trMeta.font = { name: FONT_FAMILY, size: 9, italic: true, color: { argb: 'FF64748B' } };
+  trMeta.alignment = { vertical: 'middle', horizontal: 'center' };
+  wsTriage.getRow(3).height = 18;
 
   const totalTriage = (stats.triageRedCount || 0) + (stats.triageYellowCount || 0) + (stats.triageGreenCount || 0) || 1;
 
-  const triageHeaders = ['Mức Độ Nguy Hiểm (Triage Level)', 'Số Ca Ghi Nhận', 'Tỉ Lệ (%)', 'Quy Trình Xử Trí Y Tế Khuyến Nghị'];
-  const triageHeaderRow = wsTriage.getRow(4);
+  const triageHeaders = [
+    'Ma Phan Loai',
+    'Muc Do Lam Sang (Level)',
+    'So Ca Ghi Nhan (Cases)',
+    'Ty Trong (%)',
+    'Thoi Gian Dap Ung Muc Tieu',
+    'Quy Trinh Xu Tri Khuyen Nghi'
+  ];
+
+  const triageHeaderRow = wsTriage.getRow(5);
   triageHeaders.forEach((h, idx) => {
     const cell = triageHeaderRow.getCell(idx + 2);
     cell.value = h;
-    cell.font = { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
-    cell.fill = primaryHeaderFill;
-    cell.alignment = { vertical: 'middle', horizontal: idx === 1 || idx === 2 ? 'right' : 'left' };
+    cell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = tableHeaderFill;
+    cell.alignment = { vertical: 'middle', horizontal: idx === 2 || idx === 3 ? 'right' : 'left' };
     cell.border = thinBorder;
   });
   triageHeaderRow.height = 24;
 
   const triageData = [
-    ['🔴 Cảnh Báo Đỏ (Cấp Bách)', stats.triageRedCount || 0, (stats.triageRedCount || 0) / totalTriage, 'Chỉ định cấp cứu khẩn cấp trong vòng 1 giờ'],
-    ['🟡 Cảnh Báo Vàng (Theo Dõi)', stats.triageYellowCount || 0, (stats.triageYellowCount || 0) / totalTriage, 'Theo dõi triệu chứng trong 24h và đặt hẹn khám thú y'],
-    ['🟢 Khung Xanh (An Toàn)', stats.triageGreenCount || 0, (stats.triageGreenCount || 0) / totalTriage, 'Tư vấn dinh dưỡng, phòng bệnh và chăm sóc chuẩn y khoa']
+    [
+      'TRIAGE_L1_RED',
+      'Cap Do 1 - Canh Bao Do (Cap Bach)',
+      stats.triageRedCount || 0,
+      (stats.triageRedCount || 0) / totalTriage,
+      '< 15 phut',
+      'Chi dinh cap cuu khot cap ngay lap tuc tai phong kham gan nhat'
+    ],
+    [
+      'TRIAGE_L2_YELLOW',
+      'Cap Do 2 - Canh Bao Vang (Nguy Co)',
+      stats.triageYellowCount || 0,
+      (stats.triageYellowCount || 0) / totalTriage,
+      '< 24 gio',
+      'Theo doi sat sao cac dau hieu lam sang va dat lich hen tham kham'
+    ],
+    [
+      'TRIAGE_L3_GREEN',
+      'Cap Do 3 - Khung Xanh (Tieu Chuan)',
+      stats.triageGreenCount || 0,
+      (stats.triageGreenCount || 0) / totalTriage,
+      'Tieu chuan cham soc',
+      'Tu van dinh duong, cham soc hang ngay va phong ngua benh thuong gap'
+    ]
   ];
 
   triageData.forEach((row, rIdx) => {
-    const r = wsTriage.getRow(rIdx + 5);
+    const r = wsTriage.getRow(rIdx + 6);
     row.forEach((val, cIdx) => {
       const cell = r.getCell(cIdx + 2);
       cell.value = val;
-      cell.font = { name: 'Arial', size: 10 };
+      cell.font = { name: FONT_FAMILY, size: 9.5 };
       cell.border = thinBorder;
 
       if (cIdx === 0) {
-        cell.font = { name: 'Arial', size: 10, bold: true };
+        cell.font = { name: 'Consolas', size: 9, color: { argb: 'FF64748B' } };
       } else if (cIdx === 1) {
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true };
+      } else if (cIdx === 2) {
         cell.numFmt = '#,##0';
         cell.alignment = { horizontal: 'right' };
-        cell.font = { name: 'Arial', size: 10, bold: true };
-      } else if (cIdx === 2) {
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true, color: { argb: 'FF0F172A' } };
+      } else if (cIdx === 3) {
         cell.numFmt = '0.0%';
         cell.alignment = { horizontal: 'right' };
-        cell.font = { name: 'Arial', size: 10, bold: true };
+        cell.font = { name: FONT_FAMILY, size: 9.5, bold: true, color: { argb: 'FF1B365D' } };
+      }
+
+      if (rIdx % 2 === 1) {
+        cell.fill = zebraRowFill;
       }
     });
     r.height = 22;
   });
+
+  // Triage Summary Row
+  const trSumRow = wsTriage.getRow(9);
+  wsTriage.mergeCells('B9:C9');
+  const trSumLabel = trSumRow.getCell(2);
+  trSumLabel.value = 'TONG SO CA HOI BENH';
+  trSumLabel.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FF1B365D' } };
+  trSumLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  ['B', 'C'].forEach(c => {
+    trSumRow.getCell(c).fill = totalRowFill;
+    trSumRow.getCell(c).border = totalBorder;
+  });
+
+  const sumCasesCell = trSumRow.getCell(4);
+  sumCasesCell.value = { formula: 'SUM(D6:D8)' };
+  sumCasesCell.numFmt = '#,##0';
+  sumCasesCell.font = { name: FONT_FAMILY, size: 10, bold: true };
+  sumCasesCell.alignment = { horizontal: 'right' };
+  sumCasesCell.fill = totalRowFill;
+  sumCasesCell.border = totalBorder;
+
+  const sumPctCell = trSumRow.getCell(5);
+  sumPctCell.value = { formula: 'SUM(E6:E8)' };
+  sumPctCell.numFmt = '0.0%';
+  sumPctCell.font = { name: FONT_FAMILY, size: 10, bold: true, color: { argb: 'FF1B365D' } };
+  sumPctCell.alignment = { horizontal: 'right' };
+  sumPctCell.fill = totalRowFill;
+  sumPctCell.border = totalBorder;
+
+  ['F', 'G'].forEach(c => {
+    const emptyC = trSumRow.getCell(c);
+    emptyC.value = '';
+    emptyC.fill = totalRowFill;
+    emptyC.border = totalBorder;
+  });
+  trSumRow.height = 22;
 
   // ─────────────────────────────────────────────────────────────
   // GENERATE BLOB & TRIGGER BROWSER DOWNLOAD
@@ -574,10 +963,11 @@ export async function exportDashboardStatsToExcel(stats: SystemStats, timeRange:
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   });
 
+  const filenameDate = new Date().toISOString().split('T')[0];
   const url = window.URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `Vethic_AI_Bao_Cao_Thong_Ke_${new Date().toISOString().split('T')[0]}.xlsx`;
+  anchor.download = `Vethic_System_Analytics_Report_${timeRange}_${filenameDate}.xlsx`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
