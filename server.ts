@@ -1976,6 +1976,43 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
 
+      // Parallel helpers to bypass Supabase PostgREST default 1000-row cap
+      const fetchAnalyticsEvents = async () => {
+        const pages = [0, 1, 2, 3, 4, 5, 6, 7];
+        const resList = await Promise.all(
+          pages.map(p =>
+            supabase
+              .from('analytics_events')
+              .select('visitor_id, ip_address, event_type, path, created_at')
+              .not('path', 'like', '/admin%')
+              .gte('created_at', thirtyDaysAgoISO)
+              .range(p * 1000, (p + 1) * 1000 - 1)
+          )
+        );
+        const combined: any[] = [];
+        for (const r of resList) {
+          if (r.data && r.data.length > 0) combined.push(...r.data);
+        }
+        return combined;
+      };
+
+      const fetchChatSessions = async () => {
+        const pages = [0, 1, 2];
+        const resList = await Promise.all(
+          pages.map(p =>
+            supabase
+              .from('chat_sessions')
+              .select('id, user_id, messages, created_at')
+              .range(p * 1000, (p + 1) * 1000 - 1)
+          )
+        );
+        const combined: any[] = [];
+        for (const r of resList) {
+          if (r.data && r.data.length > 0) combined.push(...r.data);
+        }
+        return combined;
+      };
+
       // Parallel DB queries for actual registered entities & chat histories & analytics events
       const [
         usersRes,
@@ -1985,9 +2022,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         redRes,
         yellowRes,
         greenRes,
-        sessionsRes,
+        allSessions,
         guestLimitsRes,
-        analyticsEventsRes,
+        allAnalyticsEvents,
         pageViewsCountRes,
         recentEventsRes
       ] = await Promise.all([
@@ -1998,9 +2035,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'RED'),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'YELLOW'),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'GREEN'),
-        supabase.from('chat_sessions').select('id, user_id, messages, created_at'),
-        supabase.from('guest_rate_limits').select('ip_address, message_count, first_seen_at, last_message_at'),
-        supabase.from('analytics_events').select('visitor_id, ip_address, event_type, path, created_at').not('path', 'like', '/admin%').limit(1000),
+        fetchChatSessions(),
+        supabase.from('guest_rate_limits').select('ip_address, message_count, last_message_at'),
+        fetchAnalyticsEvents(),
         supabase.from('analytics_events').select('*', { count: 'exact', head: true }).eq('event_type', 'PAGE_VIEW').not('path', 'like', '/admin%'),
         supabase.from('analytics_events').select('*').not('path', 'like', '/admin%').order('created_at', { ascending: false }).limit(20)
       ]);
@@ -2027,7 +2064,6 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       }
 
       // Filter out admin chat sessions
-      const allSessions = sessionsRes.data || [];
       const nonAdminSessions = allSessions.filter(s => !s.user_id || !adminUserIds.has(s.user_id));
       const chatSessions = nonAdminSessions.length;
 
@@ -2064,7 +2100,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
       // Realtime Analytics metrics directly from Supabase & store
       const store = getAnalyticsStore();
-      const dbEvents = analyticsEventsRes.data || [];
+      const dbEvents = allAnalyticsEvents || [];
 
       const distinctVisitorIds = new Set<string>();
       dbEvents.forEach(e => {
@@ -3995,11 +4031,14 @@ YÊU CẦU:
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
       role: 'user',
       status: 'active'
-    }, { onConflict: 'id' }).then(() => {
-      serverLog('SYSTEM', 'OK', 'Guest User Init', 'Tài khoản guest mặc định đã sẵn sàng');
-    }).catch(e => {
-      serverLog('SYSTEM', 'WARN', 'Guest User Init', e?.message || 'Warning');
-    });
+    }, { onConflict: 'id' }).then(
+      () => {
+        serverLog('SYSTEM', 'OK', 'Guest User Init', 'Tài khoản guest mặc định đã sẵn sàng');
+      },
+      e => {
+        serverLog('SYSTEM', 'WARN', 'Guest User Init', e?.message || 'Warning');
+      }
+    );
 
     // Tự động "đánh thức" Python AI Server trên Render ngay khi khởi động Dev Server
     const renderUrl = 'https://pet-chatbot-ai.onrender.com';
