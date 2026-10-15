@@ -5,6 +5,7 @@ import { KnowledgeArticle } from '../../types';
 import { TriageBadge } from '../common/TriageBadge';
 import { api } from '../../services/api';
 import { CardsGridSkeleton } from '../common/LoadingSkeleton';
+import { trackEvent } from '../../utils/analytics';
 
 const DEFAULT_ARTICLE_IMAGE = 'https://images.unsplash.com/photo-1576201836106-db1758fd1c97?auto=format&fit=crop&q=80&w=800';
 
@@ -221,7 +222,15 @@ export const ArticlesNewsView: React.FC = () => {
               {filtered.map((art) => (
                 <div
                   key={art.id}
-                  onClick={() => setActiveArticle(art)}
+                  onClick={() => {
+                    setActiveArticle(art);
+                    trackEvent('EMERGENCY_GUIDE_VIEW', {
+                      title: art.title,
+                      category: art.category,
+                      species: art.species,
+                      urgencyLevel: art.urgencyLevel
+                    });
+                  }}
                   className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-emerald-500 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
                 >
                   <div>

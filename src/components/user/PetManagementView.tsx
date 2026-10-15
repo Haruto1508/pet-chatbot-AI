@@ -4,6 +4,7 @@ import { PetProfile, UserProfile } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { trackEvent } from '../../utils/analytics';
 
 interface Props {
   pets: PetProfile[];
@@ -86,9 +87,11 @@ export const PetManagementView: React.FC<Props> = ({ pets, currentUser, onRefres
     try {
       if (editingPet) {
         await api.updatePet(editingPet.id, payload);
+        trackEvent('PET_UPDATE', { petId: editingPet.id, name: payload.name, species: payload.species });
         showSuccess(`Cập nhật thông tin bé ${payload.name} thành công`);
       } else {
         await api.createPet(payload);
+        trackEvent('PET_CREATE', { name: payload.name, species: payload.species, breed: payload.breed });
         showSuccess(`Đã thêm bé ${payload.name} thành công`);
       }
       setIsModalOpen(false);
