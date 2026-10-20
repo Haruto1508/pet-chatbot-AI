@@ -27,6 +27,7 @@ const ArticlesNewsView = lazyWithRetry(() => import('./components/user/ArticlesN
 const NearestClinicsView = lazyWithRetry(() => import('./components/user/NearestClinicsView').then(m => ({ default: m.NearestClinicsView })));
 const PetManagementView = lazyWithRetry(() => import('./components/user/PetManagementView').then(m => ({ default: m.PetManagementView })));
 const AccountSettingsView = lazyWithRetry(() => import('./components/user/AccountSettingsView').then(m => ({ default: m.AccountSettingsView })));
+const PricingPackagesView = lazyWithRetry(() => import('./components/user/PricingPackagesView').then(m => ({ default: m.PricingPackagesView })));
 
 // Lazy-loaded Admin Views with auto-retry on new deployments
 const AdminDashboardView = lazyWithRetry(() => import('./components/admin/AdminDashboardView').then(m => ({ default: m.AdminDashboardView })));
@@ -497,8 +498,19 @@ export function App() {
                     onNavigateToRecords={() => setCurrentTab('records')}
                     onNavigateToPets={() => setCurrentTab('pets')}
                     onNavigateToClinics={() => setCurrentTab('clinics')}
+                    onNavigateToPricing={() => setCurrentTab('pricing')}
                     currentUser={currentUser}
                     onOpenLogin={() => setIsLoginModalOpen(true)}
+                    onUpdatePoints={(newPts) => handleUpdateUser({ points: newPts })}
+                  />
+                )}
+
+                {currentTab === 'pricing' && (
+                  <PricingPackagesView
+                    currentUser={currentUser}
+                    onUpdateUser={handleUpdateUser}
+                    onOpenLoginModal={() => setIsLoginModalOpen(true)}
+                    onNavigateToChat={() => setCurrentTab('chat')}
                   />
                 )}
 

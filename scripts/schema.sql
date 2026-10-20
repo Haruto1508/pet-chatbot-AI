@@ -16,6 +16,20 @@ CREATE TABLE users (
   avatar TEXT,
   role TEXT DEFAULT 'user',
   status TEXT DEFAULT 'active',
+  points INTEGER DEFAULT 10,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- Bảng Point Transactions (Lịch sử nạp/trừ điểm)
+CREATE TABLE point_transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+  amount_vnd NUMERIC DEFAULT 0,
+  points INTEGER NOT NULL,
+  transaction_type TEXT NOT NULL, -- 'topup', 'chat_usage', 'bonus', 'refund'
+  package_id TEXT,               -- 'month', 'year', 'custom', 'welcome_bonus'
+  description TEXT,
+  status TEXT DEFAULT 'success',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
@@ -151,3 +165,4 @@ ALTER TABLE articles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE clinics DISABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_sessions DISABLE ROW LEVEL SECURITY;
 ALTER TABLE guest_rate_limits DISABLE ROW LEVEL SECURITY;
+ALTER TABLE point_transactions DISABLE ROW LEVEL SECURITY;

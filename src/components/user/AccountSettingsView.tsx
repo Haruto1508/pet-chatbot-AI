@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, User, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut, Smartphone, Compass, Sparkles, HelpCircle } from 'lucide-react';
+import { Settings, User, Shield, Key, Moon, Check, Save, Database, Trash2, MessageSquare, AlertTriangle, LogOut, Smartphone, Compass, Sparkles, HelpCircle, Coins, CreditCard } from 'lucide-react';
 import { UserProfile, ChatSession } from '../../types';
 import { api } from '../../services/api';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -17,6 +17,7 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
   const email = currentUser.email;
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{ usage: number; quota: number } | null>(null);
+  const [isClaimingBonus, setIsClaimingBonus] = useState(false);
 
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   
@@ -55,6 +56,27 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
   React.useEffect(() => {
     loadSessions();
   }, [currentUser.id]);
+
+  const handleClaimTestBonus = async () => {
+    setIsClaimingBonus(true);
+    try {
+      const res = await api.topupPointsSandbox({
+        userId: currentUser.id,
+        packageId: 'bonus_test',
+        amountVnd: 0,
+        points: 10,
+        description: 'Tặng 10 Point dùng thử nghiệm'
+      });
+      if (res.success) {
+        onUpdateUser({ points: res.newPoints });
+        showSuccess('Đã cộng thêm 10 Point thử nghiệm vào tài khoản!');
+      }
+    } catch (e: any) {
+      showError(e.message || 'Lỗi nhận điểm thử nghiệm');
+    } finally {
+      setIsClaimingBonus(false);
+    }
+  };
 
   const confirmClearCache = async () => {
     if ('caches' in window) {
@@ -160,6 +182,54 @@ export const AccountSettingsView: React.FC<Props> = ({ currentUser, onUpdateUser
                 value={email}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-500"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Điểm Số & Gói Dịch Vụ AI Section */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-2">
+            <Coins className="w-4 h-4 text-amber-500" /> Điểm Chat & Gói Dịch Vụ AI (Thử Nghiệm)
+          </h3>
+
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-50/80 via-emerald-50/50 to-teal-50/80 border border-amber-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700">Số dư hiện tại:</span>
+                <span className="text-xl font-black text-amber-700">
+                  {currentUser.points ?? 10} Point
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-200/80 text-amber-900 uppercase">
+                  1 Point = 1.000đ
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Mỗi câu hỏi tư vấn bác sĩ thú y tiêu thụ 1 Point. Hệ thống đang hoạt động ở chế độ thử nghiệm (Sandbox).
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={handleClaimTestBonus}
+                disabled={isClaimingBonus}
+                className="flex-1 sm:flex-none py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>+10 Point Thử Nghiệm</span>
+              </button>
+              <a
+                href="/pricing"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.history.pushState(null, '', '/pricing');
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                }}
+                className="flex-1 sm:flex-none py-2 px-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 text-center"
+              >
+                <CreditCard className="w-3.5 h-3.5" />
+                <span>Bảng Giá & Gói Chat</span>
+              </a>
             </div>
           </div>
         </div>

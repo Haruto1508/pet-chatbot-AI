@@ -33,7 +33,8 @@ import {
   Phone,
   Navigation,
   ShieldAlert,
-  UploadCloud
+  UploadCloud,
+  Coins
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord, VetClinic } from '../../types';
@@ -49,8 +50,10 @@ interface Props {
   onNavigateToRecords: () => void;
   onNavigateToPets: () => void;
   onNavigateToClinics?: () => void;
+  onNavigateToPricing?: () => void;
   currentUser: UserProfile;
   onOpenLogin?: () => void;
+  onUpdatePoints?: (newPoints: number) => void;
 }
 
 const THINKING_STEPS = [
@@ -140,12 +143,28 @@ export const PetChatView: React.FC<Props> = ({
   onNavigateToRecords,
   onNavigateToPets,
   onNavigateToClinics,
+  onNavigateToPricing,
   currentUser,
-  onOpenLogin
+  onOpenLogin,
+  onUpdatePoints
 }) => {
   const { showSuccess, showError, showInfo } = useNotification();
   const GUEST_MESSAGE_LIMIT = 8;
   const isGuest = currentUser.id === 'guest' || !currentUser.email;
+
+  const [pointSystemEnabled, setPointSystemEnabled] = useState<boolean>(() => {
+    return (import.meta as any).env?.VITE_ENABLE_POINT_SYSTEM !== 'false';
+  });
+
+  useEffect(() => {
+    api.getPointConfig().then(cfg => {
+      if (typeof cfg?.enabled === 'boolean') {
+        setPointSystemEnabled(cfg.enabled);
+      }
+    }).catch(() => { });
+  }, []);
+
+  const isOutOfPoints = !isGuest && pointSystemEnabled && (currentUser.points !== undefined && currentUser.points <= 0);
 
   const [guestMsgCount, setGuestMsgCount] = useState<number>(() => {
     const saved = localStorage.getItem('petcare_guest_msg_count');
@@ -437,7 +456,7 @@ export const PetChatView: React.FC<Props> = ({
   };
 
   const handleClipboardPaste = (e: React.ClipboardEvent) => {
-    if (isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)) return;
+    if (isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints) return;
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -471,7 +490,7 @@ export const PetChatView: React.FC<Props> = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
-    if (isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)) return;
+    if (isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints) return;
 
     const file = e.dataTransfer?.files?.[0];
     if (file && file.type.startsWith('image/')) {
@@ -547,8 +566,15 @@ export const PetChatView: React.FC<Props> = ({
 
     // Enforce 8-message rate limit for guest users
     if (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) {
-      showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập bằng Google để tiếp tục.');
+      showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập để nhận ngay 10 Point.');
       onOpenLogin?.();
+      return;
+    }
+
+    // Enforce Point check for logged-in users
+    if (isOutOfPoints) {
+      showError('Bạn đã dùng hết điểm chat (0 Point). Vui lòng nạp thêm point hoặc chọn gói chat để tiếp tục trò chuyện!');
+      onNavigateToPricing?.();
       return;
     }
 
@@ -721,6 +747,9 @@ export const PetChatView: React.FC<Props> = ({
             setHasReceivedFirstChunk(false);
             setMessages(prev => prev.filter(m => m.id !== aiMessageId));
           }
+        },
+        (newPoints) => {
+          if (onUpdatePoints) onUpdatePoints(newPoints);
         }
       );
 
@@ -764,6 +793,14 @@ export const PetChatView: React.FC<Props> = ({
           });
         }
       } else {
+        const isPointLimit = (err as any)?.pointLimitReached ||
+          err?.message?.includes('hết điểm') ||
+          err?.message?.includes('0 Point');
+
+        if (isPointLimit && !isGuest) {
+          if (onUpdatePoints) onUpdatePoints(0);
+        }
+
         const isTimeout = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('timeout') || err?.message?.toLowerCase().includes('quá thời gian');
         const isRateLimit = err?.message?.includes('giới hạn 8 tin nhắn') ||
           err?.message?.includes('đạt giới hạn') ||
@@ -780,11 +817,13 @@ export const PetChatView: React.FC<Props> = ({
           err?.message?.toLowerCase().includes('lượng lớn người truy cập') ||
           err?.message?.toLowerCase().includes('tải lại trang');
 
-        const errorText = isTimeout
-          ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại sau ít phút.'
-          : isOverload
-            ? 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
-            : (err?.message || 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
+        const errorText = isPointLimit
+          ? 'Tài khoản của bạn đã hết điểm chat (0 Point). Vui lòng nạp thêm point hoặc chọn gói chat để tiếp tục trò chuyện!'
+          : isTimeout
+            ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại sau ít phút.'
+            : isOverload
+              ? 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
+              : (err?.message || 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
 
         const errMsg: ChatMessage = {
           id: `err_${Date.now()}`,
@@ -1103,8 +1142,19 @@ export const PetChatView: React.FC<Props> = ({
           </button>
         )}
 
-        {/* Top Right Actions: Mobile History & New Chat */}
+        {/* Top Right Actions: Point balance badge & Mobile History & New Chat */}
         <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+          {!isGuest && (
+            <button
+              type="button"
+              onClick={onNavigateToPricing}
+              title={`Số dư: ${currentUser.points ?? 10} Point - Bấm để nạp thêm hoặc xem các gói chat`}
+              className="h-10 px-3 rounded-xl bg-gradient-to-r from-amber-50 to-amber-100/90 hover:from-amber-100 hover:to-amber-200/90 active:scale-95 text-amber-900 border border-amber-300 shadow-2xs transition-all cursor-pointer flex items-center gap-1.5 font-black text-xs"
+            >
+              <Coins className="w-4 h-4 text-amber-500 animate-pulse shrink-0" />
+              <span>{currentUser.points ?? 10} Pt</span>
+            </button>
+          )}
           <button
             onClick={() => setIsMobileHistoryOpen(true)}
             title="Lịch sử chat"
@@ -1138,6 +1188,35 @@ export const PetChatView: React.FC<Props> = ({
 
             {/* Centered input bar */}
             <div className="w-full max-w-2xl">
+              {/* Out of points warning banner */}
+              {isOutOfPoints && (
+                <div className="mb-3 p-3.5 rounded-2xl bg-gradient-to-r from-red-500/15 via-amber-500/10 to-red-500/15 border border-red-300 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-800 animate-in fade-in">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-red-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Coins className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">
+                        Tài khoản của bạn đã hết điểm chat (0 Point)
+                      </p>
+                      <p className="text-[11px] text-slate-600">
+                        Chi phí chỉ 1.000 VNĐ / lượt. Vui lòng nạp thêm point hoặc mua gói chat để bắt đầu!
+                      </p>
+                    </div>
+                  </div>
+                  {onNavigateToPricing && (
+                    <button
+                      type="button"
+                      onClick={onNavigateToPricing}
+                      className="shrink-0 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                      <span>Nạp Point Ngay</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               {selectedImage && (
                 <div className="mb-2 px-3 py-1.5 bg-emerald-50 rounded-xl border border-emerald-100 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2 font-semibold text-emerald-800">
@@ -1149,12 +1228,15 @@ export const PetChatView: React.FC<Props> = ({
                   </button>
                 </div>
               )}
-              <div data-tour="chat-input" className="flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border border-slate-200/90 shadow-md hover:shadow-lg transition-all px-3 py-2">
+              <div data-tour="chat-input" className={`flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border shadow-md hover:shadow-lg transition-all px-3 py-2 ${
+                isOutOfPoints ? 'border-red-300 bg-slate-50/50' : 'border-slate-200/90'
+              }`}>
                 <button
                   data-tour="image-upload"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={isOutOfPoints}
                   title="Đính kèm ảnh"
-                  className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors flex-shrink-0 cursor-pointer"
+                  className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors flex-shrink-0 cursor-pointer disabled:opacity-40"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -1162,15 +1244,20 @@ export const PetChatView: React.FC<Props> = ({
                   type="text"
                   ref={inputRef}
                   value={input}
+                  disabled={isOutOfPoints}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSend(); }}
-                  placeholder={selectedPet ? `Hỏi về triệu chứng của ${selectedPet.name}...` : 'Hỏi bất kỳ điều gì về thú cưng của bạn...'}
-                  className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 py-1 px-1"
+                  placeholder={
+                    isOutOfPoints
+                      ? 'Bạn đã hết điểm chat (0 Point). Vui lòng nạp thêm point để tiếp tục...'
+                      : selectedPet ? `Hỏi về triệu chứng của ${selectedPet.name}...` : 'Hỏi bất kỳ điều gì về thú cưng của bạn...'
+                  }
+                  className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 py-1 px-1 disabled:text-slate-400"
                 />
                 <button
                   type="button"
                   onClick={() => handleSend()}
-                  disabled={!input.trim() && !selectedImage}
+                  disabled={(!input.trim() && !selectedImage) || isOutOfPoints}
                   title="Gửi"
                   className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white transition-all flex items-center justify-center shadow-xs cursor-pointer disabled:cursor-not-allowed flex-shrink-0"
                 >
@@ -1589,7 +1676,7 @@ export const PetChatView: React.FC<Props> = ({
                               Đã sử dụng hết {guestMsgCount}/{GUEST_MESSAGE_LIMIT} tin nhắn dùng thử miễn phí
                             </p>
                             <p className="text-[11px] text-slate-600">
-                              Đăng nhập bằng tài khoản Google để tiếp tục tư vấn AI không giới hạn & lưu hồ sơ bệnh án!
+                              Đăng nhập bằng tài khoản Google để nhận ngay 10 Point và tiếp tục tư vấn AI!
                             </p>
                           </div>
                         </div>
@@ -1600,7 +1687,7 @@ export const PetChatView: React.FC<Props> = ({
                             className="shrink-0 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
                           >
                             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                            <span>Đăng nhập Google ngay</span>
+                            <span>Đăng nhập nhận 10 Point</span>
                           </button>
                         )}
                       </div>
@@ -1616,10 +1703,58 @@ export const PetChatView: React.FC<Props> = ({
                             onClick={onOpenLogin}
                             className="text-emerald-700 hover:text-emerald-800 font-semibold underline underline-offset-2 cursor-pointer flex items-center gap-1"
                           >
-                            Đăng nhập để chat không giới hạn
+                            Đăng nhập nhận 10 Point
                           </button>
                         )}
                       </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Registered User Out of Points Warning Banner */}
+                {!isGuest && isOutOfPoints && (
+                  <div className="mb-2.5 p-3.5 rounded-2xl bg-gradient-to-r from-red-500/15 via-amber-500/10 to-red-500/15 border border-red-300 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-800 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-red-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <Coins className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">
+                          Tài khoản của bạn đã hết điểm chat (0 Point)
+                        </p>
+                        <p className="text-[11px] text-slate-600">
+                          Chi phí chỉ 1.000 VNĐ / lượt chat. Nạp thêm điểm hoặc đăng ký gói tháng/năm để tiếp tục tư vấn!
+                        </p>
+                      </div>
+                    </div>
+                    {onNavigateToPricing && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToPricing}
+                        className="shrink-0 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                        <span>Nạp Point / Mua Gói Ngay</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Point balance micro-bar for registered user */}
+                {!isGuest && !isOutOfPoints && pointSystemEnabled && (
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 px-2 py-0.5 mb-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-amber-500" />
+                      <span>1 lượt chat = 1 Point (1.000đ) • Số dư: <strong className="text-amber-600">{currentUser.points ?? 10} Point</strong></span>
+                    </div>
+                    {onNavigateToPricing && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToPricing}
+                        className="text-emerald-700 hover:text-emerald-800 font-semibold underline underline-offset-2 cursor-pointer"
+                      >
+                        Nạp thêm điểm
+                      </button>
                     )}
                   </div>
                 )}
@@ -1690,14 +1825,19 @@ export const PetChatView: React.FC<Props> = ({
                   onDragEnter={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border shadow-md px-2.5 py-1.5 transition-all ${isDraggingOver ? 'border-emerald-500 ring-2 ring-emerald-400/30' : 'border-slate-200'
-                    }`}
+                  className={`flex items-center gap-2 bg-white rounded-2xl sm:rounded-full border shadow-md px-2.5 py-1.5 transition-all ${
+                    isOutOfPoints
+                      ? 'border-red-300 ring-2 ring-red-400/20 bg-slate-50/50'
+                      : isDraggingOver
+                        ? 'border-emerald-500 ring-2 ring-emerald-400/30'
+                        : 'border-slate-200'
+                  }`}
                 >
                   <button
                     type="button"
                     data-tour="image-upload"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)}
+                    disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints}
                     title="Đính kèm ảnh triệu chứng (Tối đa 5MB • Hỗ trợ JPG, PNG, WEBP, GIF)"
                     className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0 cursor-pointer"
                   >
@@ -1708,14 +1848,19 @@ export const PetChatView: React.FC<Props> = ({
                     type="text"
                     ref={inputRef}
                     value={input}
-                    disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)}
+                    disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints}
                     onChange={(e) => setInput(e.target.value)}
                     onPaste={handleClipboardPaste}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !isLoading) {
                         if (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) {
-                          showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập.');
+                          showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập để nhận 10 Point.');
                           onOpenLogin?.();
+                          return;
+                        }
+                        if (isOutOfPoints) {
+                          showError('Bạn đã dùng hết điểm chat (0 Point). Vui lòng nạp thêm point hoặc mua gói chat để tiếp tục!');
+                          onNavigateToPricing?.();
                           return;
                         }
                         handleSend();
@@ -1724,10 +1869,12 @@ export const PetChatView: React.FC<Props> = ({
                     placeholder={
                       isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT
                         ? 'Bạn đã hết lượt dùng thử miễn phí. Vui lòng đăng nhập để tiếp tục...'
-                        : isRetrying ? 'Bác sĩ AI đang đối chiếu thông tin & tổng hợp phác đồ...'
-                          : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
-                            : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}... (Có thể dán Ctrl+V hoặc kéo ảnh vào)`
-                              : 'Mô tả triệu chứng, tình trạng... (Có thể dán Ctrl+V hoặc kéo ảnh vào)'
+                        : isOutOfPoints
+                          ? 'Bạn đã hết điểm chat (0 Point). Vui lòng nạp thêm point để tiếp tục...'
+                          : isRetrying ? 'Bác sĩ AI đang đối chiếu thông tin & tổng hợp phác đồ...'
+                            : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
+                              : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}... (Có thể dán Ctrl+V hoặc kéo ảnh vào)`
+                                : 'Mô tả triệu chứng, tình trạng... (Có thể dán Ctrl+V hoặc kéo ảnh vào)'
                     }
                     className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 disabled:text-slate-400 py-1.5 px-2"
                   />
@@ -1740,7 +1887,7 @@ export const PetChatView: React.FC<Props> = ({
                     </button>
                   ) : (
                     <button type="button" onClick={() => handleSend()}
-                      disabled={(!input.trim() && !selectedImage) || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT)} title="Gửi"
+                      disabled={(!input.trim() && !selectedImage) || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints} title="Gửi"
                       className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 disabled:opacity-40 text-white font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer disabled:cursor-not-allowed flex-shrink-0">
                       <Send className="w-4 h-4" />
                     </button>

@@ -11,6 +11,42 @@ export interface UserProfile {
   role: UserRole;
   status: 'active' | 'suspended';
   createdAt: string;
+  points?: number; // Điểm số chat hiện tại của người dùng (1 lần chat = 1 point)
+}
+
+export interface PointConfig {
+  enabled: boolean;
+  costPerChat: number;
+  costPerChatVnd: number;
+  initialFreePoints: number;
+  guestMaxLimit: number;
+  isTrialMode: boolean;
+}
+
+export interface PointTransaction {
+  id: string;
+  userId: string;
+  amountVnd: number;
+  points: number;
+  transactionType: 'topup' | 'chat_usage' | 'bonus' | 'refund';
+  packageId?: string;
+  description?: string;
+  status: 'success' | 'pending' | 'failed';
+  createdAt: string;
+}
+
+export interface ChatPackage {
+  id: 'month' | 'year' | 'custom';
+  name: string;
+  tagline: string;
+  badge?: string;
+  priceVnd: number;
+  points: number;
+  duration?: string;
+  description: string;
+  features: string[];
+  isPopular?: boolean;
+  isBestValue?: boolean;
 }
 
 export interface PetProfile {

@@ -1870,8 +1870,271 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     }
   });
 
+  // ─────────────────────────────────────────
+  // 🪙 POINT & CHAT MONETIZATION SYSTEM (EXPERIMENTAL / TRIAL MODE)
+  // ─────────────────────────────────────────
+  const ENABLE_POINT_SYSTEM = process.env.ENABLE_POINT_SYSTEM !== 'false';
+  const POINTS_STORE_FILE = path.join(process.cwd(), 'points_store.json');
+  const DEFAULT_INITIAL_POINTS = 10;
+  const COST_PER_CHAT = 1;
+  const COST_PER_CHAT_VND = 1000;
+
+  interface PointTransactionRecord {
+    id: string;
+    userId: string;
+    amountVnd: number;
+    points: number;
+    transactionType: 'topup' | 'chat_usage' | 'bonus' | 'refund';
+    packageId?: string;
+    description?: string;
+    status: 'success' | 'pending' | 'failed';
+    createdAt: string;
+  }
+
+  interface PointsStoreData {
+    userPoints: Record<string, number>;
+    transactions: PointTransactionRecord[];
+  }
+
+  function getPointsStore(): PointsStoreData {
+    try {
+      if (fs.existsSync(POINTS_STORE_FILE)) {
+        const raw = fs.readFileSync(POINTS_STORE_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return {
+          userPoints: parsed.userPoints || {},
+          transactions: Array.isArray(parsed.transactions) ? parsed.transactions : []
+        };
+      }
+    } catch { }
+    return { userPoints: {}, transactions: [] };
+  }
+
+  function savePointsStore(data: PointsStoreData): void {
+    try {
+      fs.writeFileSync(POINTS_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    } catch { }
+  }
+
+  async function getUserPoints(userId: string): Promise<number> {
+    if (!userId || userId === 'guest') return 0;
+    const store = getPointsStore();
+
+    // 1. Cố gắng lấy từ Supabase
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('points')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!error && data && typeof data.points === 'number') {
+        store.userPoints[userId] = data.points;
+        savePointsStore(store);
+        return data.points;
+      }
+    } catch (e: any) {
+      serverLog('SYSTEM', 'WARN', 'getUserPoints', `Supabase select points: ${e.message}`);
+    }
+
+    // 2. Fallback: Nếu Supabase chưa có cột hoặc user chưa có point trong store, cấp 10 point mặc định
+    if (typeof store.userPoints[userId] !== 'number') {
+      store.userPoints[userId] = DEFAULT_INITIAL_POINTS;
+      savePointsStore(store);
+
+      // Thử đồng bộ ngược vào Supabase nếu được
+      try {
+        await supabase.from('users').update({ points: DEFAULT_INITIAL_POINTS }).eq('id', userId);
+      } catch { }
+    }
+
+    return store.userPoints[userId];
+  }
+
+  async function deductUserPoints(userId: string, pointsToDeduct: number = 1, description: string = 'Trừ điểm chat AI'): Promise<number> {
+    if (!userId || userId === 'guest') return 0;
+    const store = getPointsStore();
+    const current = await getUserPoints(userId);
+    const newPoints = Math.max(0, current - pointsToDeduct);
+
+    // Cập nhật store local
+    store.userPoints[userId] = newPoints;
+    const tx: PointTransactionRecord = {
+      id: (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `tx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`),
+      userId,
+      amountVnd: 0,
+      points: -pointsToDeduct,
+      transactionType: 'chat_usage',
+      description,
+      status: 'success',
+      createdAt: new Date().toISOString()
+    };
+    store.transactions.unshift(tx);
+    if (store.transactions.length > 500) store.transactions.pop();
+    savePointsStore(store);
+
+    // Cố gắng cập nhật Supabase
+    try {
+      await supabase.from('users').update({ points: newPoints }).eq('id', userId);
+      await supabase.from('point_transactions').insert([{
+        user_id: userId,
+        amount_vnd: 0,
+        points: -pointsToDeduct,
+        transaction_type: 'chat_usage',
+        description,
+        status: 'success'
+      }]);
+    } catch { }
+
+    return newPoints;
+  }
+
+  async function addSandboxPoints(userId: string, pointsToAdd: number, amountVnd: number, packageId: string = 'custom', description: string = 'Nạp point thử nghiệm'): Promise<number> {
+    if (!userId || userId === 'guest') return 0;
+    const store = getPointsStore();
+    const current = await getUserPoints(userId);
+    const newPoints = current + pointsToAdd;
+
+    store.userPoints[userId] = newPoints;
+    const tx: PointTransactionRecord = {
+      id: (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `tx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`),
+      userId,
+      amountVnd,
+      points: pointsToAdd,
+      transactionType: 'topup',
+      packageId,
+      description,
+      status: 'success',
+      createdAt: new Date().toISOString()
+    };
+    store.transactions.unshift(tx);
+    if (store.transactions.length > 500) store.transactions.pop();
+    savePointsStore(store);
+
+    // Cố gắng cập nhật Supabase
+    try {
+      await supabase.from('users').update({ points: newPoints }).eq('id', userId);
+      await supabase.from('point_transactions').insert([{
+        user_id: userId,
+        amount_vnd: amountVnd,
+        points: pointsToAdd,
+        transaction_type: 'topup',
+        package_id: packageId,
+        description,
+        status: 'success'
+      }]);
+    } catch { }
+
+    return newPoints;
+  }
+
+  async function getUserTransactions(userId: string): Promise<PointTransactionRecord[]> {
+    if (!userId || userId === 'guest') return [];
+    try {
+      const { data, error } = await supabase
+        .from('point_transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (!error && Array.isArray(data) && data.length > 0) {
+        return data.map((d: any) => ({
+          id: d.id,
+          userId: d.user_id,
+          amountVnd: Number(d.amount_vnd || 0),
+          points: Number(d.points || 0),
+          transactionType: d.transaction_type,
+          packageId: d.package_id,
+          description: d.description,
+          status: d.status,
+          createdAt: d.created_at
+        }));
+      }
+    } catch { }
+
+    const store = getPointsStore();
+    return store.transactions.filter(t => t.userId === userId).slice(0, 50);
+  }
+
+  // Endpoints: Point System Configuration
+  app.get('/api/points/config', (_req: Request, res: Response) => {
+    res.json(secureResponse({
+      enabled: ENABLE_POINT_SYSTEM,
+      costPerChat: COST_PER_CHAT,
+      costPerChatVnd: COST_PER_CHAT_VND,
+      initialFreePoints: DEFAULT_INITIAL_POINTS,
+      guestMaxLimit: 8,
+      isTrialMode: true
+    }));
+  });
+
+  // Endpoints: Get User Point Balance
+  app.get('/api/points/balance', async (req: Request, res: Response) => {
+    try {
+      const auth = await resolveAuthContext(req);
+      const userId = (req.query.userId as string) || auth?.user?.id;
+      if (!userId || userId === 'guest') {
+        return res.json(secureResponse({ points: 0, isGuest: true, guestLimit: 8 }));
+      }
+      const points = await getUserPoints(userId);
+      res.json(secureResponse({ points, userId, enabled: ENABLE_POINT_SYSTEM }));
+    } catch (e: any) {
+      res.status(500).json(secureResponse({ error: e.message }));
+    }
+  });
+
+  // Endpoints: Sandbox Top-up (Nạp tiền thử nghiệm)
+  app.post('/api/points/topup-sandbox', async (req: Request, res: Response) => {
+    try {
+      const auth = await resolveAuthContext(req);
+      const userId = req.body.userId || auth?.user?.id;
+      const { packageId, amountVnd, points, description } = req.body;
+
+      if (!userId || userId === 'guest') {
+        return res.status(401).json(secureResponse({ error: 'Vui lòng đăng nhập để nạp point' }));
+      }
+
+      const numPoints = parseInt(points, 10);
+      const numAmount = parseInt(amountVnd, 10) || (numPoints * COST_PER_CHAT_VND);
+
+      if (isNaN(numPoints) || numPoints <= 0) {
+        return res.status(400).json(secureResponse({ error: 'Số point nạp không hợp lệ' }));
+      }
+
+      const desc = description || `Nạp ${numPoints} Point (${packageId || 'custom'}) - Thử nghiệm Sandbox`;
+      const newPoints = await addSandboxPoints(userId, numPoints, numAmount, packageId || 'custom', desc);
+
+      serverLog('SYSTEM', 'INFO', '/api/points/topup-sandbox', `User ${userId} topped up ${numPoints} points (New balance: ${newPoints})`);
+
+      res.json(secureResponse({
+        success: true,
+        newPoints,
+        addedPoints: numPoints,
+        message: `Nạp thành công ${numPoints} Point thử nghiệm! Số dư mới: ${newPoints} Point.`
+      }));
+    } catch (e: any) {
+      res.status(500).json(secureResponse({ error: e.message }));
+    }
+  });
+
+  // Endpoints: User Transactions History
+  app.get('/api/points/transactions', async (req: Request, res: Response) => {
+    try {
+      const auth = await resolveAuthContext(req);
+      const userId = (req.query.userId as string) || auth?.user?.id;
+      if (!userId || userId === 'guest') {
+        return res.json(secureResponse([]));
+      }
+      const txs = await getUserTransactions(userId);
+      res.json(secureResponse(txs));
+    } catch (e: any) {
+      res.status(500).json(secureResponse({ error: e.message }));
+    }
+  });
+
   // In-memory cooldown map for server-side pageview deduplication (30s per machine + path)
   const recentPageViewsCooldownMap = new Map<string, number>();
+
 
   // 1. Ingest Client & User Activity Events (supports /api/app-activity to avoid ad-blocker filters like EasyPrivacy)
   app.post(['/api/app-activity', '/api/events'], async (req: Request, res: Response) => {
@@ -2035,15 +2298,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'RED'),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'YELLOW'),
         supabase.from('medical_records').select('*', { count: 'exact', head: true }).eq('triage_level', 'GREEN'),
-<<<<<<< HEAD
         fetchChatSessions(),
         supabase.from('guest_rate_limits').select('ip_address, message_count, last_message_at'),
         fetchAnalyticsEvents(),
-=======
-        supabase.from('chat_sessions').select('id, user_id, messages, created_at').gte('created_at', thirtyDaysAgoISO).limit(10000),
-        supabase.from('guest_rate_limits').select('ip_address, message_count, first_seen_at, last_message_at'),
-        supabase.from('analytics_events').select('visitor_id, ip_address, event_type, path, created_at').not('path', 'like', '/admin%').gte('created_at', thirtyDaysAgoISO).limit(10000),
->>>>>>> 9035d0b0aa9416da37d1b63faed180e113c075b1
         supabase.from('analytics_events').select('*', { count: 'exact', head: true }).eq('event_type', 'PAGE_VIEW').not('path', 'like', '/admin%'),
         supabase.from('analytics_events').select('*').not('path', 'like', '/admin%').order('created_at', { ascending: false }).limit(20)
       ]);
@@ -2417,16 +2674,34 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
           .select()
           .single();
         if (updateError) throw updateError;
-        return res.json(secureResponse({ ...data, createdAt: data.created_at }));
+        const currentPoints = await getUserPoints(userId);
+        return res.json(secureResponse({ ...data, points: currentPoints, createdAt: data.created_at }));
       } else {
-        // Insert new user
-        const { data, error: insertError } = await supabase
-          .from('users')
-          .insert([{ id: userId, name: userName || 'User', email: userEmail, avatar: userAvatar, role, status: 'active' }])
-          .select()
-          .single();
-        if (insertError) throw insertError;
-        return res.json(secureResponse({ ...data, createdAt: data.created_at }));
+        // Insert new user (Thử insert kèm points = 10, nếu cột chưa tồn tại thì fallback)
+        let insertedData: any = null;
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .insert([{ id: userId, name: userName || 'User', email: userEmail, avatar: userAvatar, role, status: 'active', points: DEFAULT_INITIAL_POINTS }])
+            .select()
+            .single();
+          if (!error && data) {
+            insertedData = data;
+          }
+        } catch { }
+
+        if (!insertedData) {
+          const { data, error: insertError } = await supabase
+            .from('users')
+            .insert([{ id: userId, name: userName || 'User', email: userEmail, avatar: userAvatar, role, status: 'active' }])
+            .select()
+            .single();
+          if (insertError) throw insertError;
+          insertedData = data;
+        }
+
+        const userPoints = await getUserPoints(userId);
+        return res.json(secureResponse({ ...insertedData, points: userPoints, createdAt: insertedData.created_at }));
       }
     } catch (e: any) {
       return res.status(500).json(secureResponse({ error: e.message }));
@@ -3568,20 +3843,31 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     } catch { }
 
     try {
-      // 1. GUEST RATE LIMIT CHECK (Server-side & Machine-Enforced)
+      // 1. GUEST RATE LIMIT & USER POINT CHECK
       if (!userId || userId === 'guest') {
         const clientIp = getClientIp(req);
         const quota = await getGuestQuota(clientIp);
         if (quota.messageCount >= 8) {
           serverLog('SYSTEM', 'WARN', '/api/chat', `Guest machine IP ${clientIp} exceeded limit (${quota.messageCount}/8)`);
           return res.status(429).json(secureResponse({
-            error: 'Bạn đã đạt giới hạn 8 tin nhắn miễn phí trên thiết bị này. Vui lòng đăng nhập tài khoản để tiếp tục tư vấn không giới hạn!',
+            error: 'Bạn đã đạt giới hạn 8 tin nhắn dùng thử miễn phí trên thiết bị này. Vui lòng đăng nhập tài khoản để nhận ngay 10 Point miễn phí và tiếp tục tư vấn!',
             guestLimitReached: true,
             messageCount: quota.messageCount,
             limit: 8
           }));
         }
         await incrementGuestMessageCount(clientIp, quota.messageCount);
+      } else if (ENABLE_POINT_SYSTEM) {
+        // Kiểm tra số point của người dùng đã đăng nhập
+        const currentPoints = await getUserPoints(userId);
+        if (currentPoints <= 0) {
+          serverLog('SYSTEM', 'WARN', '/api/chat', `User ${userId} has 0 points. Chat blocked.`);
+          return res.status(402).json(secureResponse({
+            error: 'Bạn đã sử dụng hết điểm chat (0 Point). Vui lòng nạp thêm point hoặc chọn gói chat để tiếp tục trò chuyện với Bác sĩ Thú y AI!',
+            pointLimitReached: true,
+            currentPoints: 0
+          }));
+        }
       }
 
       // Retrieve System Config
@@ -3906,7 +4192,18 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
               }
             }
 
-            sendEvent('done', { rawText: fullText });
+            // Trừ 1 point nếu người dùng đã đăng nhập và tính năng point được bật
+            let remainingPoints: number | undefined;
+            if (ENABLE_POINT_SYSTEM && userId && userId !== 'guest') {
+              try {
+                remainingPoints = await deductUserPoints(userId, 1, 'Trừ 1 điểm cho lượt chat tư vấn Bác sĩ Thú y AI');
+                sendEvent('point_update', { points: remainingPoints });
+              } catch (e: any) {
+                serverLog('SYSTEM', 'WARN', 'deductUserPoints', e.message);
+              }
+            }
+
+            sendEvent('done', { rawText: fullText, remainingPoints });
             res.end();
             serverLog('GEMINI', 'OK', `stream done ← ${targetModel}`,
               `${fullText.length} chars [${keyTag}]`, Date.now() - gemT0);
@@ -4166,23 +4463,6 @@ YÊU CẦU:
     serverLog('SYSTEM', 'INFO', 'Gemini', `API_KEY=${process.env.GEMINI_API_KEY ? '✅ Set' : '❌ MISSING'}`);
 
     // Đảm bảo user "guest" luôn tồn tại trong DB để lưu chat_sessions của khách
-<<<<<<< HEAD
-    supabase.from('users').upsert({
-      id: 'guest',
-      name: 'Khách (Guest)',
-      email: 'guest@petcare.local',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-      role: 'user',
-      status: 'active'
-    }, { onConflict: 'id' }).then(
-      () => {
-        serverLog('SYSTEM', 'OK', 'Guest User Init', 'Tài khoản guest mặc định đã sẵn sàng');
-      },
-      e => {
-        serverLog('SYSTEM', 'WARN', 'Guest User Init', e?.message || 'Warning');
-      }
-    );
-=======
     (async () => {
       try {
         await supabase.from('users').upsert({
@@ -4198,7 +4478,6 @@ YÊU CẦU:
         serverLog('SYSTEM', 'WARN', 'Guest User Init', e?.message || 'Warning');
       }
     })();
->>>>>>> 9035d0b0aa9416da37d1b63faed180e113c075b1
 
     // Tự động "đánh thức" Python AI Server trên Render ngay khi khởi động Dev Server
     const renderUrl = 'https://pet-chatbot-ai.onrender.com';

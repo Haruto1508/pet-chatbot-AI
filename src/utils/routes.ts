@@ -5,6 +5,7 @@
 
 export const TAB_TO_PATH: Record<string, string> = {
   chat: '/chat',
+  pricing: '/pricing',
   records: '/records',
   record_detail: '/record-detail',
   news: '/news',
@@ -28,6 +29,9 @@ export const PATH_TO_TAB: Record<string, string> = {
   '': 'chat',
   '/': 'chat',
   '/chat': 'chat',
+  '/pricing': 'pricing',
+  '/packages': 'pricing',
+  '/billing': 'pricing',
   '/records': 'records',
   '/record-detail': 'record_detail',
   '/record_detail': 'record_detail',
@@ -65,6 +69,7 @@ export const PATH_TO_TAB: Record<string, string> = {
 
 export const TAB_TITLES: Record<string, string> = {
   chat: 'Tư Vấn Bệnh Lý AI | Vethic AI',
+  pricing: 'Gói Dịch Vụ & Nạp Point | Vethic AI',
   records: 'Hồ Sơ Bệnh Án | Vethic AI',
   record_detail: 'Chi Tiết Bệnh Án | Vethic AI',
   news: 'Tin Tức & Sơ Cứu Khẩn Cấp 24/7 | Vethic AI',
@@ -87,6 +92,7 @@ export const TAB_TITLES: Record<string, string> = {
 
 export const TAB_DESCRIPTIONS: Record<string, string> = {
   chat: 'Tư vấn sức khỏe, chẩn đoán triệu chứng chó mèo trực tuyến 24/7 với Bác sĩ Thú y AI Vethic.',
+  pricing: 'Bảng giá các gói chat theo tháng, theo năm và nạp point tùy ý cho Bác sĩ Thú y AI Vethic.',
   records: 'Theo dõi lịch sử khám bệnh, chẩn đoán, điều trị và phác đồ y tế thú cưng của bạn.',
   record_detail: 'Xem chi tiết bệnh án điện tử, phân loại Triage y tế và hướng dẫn điều trị thú cưng.',
   news: 'Cẩm nang dinh dưỡng, phòng bệnh và hướng dẫn các bước sơ cứu khẩn cấp 24/7 chuẩn y khoa.',

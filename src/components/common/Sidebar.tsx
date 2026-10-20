@@ -3,7 +3,8 @@ import {
   MessageSquare, FileText, Newspaper, ShieldAlert, MapPin,
   PawPrint, Settings, LayoutDashboard, Users, Database,
   Sliders, X, ShieldCheck, LogOut, LogIn, PawPrint as PawIcon,
-  Phone, ChevronLeft, ChevronRight, Menu, Activity, ScrollText, HelpCircle, Award
+  Phone, ChevronLeft, ChevronRight, Menu, Activity, ScrollText, HelpCircle, Award,
+  Coins
 } from "lucide-react";
 import { UserProfile } from "../../types";
 import { LogoutConfirmModal } from "./LogoutConfirmModal";
@@ -31,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const userNavItems = [
     { id: "chat", label: "Chat AI Tư Vấn", icon: MessageSquare },
+    { id: "pricing", label: "Nạp Point & Gói Chat", icon: Coins, badge: "Mới" },
     // { id: "records", label: "Hồ Sơ Bệnh Án", icon: FileText },
     { id: "news", label: "Tin Tức & Sơ Cứu", icon: Newspaper, badge: "24/7" },
     { id: "clinics", label: "Tìm Phòng Khám", icon: MapPin },
@@ -175,8 +177,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex flex-col gap-0.5 mt-1">
             {userNavItems.map(({ id, label, icon: Icon }: any) => {
               const isActive = currentTab === id || (id === "records" && currentTab === "record_detail");
+              const itemTitle = id === 'pricing' && currentUser.id !== 'guest'
+                ? `${label} (${currentUser.points ?? 10} Pt)`
+                : label;
               return (
-                <button key={id} onClick={() => handleNav(id)} title={label}
+                <button key={id} onClick={() => handleNav(id)} title={itemTitle}
                   className={`p-2 rounded-lg transition-all ${
                     isActive
                       ? "bg-white text-emerald-600 shadow-xs border border-slate-200/80"
@@ -310,6 +315,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             </div>
           </nav>
+
+          {/* Point Balance Card for logged-in user */}
+          {currentUser.id !== "guest" && (
+            <div className="mx-2 mb-2 p-2.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-emerald-500/10 to-teal-500/10 border border-amber-200/80 shadow-2xs">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Số dư Point:</span>
+                </span>
+                <span className="text-xs font-black text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-lg border border-amber-300/60">
+                  {currentUser.points ?? 10} Pt
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleNav("pricing")}
+                className="w-full py-1.5 px-2 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-600 hover:from-amber-600 hover:to-emerald-700 text-white text-[11px] font-extrabold shadow-xs transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
+              >
+                <span>Nạp Point / Mua Gói</span>
+                <ChevronRight className="w-3 h-3" />
+              </button>
+            </div>
+          )}
 
           {/* Bottom User Profile Section */}
           <div className="border-t border-slate-200 p-2 space-y-1">

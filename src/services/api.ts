@@ -13,7 +13,9 @@ import {
   ApiLogType,
   ApiLogLevel,
   PaginatedLogsResponse,
-  AiEvaluationReport
+  AiEvaluationReport,
+  PointConfig,
+  PointTransaction
 } from '../types';
 import { supabase } from './supabaseClient';
 import { parseApiKeys, maskApiKey } from '../utils/apiKeys';
@@ -61,6 +63,62 @@ export const api = {
     const url = timeRange ? `/api/stats?timeRange=${timeRange}` : '/api/stats';
     const res = await authFetch(url);
     return res.json();
+  },
+
+  // ─────────────────────────────────────────────
+  // 🪙 POINT & CHAT MONETIZATION SYSTEM (TRIAL)
+  // ─────────────────────────────────────────────
+  getPointConfig: async (): Promise<PointConfig> => {
+    try {
+      const res = await authFetch('/api/points/config');
+      if (!res.ok) {
+        return { enabled: true, costPerChat: 1, costPerChatVnd: 1000, initialFreePoints: 10, guestMaxLimit: 8, isTrialMode: true };
+      }
+      return res.json();
+    } catch {
+      return { enabled: true, costPerChat: 1, costPerChatVnd: 1000, initialFreePoints: 10, guestMaxLimit: 8, isTrialMode: true };
+    }
+  },
+
+  getUserPoints: async (userId?: string): Promise<{ points: number; enabled?: boolean }> => {
+    try {
+      const url = userId ? `/api/points/balance?userId=${encodeURIComponent(userId)}` : '/api/points/balance';
+      const res = await authFetch(url);
+      if (!res.ok) return { points: 10 };
+      return res.json();
+    } catch {
+      return { points: 10 };
+    }
+  },
+
+  topupPointsSandbox: async (payload: {
+    userId: string;
+    packageId: string;
+    amountVnd: number;
+    points: number;
+    description?: string;
+  }): Promise<{ success: boolean; newPoints: number; message: string }> => {
+    const res = await authFetch('/api/points/topup-sandbox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Nạp điểm thử nghiệm thất bại');
+    }
+    return res.json();
+  },
+
+  getPointTransactions: async (userId?: string): Promise<PointTransaction[]> => {
+    try {
+      const url = userId ? `/api/points/transactions?userId=${encodeURIComponent(userId)}` : '/api/points/transactions';
+      const res = await authFetch(url);
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
   },
 
   // Guest Quota & Machine Rate Limits
@@ -536,7 +594,8 @@ export const api = {
     },
     onChunk: (text: string) => void,
     onTriage: (triageLevel: TriageLevel, triageDetails: any) => void,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onPointUpdate?: (points: number) => void
   ): Promise<void> => {
     const t0 = Date.now();
     let res: Response;
@@ -562,9 +621,13 @@ export const api = {
 
     if (!res.ok || !res.body) {
       let errMsg = `Lỗi máy chủ (${res.status})`;
+      let isPointLimit = res.status === 402;
+      let isGuestLimit = res.status === 429;
       try {
         const errJson = await res.json();
         errMsg = errJson.message || errJson.error || errJson.details || errMsg;
+        if (errJson.pointLimitReached) isPointLimit = true;
+        if (errJson.guestLimitReached) isGuestLimit = true;
       } catch { }
       api.writeLog({
         log_type: 'render',
@@ -574,7 +637,10 @@ export const api = {
         latency_ms: Date.now() - t0,
         metadata: { status: res.status, error: errMsg }
       }).catch(() => { });
-      throw new Error(errMsg);
+      const errObj: any = new Error(errMsg);
+      if (isPointLimit) errObj.pointLimitReached = true;
+      if (isGuestLimit) errObj.guestLimitReached = true;
+      throw errObj;
     }
 
     const reader = res.body.getReader();
@@ -604,6 +670,8 @@ export const api = {
                 onTriage(data.triageLevel, data.triageDetails);
               } else if (data.type === 'chunk') {
                 onChunk(data.text);
+              } else if (data.type === 'point_update' && typeof data.points === 'number') {
+                if (onPointUpdate) onPointUpdate(data.points);
               } else if (data.type === 'error') {
                 throw new Error(data.message || 'Lỗi server');
               }
@@ -701,7 +769,8 @@ export const api = {
       model?: string;
       timeoutMs?: number;
     },
-    onRetry?: (isRetrying: boolean) => void
+    onRetry?: (isRetrying: boolean) => void,
+    onPointUpdate?: (points: number) => void
   ): Promise<void> => {
     const startTime = Date.now();
 
@@ -756,7 +825,7 @@ export const api = {
       }
 
       try {
-        await api.sendChatStream(payload, onChunk, onTriage, controller.signal);
+        await api.sendChatStream(payload, onChunk, onTriage, controller.signal, onPointUpdate);
       } catch (err: any) {
         if (timedOut && !signal?.aborted) {
           throw new Error(`Máy chủ AI phản hồi quá thời gian (${Math.round(timeoutMs / 1000)}s)`);
@@ -787,7 +856,7 @@ export const api = {
 
       return;
     } catch (err: any) {
-      if (signal?.aborted) throw err;
+      if (signal?.aborted || err?.pointLimitReached || err?.guestLimitReached) throw err;
       primaryFailed = true;
 
       api.writeLog({
@@ -831,7 +900,7 @@ export const api = {
         return;
       } catch (retryErr: any) {
         if (onRetry) onRetry(false);
-        if (signal?.aborted) throw retryErr;
+        if (signal?.aborted || retryErr?.pointLimitReached || retryErr?.guestLimitReached) throw retryErr;
 
         api.writeLog({
           log_type: 'render',
