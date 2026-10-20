@@ -17,7 +17,8 @@ import {
   XCircle,
   Stethoscope,
   Sparkles,
-  Building2
+  Building2,
+  Layers
 } from 'lucide-react';
 import { VetClinic } from '../../types';
 import { api } from '../../services/api';
@@ -54,9 +55,45 @@ const DynamicMapView: React.FC<{ center: { lat: number; lng: number }; zoom: num
   useEffect(() => {
     if (center && typeof center.lat === 'number' && typeof center.lng === 'number') {
       map.flyTo([center.lat, center.lng], zoom, { duration: 1.2 });
-      setTimeout(() => map.invalidateSize(), 200);
+      const timer = setTimeout(() => {
+        try {
+          map.invalidateSize();
+        } catch {}
+      }, 250);
+      return () => clearTimeout(timer);
     }
   }, [center.lat, center.lng, zoom, map]);
+  return null;
+};
+
+// Component to fix Leaflet grey container bug by invalidating size on mount & resize
+const MapInitializer: React.FC = () => {
+  const map = useMap();
+
+  useEffect(() => {
+    const trigger = () => {
+      try {
+        map.invalidateSize();
+      } catch {}
+    };
+
+    // Trigger immediately and with staggered intervals to ensure flex/grid layout has computed
+    trigger();
+    const t1 = setTimeout(trigger, 100);
+    const t2 = setTimeout(trigger, 350);
+    const t3 = setTimeout(trigger, 800);
+    const t4 = setTimeout(trigger, 1500);
+
+    window.addEventListener('resize', trigger);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+      window.removeEventListener('resize', trigger);
+    };
+  }, [map]);
+
   return null;
 };
 
@@ -155,6 +192,9 @@ export const NearestClinicsView: React.FC = () => {
     lng: 105.768515,
     zoom: 14
   });
+
+  // Map Tile Type: Google Maps standard (roadmap) vs satellite
+  const [mapType, setMapType] = useState<'roadmap' | 'satellite'>('roadmap');
   
   const { showSuccess, showError } = useNotification();
 
@@ -877,10 +917,25 @@ export const NearestClinicsView: React.FC = () => {
               style={{ height: '100%', width: '100%', zIndex: 10 }}
             >
               <DynamicMapView center={{ lat: mapTarget.lat, lng: mapTarget.lng }} zoom={mapTarget.zoom} />
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
+              <MapInitializer />
+
+              {mapType === 'satellite' ? (
+                <TileLayer
+                  key="google-satellite"
+                  attribution='&copy; <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer">Google Maps</a>'
+                  url="https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+                  subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
+                  maxZoom={20}
+                />
+              ) : (
+                <TileLayer
+                  key="google-roadmap"
+                  attribution='&copy; <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer">Google Maps</a>'
+                  url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+                  subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
+                  maxZoom={20}
+                />
+              )}
               
               {/* Markers phòng khám */}
               {processedClinics.map((clinic) => (
@@ -943,11 +998,22 @@ export const NearestClinicsView: React.FC = () => {
             </MapContainer>
 
             {/* Map Floating Control Buttons */}
-            <div className="absolute top-3 right-3 z-[400] flex flex-col gap-2">
+            <div className="absolute top-3 right-3 z-[400] flex flex-col sm:flex-row items-end sm:items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMapType(prev => (prev === 'roadmap' ? 'satellite' : 'roadmap'))}
+                className="bg-white/95 backdrop-blur text-slate-800 px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-50 transition-all hover:scale-105 cursor-pointer active:scale-95"
+                title="Chuyển đổi kiểu bản đồ Google"
+              >
+                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                <span>{mapType === 'roadmap' ? 'Bản đồ Google' : 'Vệ tinh Google'}</span>
+              </button>
+
               {userLocation && (
                 <button
+                  type="button"
                   onClick={handleRecenterUserLocation}
-                  className="bg-white text-slate-800 px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-50 transition-all hover:scale-105 cursor-pointer"
+                  className="bg-white/95 backdrop-blur text-slate-800 px-3 py-1.5 rounded-xl shadow-md border border-slate-200 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-50 transition-all hover:scale-105 cursor-pointer active:scale-95"
                 >
                   <LocateFixed className="w-4 h-4 text-red-600" />
                   Vị trí của tôi
