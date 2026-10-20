@@ -491,7 +491,7 @@ export const api = {
     try {
       let url = '/api/chat-sessions';
       const params = new URLSearchParams();
-      if (userId === 'guest') params.append('userId', 'guest');
+      if (userId) params.append('userId', userId);
       if (petId) params.append('petId', petId);
       if (params.toString()) url += `?${params.toString()}`;
       const res = await authFetch(url);

@@ -286,6 +286,19 @@ export const PetChatView: React.FC<Props> = ({
       });
   }, [clinics, userLocation]);
 
+  const [copiedClinicPhoneId, setCopiedClinicPhoneId] = useState<string | null>(null);
+
+  const handleCopyClinicPhone = (e: React.MouseEvent, phone: string, clinicId: string) => {
+    e.stopPropagation();
+    if (!phone) return;
+    navigator.clipboard.writeText(phone);
+    setCopiedClinicPhoneId(clinicId);
+    showSuccess(`Đã sao chép SĐT: ${phone}`);
+    setTimeout(() => {
+      setCopiedClinicPhoneId((prev) => (prev === clinicId ? null : prev));
+    }, 2000);
+  };
+
   const getClinicDirectionsUrl = (clinic: VetClinic) => {
     if (userLocation) {
       return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${clinic.lat},${clinic.lng}`;
@@ -520,9 +533,9 @@ export const PetChatView: React.FC<Props> = ({
       await api.deleteChatSession(sessionToDelete);
       setSessions(prev => (Array.isArray(prev) ? prev : []).filter(s => s.id !== sessionToDelete));
       if (currentSessionId === sessionToDelete) {
-
         startNewChat();
       }
+      showSuccess('Đã xóa cuộc trò chuyện thành công!');
     } catch (e) {
       showError('Xóa thất bại');
     } finally {
@@ -535,6 +548,7 @@ export const PetChatView: React.FC<Props> = ({
       await api.deleteAllChatSessions(currentUser.id);
       setSessions([]);
       startNewChat();
+      showSuccess('Đã xóa toàn bộ lịch sử trò chuyện!');
     } catch (e) {
       showError('Xóa tất cả thất bại');
     } finally {
@@ -1482,22 +1496,42 @@ export const PetChatView: React.FC<Props> = ({
 
                                     <div className="flex items-center gap-1.5 shrink-0">
                                       {clinic.phone && (
-                                        <a
-                                          href={`tel:${clinic.phone}`}
-                                          onClick={() => trackEvent('CLINIC_CALL_CLICK', { clinicName: clinic.name, phone: clinic.phone, fromChat: true })}
-                                          className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors ${isRed
-                                              ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
-                                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                                            }`}
-                                          style={{
-                                            color: isRed ? '#be123c' : '#334155',
-                                            textDecoration: 'none'
-                                          }}
-                                          title={`Gọi ${clinic.phone}`}
-                                        >
-                                          <Phone className={`w-3 h-3 ${isRed ? 'text-rose-600' : 'text-slate-600'}`} />
-                                          <span className="hidden sm:inline">Gọi</span>
-                                        </a>
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => handleCopyClinicPhone(e, clinic.phone, clinic.id)}
+                                            className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors"
+                                            title="Sao chép số điện thoại"
+                                          >
+                                            {copiedClinicPhoneId === clinic.id ? (
+                                              <>
+                                                <Check className="w-3 h-3 text-emerald-600" />
+                                                <span className="text-emerald-700 font-bold">Đã chép</span>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Copy className="w-3 h-3 text-slate-500" />
+                                                <span>{clinic.phone}</span>
+                                              </>
+                                            )}
+                                          </button>
+                                          <a
+                                            href={`tel:${clinic.phone}`}
+                                            onClick={() => trackEvent('CLINIC_CALL_CLICK', { clinicName: clinic.name, phone: clinic.phone, fromChat: true })}
+                                            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-md border transition-colors ${isRed
+                                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                                                : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                              }`}
+                                            style={{
+                                              color: isRed ? '#be123c' : '#334155',
+                                              textDecoration: 'none'
+                                            }}
+                                            title={`Gọi ${clinic.phone}`}
+                                          >
+                                            <Phone className={`w-3 h-3 ${isRed ? 'text-rose-600' : 'text-slate-600'}`} />
+                                            <span className="hidden sm:inline">Gọi</span>
+                                          </a>
+                                        </>
                                       )}
                                       <a
                                         href={getClinicDirectionsUrl(clinic)}
