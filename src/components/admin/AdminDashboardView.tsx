@@ -431,30 +431,6 @@ export const AdminDashboardView: React.FC = () => {
           {/* ──── TAB 1: ACQUISITION ──── */}
           {activeTab === 'acquisition' && (
             <div className="space-y-6">
-              {/* Acquisition Metric Sub-grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase">Total Visitors</span>
-                  <p className="text-xl font-black text-slate-900 mt-1">{websiteVisitors.toLocaleString()}</p>
-                  <span className="text-[10px] text-slate-500">Lượt vào web toàn thời gian</span>
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase">Unique Visitors</span>
-                  <p className="text-xl font-black text-slate-900 mt-1">{uniqueVisitors.toLocaleString()}</p>
-                  <span className="text-[10px] text-slate-500">Độc lập theo thiết bị / IP</span>
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase">Page Views</span>
-                  <p className="text-xl font-black text-slate-900 mt-1">{pageViews.toLocaleString()}</p>
-                  <span className="text-[10px] text-slate-500">Tổng số lượt xem trang</span>
-                </div>
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase">Views / Visitor</span>
-                  <p className="text-xl font-black text-slate-900 mt-1">{viewsPerVisitor}</p>
-                  <span className="text-[10px] text-emerald-600 font-bold">Mức độ tương tác cao</span>
-                </div>
-              </div>
-
               {/* AreaChart of Visitors vs Chat Users */}
               {stats.history && stats.history.length > 0 && (
                 <div className="space-y-3">
