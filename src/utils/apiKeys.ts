@@ -13,6 +13,15 @@ export function parseApiKeys(input?: any): string[] {
   // Match legacy Gemini API keys (AIza...) and new Google AI Studio Auth keys (AQ....)
   const GEMINI_KEY_REGEX = /(?:AIza[A-Za-z0-9_\-]{30,}|AQ\.[A-Za-z0-9._\-]{15,})/g;
 
+  const isMaskedOrInvalid = (k?: string): boolean => {
+    if (!k || typeof k !== 'string') return true;
+    const trimmed = k.trim();
+    if (trimmed.length < 20) return true;
+    if (trimmed.includes('...') || trimmed.includes('***') || trimmed.includes('…')) return true;
+    if (trimmed.startsWith('#') || trimmed.startsWith('//')) return true;
+    return false;
+  };
+
   let rawList: any[] = [];
   if (Array.isArray(input)) {
     const flattened = input.flat(Infinity).filter((item) => item != null && item !== '');
@@ -20,10 +29,10 @@ export function parseApiKeys(input?: any): string[] {
       if (typeof item === 'string') {
         const matches = item.match(GEMINI_KEY_REGEX);
         if (matches && matches.length > 0) {
-          return matches;
+          return matches.filter(m => !isMaskedOrInvalid(m));
         }
         const trimmed = item.trim();
-        return (trimmed.length >= 10 && !trimmed.includes(' ') && !trimmed.startsWith('#') && !trimmed.startsWith('//'))
+        return (!isMaskedOrInvalid(trimmed) && !trimmed.includes(' '))
           ? [trimmed]
           : [];
       }
@@ -32,10 +41,10 @@ export function parseApiKeys(input?: any): string[] {
   } else if (typeof input === 'string') {
     const matches = input.match(GEMINI_KEY_REGEX);
     if (matches && matches.length > 0) {
-      rawList = matches;
+      rawList = matches.filter(m => !isMaskedOrInvalid(m));
     } else {
       const trimmed = input.trim();
-      if (trimmed.length >= 10 && !trimmed.includes(' ') && !trimmed.startsWith('#') && !trimmed.startsWith('//')) {
+      if (!isMaskedOrInvalid(trimmed) && !trimmed.includes(' ')) {
         rawList = [trimmed];
       }
     }
@@ -45,7 +54,7 @@ export function parseApiKeys(input?: any): string[] {
 
   const cleaned = rawList
     .map(k => (k != null ? String(k).trim() : ''))
-    .filter(k => k.length > 5 && !k.startsWith('#') && !k.startsWith('//'));
+    .filter(k => !isMaskedOrInvalid(k));
 
   // Deduplicate while preserving original order
   return Array.from(new Set(cleaned));

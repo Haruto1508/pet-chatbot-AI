@@ -20,6 +20,12 @@ export const LoginModal: React.FC<Props> = ({
     setIsLoading(true);
     setErrorMsg(null);
     try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('vethic_auth_intent', 'true');
+        if (window.location.pathname.startsWith('/admin')) {
+          sessionStorage.setItem('vethic_auth_redirect', window.location.pathname);
+        }
+      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

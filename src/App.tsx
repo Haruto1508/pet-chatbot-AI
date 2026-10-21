@@ -67,8 +67,22 @@ function getInitialUser(): UserProfile {
 }
 
 export function App() {
+  const isOAuthRedirect = typeof window !== 'undefined' && (
+    (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('refresh_token'))) ||
+    (window.location.search && (window.location.search.includes('code=') || window.location.search.includes('error='))) ||
+    sessionStorage.getItem('vethic_auth_intent') === 'true'
+  );
+
   const getInitialTab = () => {
-    const tab = getTabFromPath(window.location.pathname);
+    const initialUser = getInitialUser();
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
+    const tab = getTabFromPath(pathname);
+
+    // If already logged in as admin or subadmin, default route should be admin_dashboard if arriving at '/' or '/chat'
+    if ((initialUser.role === 'admin' || initialUser.role === 'subadmin') && (tab === 'chat' || pathname === '/' || pathname === '/chat')) {
+      return 'admin_dashboard';
+    }
+
     // Quản lý bệnh án & RAG data tạm thời tắt theo yêu cầu, chuyển hướng an toàn về dashboard/chat
     if (tab === 'records' || tab === 'record_detail' || tab === 'admin_records' || tab === 'admin_rag') {
       return tab.startsWith('admin') ? 'admin_dashboard' : 'chat';
@@ -81,6 +95,7 @@ export function App() {
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
+    if (isOAuthRedirect) return true;
     const initialUser = getInitialUser();
     // If we already have a cached authenticated user in localStorage, don't block the screen with full loader
     return initialUser.id === 'guest';
@@ -391,17 +406,38 @@ export function App() {
       } catch { }
       clearAuthHash();
 
-      const currentPath = window.location.pathname.substring(1);
-      const isAdminRoute = currentPath.startsWith('admin') || currentTab.startsWith('admin_');
+      const isAdmin = syncedUser.role === 'admin' || syncedUser.role === 'subadmin';
+      const savedRedirect = typeof window !== 'undefined' ? sessionStorage.getItem('vethic_auth_redirect') : null;
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('vethic_auth_intent');
+        sessionStorage.removeItem('vethic_auth_redirect');
+      }
 
-      if (syncedUser.role !== 'admin' && syncedUser.role !== 'subadmin' && isAdminRoute) {
-        // Kick non-admins out of admin routes
-        setCurrentTab('chat');
-      } else if (window.location.pathname === '/' || window.location.pathname === '/chat') {
-        // Default landing page based on role
-        if (syncedUser.role === 'admin' || syncedUser.role === 'subadmin') {
-          setCurrentTab('admin_dashboard');
-        } else {
+      if (isAdmin) {
+        // ADMIN / SUBADMIN: Always route straight to admin dashboard (or preserved admin tab)
+        let targetTab = 'admin_dashboard';
+        if (savedRedirect && savedRedirect.startsWith('/admin')) {
+          const tabFromRedirect = getTabFromPath(savedRedirect);
+          if (tabFromRedirect.startsWith('admin_')) {
+            targetTab = tabFromRedirect;
+          }
+        } else if (currentTab.startsWith('admin_')) {
+          targetTab = currentTab;
+        }
+
+        setCurrentTab(targetTab);
+        const targetPath = getPathFromTab(targetTab);
+        if (window.location.pathname !== targetPath) {
+          window.history.replaceState(null, '', targetPath);
+        }
+      } else {
+        // REGULAR USER: Kick out of admin routes
+        const currentPath = window.location.pathname;
+        const isAdminRoute = currentPath.startsWith('/admin') || currentTab.startsWith('admin_');
+        if (isAdminRoute) {
+          setCurrentTab('chat');
+          window.history.replaceState(null, '', '/chat');
+        } else if (window.location.pathname === '/' || window.location.pathname === '/chat') {
           setCurrentTab('chat');
         }
       }
@@ -412,6 +448,30 @@ export function App() {
       clearAuthHash();
     }
   };
+
+  // Full-page authenticating overlay during OAuth return / login resolution
+  if (isAuthLoading && isOAuthRedirect) {
+    return (
+      <NotificationProvider>
+        <div className="h-screen h-dvh w-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans antialiased p-6 selection:bg-emerald-500/30">
+          <div className="flex flex-col items-center max-w-sm text-center animate-in fade-in zoom-in-95 duration-200">
+            <div className="relative mb-6">
+              <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-500/10">
+                <span className="text-3xl select-none">🐾</span>
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 border-2 border-slate-900 border-t-emerald-400 border-r-emerald-400 rounded-full animate-spin" />
+            </div>
+            <h2 className="text-lg font-black tracking-tight text-white mb-2">
+              Đang xác thực tài khoản...
+            </h2>
+            <p className="text-xs text-slate-400 leading-relaxed font-medium">
+              Vui lòng đợi giây lát, hệ thống đang kiểm tra quyền truy cập và chuyển hướng bạn đến đúng trang.
+            </p>
+          </div>
+        </div>
+      </NotificationProvider>
+    );
+  }
 
   // Maintenance Mode Guard: All non-admin/non-subadmin users and visitors are blocked
   if (!isAuthLoading && isMaintenanceMode && currentUser.role !== 'admin' && currentUser.role !== 'subadmin') {

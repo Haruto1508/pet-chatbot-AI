@@ -1907,8 +1907,8 @@ export const PetChatView: React.FC<Props> = ({
                           ? 'Bạn đã hết điểm chat (0 Point). Vui lòng nạp thêm point để tiếp tục...'
                           : isRetrying ? 'Bác sĩ AI đang đối chiếu thông tin & tổng hợp phác đồ...'
                             : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
-                              : selectedPet ? `Mô tả triệu chứng bệnh của ${selectedPet.name}... (Có thể dán Ctrl+V hoặc kéo ảnh vào)`
-                                : 'Mô tả triệu chứng, tình trạng... (Có thể dán Ctrl+V hoặc kéo ảnh vào)'
+                              : selectedPet ? `Mô tả triệu chứng bệnh...`
+                                : 'Mô tả triệu chứng, tình trạng...'
                     }
                     className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 disabled:text-slate-400 py-1.5 px-2"
                   />
@@ -1929,11 +1929,6 @@ export const PetChatView: React.FC<Props> = ({
                 </div>
 
                 {/* Upload Format & Capacity Hint */}
-                <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 mt-1.5 px-2 select-none text-center">
-                  <ImageIcon className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span>Hỗ trợ dán ảnh (Ctrl+V), kéo thả hoặc tải lên (Tối đa 5MB • JPG, PNG, WEBP, GIF)</span>
-                </div>
-
                 <p className="text-[10px] sm:text-[11px] text-slate-400 text-center mt-1 px-2 leading-relaxed select-none">
                   Vethic AI chỉ mang tính chất tham khảo &amp; hỗ trợ tư vấn sơ bộ, không thay thế chẩn đoán y khoa từ bác sĩ thú y. Vui lòng liên hệ cơ sở thú y gần nhất trong trường hợp khẩn cấp.
                 </p>

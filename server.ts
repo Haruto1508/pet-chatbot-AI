@@ -593,7 +593,7 @@ async function startServer(isVercel = false) {
     candidates.push(process.env.GEMINI_API_KEYS);
 
     const keys = parseApiKeys(candidates);
-    if (keys.length === 0 && process.env.GEMINI_API_KEY) {
+    if (keys.length === 0 && process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes('...') && !process.env.GEMINI_API_KEY.includes('***')) {
       keys.push(process.env.GEMINI_API_KEY);
     }
     return keys;
@@ -3319,17 +3319,19 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     try {
       const local = getLocalConfig();
 
-      // Only accept incoming keys if they don't contain mask characters (***)
-      const cleanGeminiKey = (req.body.geminiApiKey && !req.body.geminiApiKey.includes('***'))
+      // Only accept incoming keys if they don't contain mask characters (***, ..., …) and have sufficient length
+      const isMaskedKey = (k?: string) => !k || typeof k !== 'string' || k.includes('***') || k.includes('...') || k.includes('…') || k.length < 20;
+
+      const cleanGeminiKey = (!isMaskedKey(req.body.geminiApiKey))
         ? req.body.geminiApiKey
         : (local.geminiApiKey || process.env.GEMINI_API_KEY || '');
-      const cleanBackupKey = (req.body.backupGeminiApiKey && !req.body.backupGeminiApiKey.includes('***'))
+      const cleanBackupKey = (!isMaskedKey(req.body.backupGeminiApiKey))
         ? req.body.backupGeminiApiKey
         : (local.backupGeminiApiKey || '');
-      const cleanOpenAiKey = (req.body.openaiApiKey && !req.body.openaiApiKey.includes('***'))
+      const cleanOpenAiKey = (!isMaskedKey(req.body.openaiApiKey))
         ? req.body.openaiApiKey
         : (local.openaiApiKey || '');
-      const cleanFallbackKey = (req.body.fallbackGeminiApiKey && !req.body.fallbackGeminiApiKey.includes('***'))
+      const cleanFallbackKey = (!isMaskedKey(req.body.fallbackGeminiApiKey))
         ? req.body.fallbackGeminiApiKey
         : (local.fallbackGeminiApiKey || cleanBackupKey);
 
