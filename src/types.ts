@@ -93,6 +93,13 @@ export interface ChatSession {
   isDeleted?: boolean;
   deletedAt?: string | null;
   isHiddenFromUser?: boolean;
+  petName?: string | null;
+  petSpecies?: string | null;
+  petBreed?: string | null;
+  petAvatar?: string | null;
+  diseaseSummary?: string | null;
+  triageLevel?: TriageLevel | null;
+  diagnosis?: string | null;
   user?: {
     id: string;
     name: string;

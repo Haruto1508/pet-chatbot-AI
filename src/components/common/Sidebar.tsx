@@ -33,10 +33,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const userNavItems = [
     { id: "chat", label: "Chat AI Tư Vấn", icon: MessageSquare },
     { id: "pricing", label: "Nạp Point & Gói Chat", icon: Coins, badge: "Mới" },
-    // { id: "records", label: "Hồ Sơ Bệnh Án", icon: FileText },
+    { id: "records", label: "Hồ Sơ Bệnh Án", icon: FileText },
     { id: "news", label: "Tin Tức & Sơ Cứu", icon: Newspaper, badge: "24/7" },
     { id: "clinics", label: "Tìm Phòng Khám", icon: MapPin },
-    // { id: "pets", label: "Quản Lý Thú Cưng", icon: PawPrint },
+    { id: "pets", label: "Quản Lý Thú Cưng", icon: PawPrint },
     { id: "account", label: "Tài Khoản & Cài Đặt", icon: Settings },
   ];
 
@@ -147,8 +147,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <LogoutConfirmModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}
           userName={currentUser.name} userEmail={currentUser.email}
           onConfirm={async () => {
-            await supabase.auth.signOut();
-            setCurrentTab("chat");
+            try {
+              localStorage.removeItem('vethic_auth_token');
+              localStorage.removeItem('vethic_auth_user');
+              await supabase.auth.signOut();
+            } catch { }
+            window.location.href = '/';
           }} />
       </>
     );
@@ -375,7 +379,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <LogoutConfirmModal isOpen={showLogoutModal} onClose={() => setShowLogoutModal(false)}
         userName={currentUser.name} userEmail={currentUser.email}
-        onConfirm={async () => { await supabase.auth.signOut(); }} />
+        onConfirm={async () => {
+          try {
+            localStorage.removeItem('vethic_auth_token');
+            localStorage.removeItem('vethic_auth_user');
+            await supabase.auth.signOut();
+          } catch { }
+          window.location.href = '/';
+        }} />
     </>
   );
 };

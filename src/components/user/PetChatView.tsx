@@ -34,7 +34,9 @@ import {
   Navigation,
   ShieldAlert,
   UploadCloud,
-  Coins
+  Coins,
+  FileText,
+  ChevronRight
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { PetProfile, ChatMessage, UserProfile, ChatSession, TriageLevel, MedicalRecord, VetClinic } from '../../types';
@@ -58,22 +60,22 @@ interface Props {
 
 const THINKING_STEPS = [
   {
-    title: 'Truy tìm kiến thức...',
-    detail: 'Đang tra cứu dữ liệu bệnh học & tiền sử bệnh thú cưng',
+    title: 'Xác thực hình ảnh & mô tả...',
+    detail: 'Kiểm tra ảnh thú cưng & đối chiếu sự đồng nhất với triệu chứng',
     icon: Search,
   },
   {
-    title: 'Đang phân tích...',
+    title: 'Phân tích tổn thương...',
     detail: 'Đánh giá các dấu hiệu bất thường & phân loại Triage',
     icon: Brain,
   },
   {
-    title: 'Đối chiếu thông tin...',
-    detail: 'Xác minh phác đồ điều trị an toàn cho loài & thể trạng',
+    title: 'Đối chiếu phác đồ...',
+    detail: 'Tra cứu cơ sở tri thức thú y & tiền sử bệnh thú cưng',
     icon: Stethoscope,
   },
   {
-    title: 'Đang tổng hợp câu trả lời...',
+    title: 'Đang tổng hợp chỉ dẫn...',
     detail: 'Soạn thảo lời khuyên & hướng dẫn sơ cứu chuẩn y khoa',
     icon: Sparkles,
   },
@@ -403,14 +405,97 @@ export const PetChatView: React.FC<Props> = ({
     scrollToBottom();
   }, [messages, isLoading, thinkingStep]);
 
-  // Filter sessions by search query
+  // Filter sessions by search query and disease status
+  const [sessionFilter, setSessionFilter] = useState<'all' | 'diseased'>('all');
+
+  // Find pet info for a session
+  const getPetInfoForSession = (session: ChatSession): { name: string; species?: string; breed?: string } | null => {
+    if (session.petName) {
+      return { name: session.petName, species: session.petSpecies || undefined, breed: session.petBreed || undefined };
+    }
+    if (!session.petId) return null;
+    const pet = pets.find(p => p.id === session.petId);
+    return pet ? { name: pet.name, species: pet.species, breed: pet.breed } : null;
+  };
+
+  // Find disease and triage for a session
+  const getDiseaseInfoForSession = (session: ChatSession): { disease: string | null; triage: TriageLevel | null } => {
+    let disease = session.diseaseSummary || session.diagnosis || null;
+    let triage = session.triageLevel || null;
+
+    if (!disease || !triage) {
+      const msgs = Array.isArray(session.messages) ? session.messages : [];
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m.sender === 'ai') {
+          if (!triage && m.triageLevel) triage = m.triageLevel;
+          if (!disease && m.triageDetails?.riskTitle) disease = m.triageDetails.riskTitle;
+          if (!disease && m.text) {
+            const match = m.text.match(/###\s*🩺\s*Chẩn đoán sơ bộ\s*\n+([^\n#]+)/i);
+            if (match && match[1]) disease = match[1].trim();
+          }
+        }
+      }
+    }
+    return { disease, triage };
+  };
+
   const filteredSessions = useMemo(() => {
     const safe = Array.isArray(sessions) ? sessions : [];
-    if (!searchQuery.trim()) return safe;
-    const q = searchQuery.toLowerCase();
-    return safe.filter(s => (s.title || '').toLowerCase().includes(q));
-  }, [sessions, searchQuery]);
+    let result = safe;
 
+    if (sessionFilter === 'diseased') {
+      result = result.filter(s => {
+        const d = getDiseaseInfoForSession(s);
+        return Boolean(d.disease || (d.triage && d.triage !== 'GREEN'));
+      });
+    }
+
+    if (!searchQuery.trim()) return result;
+    const q = searchQuery.toLowerCase();
+    return result.filter(s => {
+      const titleMatch = (s.title || '').toLowerCase().includes(q);
+      const petInfo = getPetInfoForSession(s);
+      const petMatch = petInfo && (
+        petInfo.name.toLowerCase().includes(q) ||
+        (petInfo.species || '').toLowerCase().includes(q) ||
+        (petInfo.breed || '').toLowerCase().includes(q)
+      );
+      const diseaseInfo = getDiseaseInfoForSession(s);
+      const diseaseMatch = diseaseInfo.disease && diseaseInfo.disease.toLowerCase().includes(q);
+      return titleMatch || petMatch || diseaseMatch;
+    });
+  }, [sessions, searchQuery, sessionFilter, pets]);
+
+  // Active chat session pet & condition summary
+  const activeSessionSummary = useMemo(() => {
+    const currentSession = sessions.find(s => s.id === currentSessionId);
+    const petInfo = currentSession ? getPetInfoForSession(currentSession) : (selectedPet ? { name: selectedPet.name, species: selectedPet.species } : null);
+    const diseaseInfo = currentSession ? getDiseaseInfoForSession(currentSession) : { disease: null, triage: null };
+
+    // Also check current messages
+    let latestDisease = diseaseInfo.disease;
+    let latestTriage = diseaseInfo.triage;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.sender === 'ai') {
+        if (!latestTriage && m.triageLevel) latestTriage = m.triageLevel;
+        if (!latestDisease && m.triageDetails?.riskTitle) latestDisease = m.triageDetails.riskTitle;
+        if (!latestDisease && m.text) {
+          const match = m.text.match(/###\s*🩺\s*Chẩn đoán sơ bộ\s*\n+([^\n#]+)/i);
+          if (match && match[1]) latestDisease = match[1].trim();
+        }
+      }
+    }
+
+    if (!petInfo && !latestDisease) return null;
+    return {
+      petName: petInfo?.name || selectedPet?.name || 'Thú cưng',
+      petSpecies: petInfo?.species || selectedPet?.species,
+      disease: latestDisease,
+      triage: latestTriage
+    };
+  }, [sessions, currentSessionId, messages, selectedPet]);
 
   // Group filtered sessions by date
   const groupedSessions = useMemo(() => groupSessionsByDate(filteredSessions), [filteredSessions]);
@@ -916,13 +1001,6 @@ export const PetChatView: React.FC<Props> = ({
     }
   };
 
-  // Find pet name for a session
-  const getPetNameForSession = (session: ChatSession): string | null => {
-    if (!session.petId) return null;
-    const pet = pets.find(p => p.id === session.petId);
-    return pet ? pet.name : null;
-  };
-
   // Render the session list (shared between desktop sidebar and mobile drawer)
   const renderSessionList = () => (
     <>
@@ -932,7 +1010,7 @@ export const PetChatView: React.FC<Props> = ({
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input
             type="text"
-            placeholder="Tìm kiếm cuộc trò chuyện..."
+            placeholder="Tìm kiếm theo thú cưng, bệnh lý..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full text-xs pl-8 pr-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent placeholder:text-slate-400 transition-all"
@@ -946,6 +1024,32 @@ export const PetChatView: React.FC<Props> = ({
             </button>
           )}
         </div>
+      </div>
+
+      {/* Quick Filter Chips: Tất cả vs Đang có bệnh */}
+      <div className="px-3 pb-2 flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => setSessionFilter('all')}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+            sessionFilter === 'all'
+              ? 'bg-slate-900 text-white shadow-2xs'
+              : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+          }`}
+        >
+          Tất cả ({sessions.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setSessionFilter('diseased')}
+          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+            sessionFilter === 'diseased'
+              ? 'bg-amber-500 text-white shadow-2xs'
+              : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/60'
+          }`}
+        >
+          <span>🩺 Đang có bệnh</span>
+        </button>
       </div>
 
       {/* Session Groups */}
@@ -987,7 +1091,8 @@ export const PetChatView: React.FC<Props> = ({
 
               {/* Sessions in this group */}
               {group.sessions.map(session => {
-                const petName = getPetNameForSession(session);
+                const petInfo = getPetInfoForSession(session);
+                const diseaseInfo = getDiseaseInfoForSession(session);
                 const isActive = currentSessionId === session.id;
                 const msgCount = session.messages?.filter(m => m.sender === 'user').length || 0;
 
@@ -1017,17 +1122,46 @@ export const PetChatView: React.FC<Props> = ({
                       </button>
                     </div>
 
-                    {/* Metadata row */}
-                    <div className="flex items-center gap-1.5 pl-5.5 ml-[22px]">
-                      {petName && (
-                        <span className={`inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${isActive
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-slate-100 text-slate-500'
+                    {/* Pet & Disease Identification Row */}
+                    {(petInfo || diseaseInfo.disease || diseaseInfo.triage) && (
+                      <div className="flex flex-wrap items-center gap-1.5 pl-5.5 ml-[22px] mt-0.5">
+                        {petInfo && (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                            isActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
                           }`}>
-                          <PawPrint className="w-2.5 h-2.5" />
-                          {petName}
-                        </span>
-                      )}
+                            <PawPrint className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                            <span className="truncate max-w-[85px]">{petInfo.name}</span>
+                            {petInfo.species && <span className="opacity-70 font-normal text-[9px]">({petInfo.species})</span>}
+                          </span>
+                        )}
+                        {diseaseInfo.disease && (
+                          <span className={`inline-flex items-center gap-1 text-[9.5px] font-semibold px-1.5 py-0.5 rounded-md ${
+                            diseaseInfo.triage === 'RED'
+                              ? 'bg-red-100 text-red-700 border border-red-200 font-bold'
+                              : diseaseInfo.triage === 'YELLOW'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`} title={diseaseInfo.disease}>
+                            <Stethoscope className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate max-w-[120px]">{diseaseInfo.disease}</span>
+                          </span>
+                        )}
+                        {diseaseInfo.triage && (
+                          <span className={`text-[8.5px] font-black px-1.5 py-0.5 rounded uppercase ${
+                            diseaseInfo.triage === 'RED'
+                              ? 'bg-red-500 text-white'
+                              : diseaseInfo.triage === 'YELLOW'
+                                ? 'bg-amber-400 text-slate-900'
+                                : 'bg-emerald-500 text-white'
+                          }`}>
+                            {diseaseInfo.triage}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Metadata row */}
+                    <div className="flex items-center gap-1.5 pl-5.5 ml-[22px] mt-0.5">
                       <span className={`text-[10px] flex items-center gap-0.5 ${isActive ? 'text-emerald-500' : 'text-slate-400'
                         }`}>
                         <Clock className="w-2.5 h-2.5" />
@@ -1307,6 +1441,52 @@ export const PetChatView: React.FC<Props> = ({
             {/* Scrollable Messages | full height */}
             <div className="flex-1 min-h-0 overflow-y-auto bg-white scrollbar-thin">
               <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-32">
+                {/* Active Chat Pet & Disease Identification Banner */}
+                {activeSessionSummary && (
+                  <div className="mb-6 p-3 sm:p-3.5 bg-gradient-to-r from-emerald-50/90 via-teal-50/60 to-slate-50 rounded-2xl border border-emerald-200/80 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                        <PawPrint className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-800">
+                            {activeSessionSummary.petName}
+                          </span>
+                          {activeSessionSummary.petSpecies && (
+                            <span className="text-[10px] font-medium text-slate-500 bg-white/80 px-2 py-0.5 rounded-md border border-slate-200/60">
+                              {activeSessionSummary.petSpecies}
+                            </span>
+                          )}
+                        </div>
+                        {activeSessionSummary.disease ? (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <Stethoscope className="w-3 h-3 text-amber-600 shrink-0" />
+                            <span className="text-[11px] font-semibold text-slate-700">
+                              Bệnh / Tình trạng: <span className="text-amber-800 font-bold">{activeSessionSummary.disease}</span>
+                            </span>
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-slate-500">Đang tư vấn &amp; theo dõi triệu chứng</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {activeSessionSummary.triage && (
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 ${
+                          activeSessionSummary.triage === 'RED'
+                            ? 'bg-red-500 text-white shadow-xs'
+                            : activeSessionSummary.triage === 'YELLOW'
+                              ? 'bg-amber-400 text-slate-900 shadow-xs'
+                              : 'bg-emerald-500 text-white shadow-xs'
+                        }`}>
+                          <span>{activeSessionSummary.triage === 'RED' ? '🔴 Cấp cứu' : activeSessionSummary.triage === 'YELLOW' ? '🟡 Cần theo dõi' : '🟢 Ổn định'}</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {messages.filter(m => m.id !== 'msg_welcome').map((msg, idx) => {
                   const isUser = msg.sender === 'user';
 

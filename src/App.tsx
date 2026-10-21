@@ -83,9 +83,9 @@ export function App() {
       return 'admin_dashboard';
     }
 
-    // Quản lý bệnh án & RAG data tạm thời tắt theo yêu cầu, chuyển hướng an toàn về dashboard/chat
-    if (tab === 'records' || tab === 'record_detail' || tab === 'admin_records' || tab === 'admin_rag') {
-      return tab.startsWith('admin') ? 'admin_dashboard' : 'chat';
+    // Chuyển hướng tab nội bộ không khả dụng
+    if (tab === 'admin_records' || tab === 'admin_rag') {
+      return 'admin_dashboard';
     }
     return tab;
   };
@@ -316,10 +316,31 @@ export function App() {
     }
   }, [currentUser.role, currentTab]);
 
-  // Handle Supabase Auth State
+  const handleLoginSuccess = (user: UserProfile) => {
+    setCurrentUser(user);
+    setIsLoginModalOpen(false);
+    if (user.role === 'admin' || user.role === 'subadmin') {
+      setCurrentTab('admin_dashboard');
+    }
+  };
+
+  // Handle Supabase & Custom Admin Auth State
   useEffect(() => {
     const checkUser = async () => {
       try {
+        const cachedToken = typeof window !== 'undefined' ? localStorage.getItem('vethic_auth_token') : null;
+        const cachedUser = typeof window !== 'undefined' ? localStorage.getItem(AUTH_USER_STORAGE_KEY) : null;
+        if (cachedToken && cachedUser) {
+          try {
+            const parsed = JSON.parse(cachedUser);
+            if (parsed && (parsed.role === 'admin' || parsed.id === 'system_admin_01')) {
+              setCurrentUser(parsed);
+              setIsAuthLoading(false);
+              return;
+            }
+          } catch { }
+        }
+
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           await syncAndSetUser(session.user);
@@ -353,6 +374,7 @@ export function App() {
         syncedUserIdRef.current = null;
         try {
           localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+          localStorage.removeItem('vethic_auth_token');
         } catch { }
         setCurrentUser(guestUser);
         setPets([]);
@@ -484,6 +506,7 @@ export function App() {
         <LoginModal
           isOpen={isLoginModalOpen}
           onClose={() => setIsLoginModalOpen(false)}
+          onLoginSuccess={handleLoginSuccess}
         />
       </NotificationProvider>
     );
@@ -675,6 +698,7 @@ export function App() {
       <LoginModal
         isOpen={isLoginModalOpen}
         onClose={() => setIsLoginModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
       />
 
       {/* Interactive UI Spotlight Tour */}

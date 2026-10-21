@@ -34,9 +34,14 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
   const headers = new Headers(init?.headers);
   if (isInternal) {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token && !headers.has('Authorization')) {
-        headers.set('Authorization', `Bearer ${session.access_token}`);
+      const customToken = typeof window !== 'undefined' ? localStorage.getItem('vethic_auth_token') : null;
+      if (customToken && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${customToken}`);
+      } else {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token && !headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${session.access_token}`);
+        }
       }
     } catch {
       // Session fetch error - proceed without token
@@ -194,6 +199,25 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
+    return res.json();
+  },
+
+  // System Admin Username & Password Authentication
+  loginSystemAdmin: async (payload: { username: string; password: string }): Promise<{
+    success: boolean;
+    token: string;
+    user: UserProfile;
+    message?: string;
+  }> => {
+    const res = await authFetch('/api/auth/system-admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Đăng nhập quản trị viên thất bại' }));
+      throw new Error(err.error || 'Tên đăng nhập hoặc mật khẩu không chính xác');
+    }
     return res.json();
   },
 

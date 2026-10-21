@@ -316,6 +316,55 @@ async function startServer(isVercel = false) {
   // ─────────────────────────────────────────
   // 🔐 SERVER-SIDE AUTHENTICATION & ADMIN GUARD
   // ─────────────────────────────────────────
+
+  // 👑 SYSTEM ROOT ADMINISTRATOR CREDENTIALS & TOKEN ENGINE
+  const SYSTEM_ADMIN_USERNAME = (process.env.SYSTEM_ADMIN_USERNAME || 'admin').trim().toLowerCase();
+  const SYSTEM_ADMIN_PASSWORD = process.env.SYSTEM_ADMIN_PASSWORD || 'admin123456';
+  const SYSTEM_ADMIN_EMAIL = (process.env.SYSTEM_ADMIN_EMAIL || 'admin@vethic.ai').trim().toLowerCase();
+  const SYSTEM_ADMIN_SECRET = process.env.SYSTEM_ADMIN_SECRET || 'vethic-system-admin-jwt-secret-2026';
+
+  const SYSTEM_ADMIN_PROFILE = {
+    id: 'system_admin_01',
+    name: 'System Administrator (Full Root)',
+    email: SYSTEM_ADMIN_EMAIL,
+    role: 'admin' as const,
+    status: 'active' as const,
+    avatar: 'https://ui-avatars.com/api/?name=Admin&background=0D9488&color=fff&bold=true',
+    points: 999999,
+    createdAt: '2026-01-01T00:00:00.000Z'
+  };
+
+  function generateSystemAdminToken(): string {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const payload = Buffer.from(JSON.stringify({
+      id: SYSTEM_ADMIN_PROFILE.id,
+      email: SYSTEM_ADMIN_PROFILE.email,
+      role: 'admin',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60) // 30 days
+    })).toString('base64url');
+    const signature = crypto.createHmac('sha256', SYSTEM_ADMIN_SECRET).update(`${header}.${payload}`).digest('base64url');
+    return `sysadmin.${header}.${payload}.${signature}`;
+  }
+
+  function verifySystemAdminToken(token: string): boolean {
+    if (!token || !token.startsWith('sysadmin.')) return false;
+    const parts = token.slice(9).split('.');
+    if (parts.length !== 3) return false;
+    const [header, payload, signature] = parts;
+    const expectedSig = crypto.createHmac('sha256', SYSTEM_ADMIN_SECRET).update(`${header}.${payload}`).digest('base64url');
+    if (signature !== expectedSig) return false;
+    try {
+      const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8'));
+      if (parsed.exp && parsed.exp < Math.floor(Date.now() / 1000)) {
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   interface AuthContext {
     user: any;
     profile: {
@@ -334,6 +383,20 @@ async function startServer(isVercel = false) {
     }
     const token = authHeader.substring(7).trim();
     if (!token) return null;
+
+    // 1. Check System Admin Root Token
+    if (verifySystemAdminToken(token)) {
+      return {
+        user: { id: SYSTEM_ADMIN_PROFILE.id, email: SYSTEM_ADMIN_PROFILE.email },
+        profile: {
+          id: SYSTEM_ADMIN_PROFILE.id,
+          name: SYSTEM_ADMIN_PROFILE.name,
+          email: SYSTEM_ADMIN_PROFILE.email,
+          role: 'admin',
+          status: 'active'
+        }
+      };
+    }
 
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser(token);
@@ -451,6 +514,15 @@ async function startServer(isVercel = false) {
     if ((cleanupInterval as any).unref) (cleanupInterval as any).unref();
 
     return (req: Request, res: Response, next: express.NextFunction) => {
+      // System Administrator bypasses rate limiters
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer sysadmin.')) {
+        const token = authHeader.replace('Bearer ', '').trim();
+        if (verifySystemAdminToken(token)) {
+          return next();
+        }
+      }
+
       const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
       const key = options.keyGenerator ? options.keyGenerator(req) : `${clientIp}:${req.baseUrl || req.path}`;
       const now = Date.now();
@@ -2625,6 +2697,60 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     }
   });
 
+  // ─────────────────────────────────────────────────────────────
+  // 👑 SYSTEM ROOT ADMIN AUTHENTICATION (USERNAME & PASSWORD)
+  // ─────────────────────────────────────────────────────────────
+  app.post('/api/auth/system-admin/login', async (req: Request, res: Response) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json(secureResponse({ error: 'Vui lòng nhập tên đăng nhập và mật khẩu.' }));
+      }
+
+      const cleanUser = String(username).trim().toLowerCase();
+      const validUsernames = [
+        SYSTEM_ADMIN_USERNAME,
+        SYSTEM_ADMIN_EMAIL,
+        'admin',
+        'systemadmin'
+      ];
+
+      if (validUsernames.includes(cleanUser) && String(password) === SYSTEM_ADMIN_PASSWORD) {
+        // Guarantee user row exists in Supabase DB with admin role
+        try {
+          await supabase.from('users').upsert({
+            id: SYSTEM_ADMIN_PROFILE.id,
+            name: SYSTEM_ADMIN_PROFILE.name,
+            email: SYSTEM_ADMIN_PROFILE.email,
+            avatar: SYSTEM_ADMIN_PROFILE.avatar,
+            role: 'admin',
+            status: 'active',
+            points: 999999
+          }, { onConflict: 'id' });
+        } catch (dbErr) {
+          console.warn('System admin upsert DB warning (non-fatal):', dbErr);
+        }
+
+        const token = generateSystemAdminToken();
+        serverLog('SYSTEM', 'OK', 'SYSTEM_ADMIN_LOGIN', `Root Admin "${cleanUser}" đăng nhập thành công full quyền.`);
+
+        return res.json(secureResponse({
+          success: true,
+          token,
+          user: SYSTEM_ADMIN_PROFILE,
+          message: 'Đăng nhập System Admin thành công!'
+        }));
+      }
+
+      serverLog('SYSTEM', 'WARN', 'SYSTEM_ADMIN_LOGIN_FAILED', `Đăng nhập thất bại cho user: "${cleanUser}"`);
+      return res.status(401).json(secureResponse({
+        error: 'Tên đăng nhập hoặc mật khẩu quản trị viên không chính xác.'
+      }));
+    } catch (e: any) {
+      return res.status(500).json(secureResponse({ error: e.message || 'Lỗi xử lý đăng nhập' }));
+    }
+  });
+
   // Auth Sync (Secured: Verifies Token & prevents privilege escalation)
   app.post('/api/auth/sync', async (req: Request, res: Response) => {
     try {
@@ -3551,15 +3677,18 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       const { data, error } = await query;
       if (error) return res.status(500).json({ error: error.message });
 
-      // Fetch users to enrich session info for Admin inspection
+      // Fetch users and pets to enrich session info with pet identity & health context
       let userMap = new Map<string, any>();
+      let petMap = new Map<string, any>();
       try {
-        const { data: usersData } = await supabase.from('users').select('id, name, email, avatar, role');
-        if (usersData) {
-          usersData.forEach(u => userMap.set(u.id, u));
-        }
-      } catch (userErr) {
-        console.warn('Could not load users for chat-sessions map:', userErr);
+        const [usersRes, petsRes] = await Promise.all([
+          supabase.from('users').select('id, name, email, avatar, role'),
+          supabase.from('pets').select('id, name, species, breed, avatar_url')
+        ]);
+        if (usersRes.data) usersRes.data.forEach(u => userMap.set(u.id, u));
+        if (petsRes.data) petsRes.data.forEach(p => petMap.set(p.id, p));
+      } catch (enrichErr) {
+        console.warn('Could not load users/pets for chat-sessions map:', enrichErr);
       }
 
       const mapped = (data || []).map(s => {
@@ -3573,6 +3702,35 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
             role: 'user'
           };
         }
+
+        const pet = s.pet_id ? petMap.get(s.pet_id) : null;
+
+        // Extract disease and triage from messages
+        let sessionTriageLevel: string | null = null;
+        let sessionDiseaseSummary: string | null = null;
+        let sessionDiagnosis: string | null = null;
+
+        if (Array.isArray(s.messages)) {
+          for (let i = s.messages.length - 1; i >= 0; i--) {
+            const m = s.messages[i];
+            if (m.sender === 'ai') {
+              if (m.triageLevel && !sessionTriageLevel) {
+                sessionTriageLevel = m.triageLevel;
+              }
+              if (m.triageDetails?.riskTitle && !sessionDiseaseSummary) {
+                sessionDiseaseSummary = m.triageDetails.riskTitle;
+              }
+              if (m.text && !sessionDiagnosis) {
+                const diagMatch = m.text.match(/###\s*🩺\s*Chẩn đoán sơ bộ\s*\n+([^\n#]+)/i);
+                if (diagMatch && diagMatch[1]) {
+                  sessionDiagnosis = diagMatch[1].trim();
+                  if (!sessionDiseaseSummary) sessionDiseaseSummary = sessionDiagnosis;
+                }
+              }
+            }
+          }
+        }
+
         const isSoftDeleted = s.is_deleted === true || (typeof s.title === 'string' && s.title.startsWith('[HIDDEN_USER]'));
         const cleanTitle = typeof s.title === 'string' ? s.title.replace(/^\[HIDDEN_USER\]\s*/, '') : s.title;
         return {
@@ -3583,6 +3741,13 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
           isHiddenFromUser: isSoftDeleted,
           userId: s.user_id,
           petId: s.pet_id,
+          petName: pet?.name || null,
+          petSpecies: pet?.species || null,
+          petBreed: pet?.breed || null,
+          petAvatar: pet?.avatar_url || null,
+          diseaseSummary: sessionDiseaseSummary,
+          triageLevel: sessionTriageLevel,
+          diagnosis: sessionDiagnosis,
           user: user || null,
           createdAt: s.created_at,
           updatedAt: s.updated_at
@@ -3612,6 +3777,35 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       return res.status(403).json(secureResponse({ error: 'Không có quyền truy cập phiên chat này' }));
     }
 
+    let petInfo: any = null;
+    if (data.pet_id) {
+      try {
+        const { data: petData } = await supabase.from('pets').select('id, name, species, breed, avatar_url').eq('id', data.pet_id).single();
+        if (petData) petInfo = petData;
+      } catch { }
+    }
+
+    let sessionTriageLevel: string | null = null;
+    let sessionDiseaseSummary: string | null = null;
+    let sessionDiagnosis: string | null = null;
+
+    if (Array.isArray(data.messages)) {
+      for (let i = data.messages.length - 1; i >= 0; i--) {
+        const m = data.messages[i];
+        if (m.sender === 'ai') {
+          if (m.triageLevel && !sessionTriageLevel) sessionTriageLevel = m.triageLevel;
+          if (m.triageDetails?.riskTitle && !sessionDiseaseSummary) sessionDiseaseSummary = m.triageDetails.riskTitle;
+          if (m.text && !sessionDiagnosis) {
+            const diagMatch = m.text.match(/###\s*🩺\s*Chẩn đoán sơ bộ\s*\n+([^\n#]+)/i);
+            if (diagMatch && diagMatch[1]) {
+              sessionDiagnosis = diagMatch[1].trim();
+              if (!sessionDiseaseSummary) sessionDiseaseSummary = sessionDiagnosis;
+            }
+          }
+        }
+      }
+    }
+
     const isSoftDeleted = data.is_deleted === true || (typeof data.title === 'string' && data.title.startsWith('[HIDDEN_USER]'));
     const cleanTitle = typeof data.title === 'string' ? data.title.replace(/^\[HIDDEN_USER\]\s*/, '') : data.title;
 
@@ -3623,6 +3817,13 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       isHiddenFromUser: isSoftDeleted,
       userId: data.user_id,
       petId: data.pet_id,
+      petName: petInfo?.name || null,
+      petSpecies: petInfo?.species || null,
+      petBreed: petInfo?.breed || null,
+      petAvatar: petInfo?.avatar_url || null,
+      diseaseSummary: sessionDiseaseSummary,
+      triageLevel: sessionTriageLevel,
+      diagnosis: sessionDiagnosis,
       createdAt: data.created_at,
       updatedAt: data.updated_at
     }));
@@ -3771,6 +3972,113 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     }
   });
 
+  // ─────────────────────────────────────────────────────────────
+  // 🔍 IMAGE & DESCRIPTION CONSISTENCY VERIFICATION GATEKEEPER
+  // ─────────────────────────────────────────────────────────────
+  interface ImageVerificationResult {
+    isValid: boolean;
+    isPetImage: boolean;
+    detectedSubject: string;
+    isMatch: boolean;
+    reason: string;
+  }
+
+  async function verifyImageAndDescription(
+    imageBase64: string,
+    userDescription: string,
+    petInfo?: any,
+    keyPool?: string[]
+  ): Promise<ImageVerificationResult> {
+    const t0 = Date.now();
+    try {
+      const keys = (keyPool && keyPool.length > 0) ? keyPool : getGeminiKeyPool();
+      const apiKey = keys[0] || process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return { isValid: true, isPetImage: true, detectedSubject: 'Thú cưng', isMatch: true, reason: 'Bỏ qua do không có API key' };
+      }
+
+      const ai = getGeminiClient(apiKey);
+      const cleanImg = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+
+      const verifyPrompt = `
+Bạn là Hệ thống Thẩm định An toàn Hình ảnh & Chống Gian Lận Thú Y (Veterinary Image & Symptom Verification Gatekeeper).
+Nhiệm vụ TỐI QUAN TRỌNG: Kiểm tra xem hình ảnh người dùng tải lên có thực sự là THÚ CƯNG (chó, mèo, chim, thú nhỏ...) hay KHÔNG, và có ĐỒNG NHẤT với MÔ TẢ/CÂU HỎI của người dùng hay KHÔNG.
+
+[MÔ TẢ CỦA NGƯỜI DÙNG]: "${userDescription}"
+[THÔNG TIN THÚ CƯNG KHAI BÁO]: ${petInfo ? `${petInfo.name} (Loài: ${petInfo.species || 'Chưa rõ'}, Giống: ${petInfo.breed || 'Chưa rõ'})` : 'Chưa chọn thú cưng cụ thể'}
+
+HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSON SAU (CHỈ TRẢ VỀ JSON THUẦN, KHÔNG DÙNG MARKDOWN BLOCK):
+{
+  "isPetImage": true | false,
+  "detectedSubject": "Mô tả ngắn gọn vật thể/đối tượng chính trong ảnh (ví dụ: 'Cánh tay người', 'Bàn tay người', 'Khuôn mặt người', 'Đồ vật/xe cộ', 'Con chó Poodle', 'Con mèo mướp', 'Vết thương da của mèo', v.v.)",
+  "isMatch": true | false,
+  "reason": "Giải thích chi tiết tại sao hợp lệ hoặc tại sao không khớp"
+}
+
+🚨 CÁC NGUYÊN TẮC BẮT BUỘC:
+1. BỘ PHẬN CƠ THỂ CON NGƯỜI:
+   - Nếu ảnh chụp cánh tay người, bàn tay người, ngón tay, chân người, mặt người, móng tay người hoặc vết xước/mẩn đỏ trên da người:
+     -> BẮT BUỘC ĐẶT: "isPetImage": false, "isMatch": false, "detectedSubject": "Cánh tay người / Bộ phận cơ thể người".
+     -> "reason": "Hình ảnh tải lên là cánh tay hoặc bộ phận cơ thể của người, không phải thú cưng. Hệ thống yêu cầu chụp ảnh thực tế của thú cưng để đảm bảo an toàn y tế."
+2. ĐỒ VẬT / PHONG CẢNH / KHÔNG LIÊN QUAN:
+   - Nếu ảnh là xe cộ, đồ chơi, nhà cửa, phong cảnh, thức ăn người, ảnh chụp màn hình máy tính/điện thoại:
+     -> BẮT BUỘC ĐẶT: "isPetImage": false, "isMatch": false.
+     -> "reason": "Hình ảnh tải lên là đồ vật hoặc nội dung không liên quan đến thú cưng."
+3. KHÔNG KHỚP GIỮA LOÀI HOẶC TỔN THƯƠNG VỚI MÔ TẢ:
+   - Nếu người dùng mô tả chó nhưng ảnh là con mèo (hoặc ngược lại), hoặc mô tả rụng lông ở tai chó nhưng ảnh chụp vật khác:
+     -> BẮT BUỘC ĐẶT: "isMatch": false.
+     -> "reason": "Hình ảnh tải lên không đồng nhất với loài hoặc triệu chứng mô tả trong câu hỏi."
+4. CHỈ ĐẶT HỢP LỆ KHI:
+   - Ảnh là thú cưng (chó, mèo...) hoặc vùng da, mắt, tai, miệng, cơ thể của thú cưng, và có liên quan đến nội dung cần hỏi.
+`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.1-flash-lite',
+        contents: [
+          {
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: cleanImg
+            }
+          },
+          { text: verifyPrompt }
+        ],
+        config: {
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        }
+      });
+
+      const responseText = response.text || '';
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(responseText.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim());
+      } catch (jsonErr) {
+        const match = responseText.match(/\{[\s\S]*\}/);
+        if (match) parsed = JSON.parse(match[0]);
+      }
+
+      if (parsed) {
+        const isPetImage = parsed.isPetImage === true;
+        const isMatch = parsed.isMatch === true;
+        const isValid = isPetImage && isMatch;
+        serverLog('GEMINI', isValid ? 'OK' : 'WARN', 'Image Verification',
+          `${isValid ? 'HỢP LỆ' : 'TỪ CHỐI'}: ${parsed.detectedSubject} | match=${isMatch} | ${parsed.reason}`,
+          Date.now() - t0);
+        return {
+          isValid,
+          isPetImage,
+          detectedSubject: parsed.detectedSubject || 'Không xác định',
+          isMatch,
+          reason: parsed.reason || 'Hình ảnh và mô tả không tương thích'
+        };
+      }
+    } catch (e: any) {
+      serverLog('GEMINI', 'WARN', 'Image Verification Bypass', e.message, Date.now() - t0);
+    }
+    return { isValid: true, isPetImage: true, detectedSubject: 'Thú cưng', isMatch: true, reason: 'Bỏ qua xác thực do lỗi mạng' };
+  }
+
   // --- AI CHAT ENDPOINT (Server-Side Gemini API) ---
   app.post('/api/chat', chatRateLimiter, async (req: Request, res: Response) => {
 
@@ -3883,6 +4191,61 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       let imageForGemini: string | null = imageBase64 || null; // ảnh sẽ gửi vào Gemini
 
       if (imageBase64) {
+        // --- 0.2 XÁC THỰC ẢNH VÀ MÔ TẢ (Image & Symptom Verification Gatekeeper) ---
+        const verifyT0 = Date.now();
+        const verification = await verifyImageAndDescription(imageBase64, cleanMessage, petInfo, keyPool);
+
+        if (!verification.isValid || !verification.isMatch || !verification.isPetImage) {
+          serverLog('GEMINI', 'WARN', '/api/chat → REJECTED_BY_IMAGE_VERIFICATION',
+            `Phát hiện: ${verification.detectedSubject} | Lý do: ${verification.reason}`, Date.now() - verifyT0);
+
+          res.setHeader('Content-Type', 'text/event-stream');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('Connection', 'keep-alive');
+
+          const sendRejectEvent = (type: string, data: any) => {
+            const payload = encryptPayload({ type, ...data });
+            res.write(`data: ${JSON.stringify({ __enc: true, payload })}\n\n`);
+          };
+
+          sendRejectEvent('triage', {
+            triageLevel: 'YELLOW',
+            triageDetails: {
+              riskTitle: 'XÁC THỰC: ẢNH VÀ MÔ TẢ KHÔNG ĐỒNG NHẤT',
+              urgency: 'Yêu cầu tải đúng ảnh thú cưng để được tư vấn an toàn',
+              immediateActions: [
+                'Chụp trực tiếp vùng da hoặc vị trí bất thường của thú cưng',
+                'Tránh chụp cánh tay, bàn tay hoặc bộ phận cơ thể người',
+                'Đảm bảo ảnh rõ nét, đủ ánh sáng và không bị che khuất'
+              ]
+            }
+          });
+
+          const rejectionText = `⚠️ **PHÁT HIỆN HÌNH ẢNH KHÔNG ĐỒNG NHẤT VỚI MÔ TẢ TRIỆU CHỨNG**
+
+Hệ thống thẩm định an toàn y tế phát hiện hình ảnh bạn tải lên **không phù hợp hoặc không khớp** với mô tả lâm sàng:
+
+- 🔍 **Đối tượng nhận diện trong ảnh**: **${verification.detectedSubject}**
+- 📝 **Mô tả của bạn**: *"${cleanMessage}"*
+- ❌ **Lý do từ chối chẩn đoán**: ${verification.reason}
+
+---
+
+### 🛡️ Tại sao Bác sĩ Thú y AI cần xác thực này?
+1. **Bảo vệ sức khỏe thú cưng**: Việc đưa ra phác đồ hay chẩn đoán dựa trên hình ảnh không phải thú cưng (như chụp cánh tay/bàn tay người, đồ vật, hoặc sai loài/vị trí tổn thương) có thể gây ra chẩn đoán sai lệch nghiêm trọng, chỉ định sai thuốc hoặc gây ngộ độc cho thú cưng.
+2. **Quy định đạo đức AI**: Bác sĩ Thú Y AI chỉ hỗ trợ chẩn đoán cho động vật (chó, mèo...), tuyệt đối từ chối tư vấn bệnh lý da liễu người.
+
+### 👉 Hướng dẫn thực hiện:
+- Vui lòng chụp lại ảnh rõ nét tại đúng vị trí có biểu hiện bất thường trên **thú cưng của bạn** (chó, mèo...).
+- Tránh để bàn tay/cánh tay người che khuất vùng tổn thương.
+- Gửi lại kèm mô tả chi tiết để được tư vấn chính xác và an toàn nhất!`;
+
+          sendRejectEvent('chunk', { text: rejectionText });
+          sendRejectEvent('done', { rawText: rejectionText });
+          res.end();
+          return;
+        }
+
         const rnT0 = Date.now();
         try {
           serverLog('RENDER_AI', 'INFO', '/predict → gọi ResNet AI', renderServiceUrl);
@@ -4005,6 +4368,10 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 - TUYỆT ĐỐI KHÔNG mô tả quy trình chuyên sâu mà phòng khám thú y sẽ làm (như rửa dạ dày, truyền dịch, tiêm thuốc tĩnh mạch...) vì gây rối mắt cho người nuôi trong lúc khẩn cấp.
 - KHÔNG lặp lại các cảnh báo đã nêu ở phần trước.
 - KHÔNG viết đoạn kết lan man hay chúc tụng rườm rà. Kết thúc ngắn gọn trong 1 câu súc tích.
+
+4. 🛡️ QUY TẮC BẮT BUỘC XÁC THỰC ẢNH & MÔ TẢ:
+- Nếu quan sát thấy ảnh chụp bộ phận cơ thể người (cánh tay, bàn tay, chân, mặt người...) hoặc đồ vật/vật nuôi khác không phải thú cưng được mô tả: BẮT BUỘC từ chối tư vấn y tế cho ảnh đó, chọn mức YELLOW và yêu cầu người dùng cung cấp đúng ảnh thực tế của thú cưng.
+- Nếu ảnh và mô tả mâu thuẫn rõ rệt, phải chỉ rõ sự không khớp này trước khi đưa ra phân tích.
 
 🚨 BẢO MẬT & GIỚI HẠN (QUAN TRỌNG):
 - BẠN CHỈ LÀ BÁC SĨ THÚ Y AI. TUYỆT ĐỐI KHÔNG trả lời các chủ đề chính trị, tôn giáo, code lập trình, hay bất cứ gì ngoài thú y/động vật.
