@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LogIn, AlertCircle, ShieldCheck, Eye, EyeOff, Lock, User, KeyRound } from 'lucide-react';
+import { X, LogIn, AlertCircle, ShieldCheck, Eye, EyeOff, Lock, User } from 'lucide-react';
 import { supabase } from '../../services/supabaseClient';
 import { api } from '../../services/api';
 import { UserProfile } from '../../types';
@@ -22,8 +22,8 @@ export const LoginModal: React.FC<Props> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Admin credentials state
-  const [adminUsername, setAdminUsername] = useState('admin');
-  const [adminPassword, setAdminPassword] = useState('admin123456');
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleGoogleSignIn = async () => {
@@ -188,7 +188,7 @@ export const LoginModal: React.FC<Props> = ({
                   type="text"
                   value={adminUsername}
                   onChange={(e) => setAdminUsername(e.target.value)}
-                  placeholder="admin hoặc admin@vethic.ai"
+                  placeholder="Nhập tên đăng nhập hoặc email..."
                   required
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-slate-800"
                 />
@@ -216,14 +216,6 @@ export const LoginModal: React.FC<Props> = ({
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
-              </div>
-            </div>
-
-            {/* Credential Hint */}
-            <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-xl flex items-start gap-2 text-[11px] text-amber-800">
-              <KeyRound className="w-3.5 h-3.5 mt-0.5 text-amber-600 shrink-0" />
-              <div>
-                <span className="font-bold">Tài khoản mặc định:</span> User: <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-900">admin</code> | Pass: <code className="bg-amber-100 px-1 py-0.5 rounded font-mono font-bold text-amber-900">admin123456</code>
               </div>
             </div>
 
