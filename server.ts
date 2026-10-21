@@ -3992,12 +3992,13 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     const t0 = Date.now();
     try {
       const keys = (keyPool && keyPool.length > 0) ? keyPool : getGeminiKeyPool();
-      const apiKey = keys[0] || process.env.GEMINI_API_KEY;
-      if (!apiKey) {
+      if (keys.length === 0 && process.env.GEMINI_API_KEY) {
+        keys.push(process.env.GEMINI_API_KEY);
+      }
+      if (keys.length === 0) {
         return { isValid: true, isPetImage: true, detectedSubject: 'Thú cưng', isMatch: true, reason: 'Bỏ qua do không có API key' };
       }
 
-      const ai = getGeminiClient(apiKey);
       const cleanImg = imageBase64.replace(/^data:image\/\w+;base64,/, '');
 
       const verifyPrompt = `
@@ -4032,46 +4033,63 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
    - Ảnh là thú cưng (chó, mèo...) hoặc vùng da, mắt, tai, miệng, cơ thể của thú cưng, và có liên quan đến nội dung cần hỏi.
 `;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
-        contents: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: cleanImg
+      for (let kIdx = 0; kIdx < keys.length; kIdx++) {
+        const apiKey = keys[kIdx];
+        try {
+          const ai = getGeminiClient(apiKey);
+          const response = await ai.models.generateContent({
+            model: 'gemini-3.1-flash-lite',
+            contents: [
+              {
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: cleanImg
+                }
+              },
+              { text: verifyPrompt }
+            ],
+            config: {
+              temperature: 0.1,
+              responseMimeType: 'application/json'
             }
-          },
-          { text: verifyPrompt }
-        ],
-        config: {
-          temperature: 0.1,
-          responseMimeType: 'application/json'
+          });
+
+          const responseText = response.text || '';
+          let parsed: any = null;
+          try {
+            parsed = JSON.parse(responseText.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim());
+          } catch (jsonErr) {
+            const match = responseText.match(/\{[\s\S]*\}/);
+            if (match) parsed = JSON.parse(match[0]);
+          }
+
+          if (parsed) {
+            const isPetImage = parsed.isPetImage === true;
+            const isMatch = parsed.isMatch === true;
+            const isValid = isPetImage && isMatch;
+            serverLog('GEMINI', isValid ? 'OK' : 'WARN', 'Image Verification',
+              `${isValid ? "HỢP LỆ" : "TỪ CHỐI"}: ${parsed.detectedSubject} | match=${isMatch} | ${parsed.reason} [Key #${kIdx + 1}/${keys.length}]`,
+              Date.now() - t0);
+            return {
+              isValid,
+              isPetImage,
+              detectedSubject: parsed.detectedSubject || 'Không xác định',
+              isMatch,
+              reason: parsed.reason || 'Hình ảnh và mô tả không tương thích'
+            };
+          }
+        } catch (keyErr: any) {
+          const errMsg = keyErr?.message || String(keyErr);
+          const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(errMsg);
+          const isAuth = /API_KEY_INVALID|key not valid|403|401/i.test(errMsg);
+
+          if ((isQuota || isAuth) && kIdx + 1 < keys.length) {
+            serverLog('GEMINI', 'WARN', 'Image Verification Key Rotation',
+              `Key #${kIdx + 1} (${maskApiKey(apiKey)}) hết quota/lỗi ${isQuota ? "429" : "Auth"} → chuyển sang Key #${kIdx + 2}/${keys.length}`);
+            continue;
+          }
+          serverLog('GEMINI', 'WARN', 'Image Verification Bypass', errMsg, Date.now() - t0);
         }
-      });
-
-      const responseText = response.text || '';
-      let parsed: any = null;
-      try {
-        parsed = JSON.parse(responseText.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim());
-      } catch (jsonErr) {
-        const match = responseText.match(/\{[\s\S]*\}/);
-        if (match) parsed = JSON.parse(match[0]);
-      }
-
-      if (parsed) {
-        const isPetImage = parsed.isPetImage === true;
-        const isMatch = parsed.isMatch === true;
-        const isValid = isPetImage && isMatch;
-        serverLog('GEMINI', isValid ? 'OK' : 'WARN', 'Image Verification',
-          `${isValid ? 'HỢP LỆ' : 'TỪ CHỐI'}: ${parsed.detectedSubject} | match=${isMatch} | ${parsed.reason}`,
-          Date.now() - t0);
-        return {
-          isValid,
-          isPetImage,
-          detectedSubject: parsed.detectedSubject || 'Không xác định',
-          isMatch,
-          reason: parsed.reason || 'Hình ảnh và mô tả không tương thích'
-        };
       }
     } catch (e: any) {
       serverLog('GEMINI', 'WARN', 'Image Verification Bypass', e.message, Date.now() - t0);
