@@ -44,6 +44,19 @@ async function loadAllKeys(): Promise<{ keys: string[]; sources: Record<string, 
     const envKeys = parseApiKeys([process.env.GEMINI_API_KEYS]);
     envKeys.forEach(k => candidates.push({ key: k, source: 'Môi trường (.env - GEMINI_API_KEYS)' }));
   }
+  for (let i = 1; i <= 20; i++) {
+    const val = process.env[`GEMINI_API_KEY_${i}`];
+    if (val) {
+      const parsed = parseApiKeys([val]);
+      parsed.forEach(k => candidates.push({ key: k, source: `Môi trường (.env - GEMINI_API_KEY_${i})` }));
+    }
+  }
+  for (const [envKey, envVal] of Object.entries(process.env)) {
+    if (envKey.startsWith('GEMINI_API_KEY') && envKey !== 'GEMINI_API_KEY' && envKey !== 'GEMINI_API_KEYS' && !envKey.match(/^GEMINI_API_KEY_\d+$/) && envVal) {
+      const parsed = parseApiKeys([envVal]);
+      parsed.forEach(k => candidates.push({ key: k, source: `Môi trường (.env - ${envKey})` }));
+    }
+  }
 
   // 2. From Supabase system_config
   if (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY) {
@@ -57,6 +70,11 @@ async function loadAllKeys(): Promise<{ keys: string[]; sources: Record<string, 
         if (data.gemini_api_keys_pool) {
           const poolKeys = parseApiKeys([data.gemini_api_keys_pool]);
           poolKeys.forEach(k => candidates.push({ key: k, source: 'Supabase DB (gemini_api_keys_pool)' }));
+        }
+        for (let i = 1; i <= 20; i++) {
+          if (data[`gemini_api_key_${i}`]) {
+            candidates.push({ key: data[`gemini_api_key_${i}`], source: `Supabase DB (gemini_api_key_${i})` });
+          }
         }
       }
     } catch {
@@ -86,18 +104,33 @@ async function testSingleKey(apiKey: string): Promise<{ ok: boolean; latencyMs: 
   const start = Date.now();
   try {
     const ai = new GoogleGenAI({ apiKey });
-    // Dùng gemini-3.1-flash-lite để ping nhanh nhất và tốn ít quota nhất
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: 'ping',
-      config: { maxOutputTokens: 5 }
-    });
+    // Thử gemini-3.5-flash trước, nếu 503 thử tiếp gemini-3.1-flash-lite
+    let response: any = null;
+    let usedModel = 'gemini-3.5-flash';
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: 'ping',
+        config: { maxOutputTokens: 5 }
+      });
+    } catch (e: any) {
+      if (/503|UNAVAILABLE|high demand/i.test(e?.message)) {
+        usedModel = 'gemini-3.1-flash-lite';
+        response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents: 'ping',
+          config: { maxOutputTokens: 5 }
+        });
+      } else {
+        throw e;
+      }
+    }
 
     const latencyMs = Date.now() - start;
     if (response && response.text) {
-      return { ok: true, latencyMs, status: 'HEALTHY', message: 'API Key hoạt động hoàn hảo' };
+      return { ok: true, latencyMs, status: 'HEALTHY', message: `API Key hoạt động tốt (${usedModel})` };
     }
-    return { ok: true, latencyMs, status: 'HEALTHY', message: 'API phản hồi thành công' };
+    return { ok: true, latencyMs, status: 'HEALTHY', message: `API phản hồi thành công (${usedModel})` };
   } catch (err: any) {
     const latencyMs = Date.now() - start;
     const msg = err?.message || 'Lỗi không xác định';

@@ -677,6 +677,12 @@ async function startServer(isVercel = false) {
       candidates.push(configData.backup_gemini_api_key);
       candidates.push(configData.fallback_gemini_api_key);
       candidates.push(configData.gemini_api_keys_pool);
+      // Support numbered DB columns if present
+      for (let i = 1; i <= 20; i++) {
+        if (configData[`gemini_api_key_${i}`]) {
+          candidates.push(configData[`gemini_api_key_${i}`]);
+        }
+      }
     }
     const local = getLocalConfig();
     if (local) {
@@ -687,6 +693,19 @@ async function startServer(isVercel = false) {
     }
     candidates.push(process.env.GEMINI_API_KEY);
     candidates.push(process.env.GEMINI_API_KEYS);
+
+    // Collect all numbered environment variables (GEMINI_API_KEY_1 .. GEMINI_API_KEY_20)
+    for (let i = 1; i <= 20; i++) {
+      const k = process.env[`GEMINI_API_KEY_${i}`];
+      if (k) candidates.push(k);
+    }
+
+    // Collect any environment variables starting with GEMINI_API_KEY (e.g. GEMINI_API_KEY_BACKUP, etc.)
+    for (const [envKey, envVal] of Object.entries(process.env)) {
+      if (envKey.startsWith('GEMINI_API_KEY') && envVal) {
+        candidates.push(envVal);
+      }
+    }
 
     const keys = parseApiKeys(candidates);
     if (keys.length === 0 && process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes('...') && !process.env.GEMINI_API_KEY.includes('***')) {
@@ -4702,16 +4721,18 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       let lastError: any = null;
       let requestedModel = sysConfig.aiModel;
       // Upgrade legacy/unavailable models to current defaults
+      // Note: gemini-3.6-flash is capped at 20 requests/day on Google AI Studio Free Tier
+      // so if requestedModel is legacy or gemini-3.6-flash, prioritize gemini-3.5-flash-lite
       const legacyModels = ['gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash'];
-      if (!requestedModel || legacyModels.includes(requestedModel)) {
-        requestedModel = 'gemini-3.6-flash';
+      if (!requestedModel || legacyModels.includes(requestedModel) || requestedModel === 'gemini-3.6-flash') {
+        requestedModel = 'gemini-3.5-flash-lite';
       }
       const modelCandidates = [
         requestedModel,
+        'gemini-3.5-flash-lite',
         'gemini-3.5-flash',
-        'gemini-3.6-flash',
-        'gemini-3.1-flash-lite',
-        'gemini-3.8-flash'
+        'gemini-flash-lite-latest',
+        'gemini-3.6-flash'
       ].filter(Boolean);
       const fallbackModels = [...new Set(modelCandidates)];
 
@@ -4878,21 +4899,41 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
               isQuota ? `🔴 HẾT QUOTA (429): ${errMsg.substring(0, 80)}` : (is503 ? `🟡 QUÁ TẢI (503): ${errMsg.substring(0, 80)}` : errMsg.substring(0, 80)),
               Date.now() - gemT0);
 
-            // Đưa key vào cooldown để các request đồng thời khác tự động chuyển sang key khác
-            if (isQuota || isAuth || is503) {
-              geminiKeyManager.markCooldown(currentKey, is503 ? 15000 : 35000, isQuota ? '429 Rate Limit' : (is503 ? '503 Overloaded' : 'Auth Error'));
+            // Nếu API Key hoàn toàn không hợp lệ (Auth Error 401/403) → key này hỏng, chuyển ngay sang key tiếp theo
+            if (isAuth) {
+              geminiKeyManager.markCooldown(currentKey, 3600000, 'Auth Error (Key Invalid)');
               if (keyIdx + 1 < prioritizedKeys.length) {
                 serverLog('GEMINI', 'WARN', 'Key Rotation Active',
-                  `${keyTag} tạm dừng → tự động kích hoạt Key #${keyIdx + 2}/${prioritizedKeys.length}`);
+                  `${keyTag} lỗi Auth → tự động kích hoạt Key #${keyIdx + 2}/${prioritizedKeys.length}`);
               }
               break; // break khỏi model loop để sang key tiếp theo
             }
 
-            await new Promise(resolve => setTimeout(resolve, 300));
+            // Nếu là 429 quota hoặc 503 overload: lỗi này thường gắn liền với từng model cụ thể
+            // (ví dụ gemini-3.6-flash hết 20 req/ngày, nhưng gemini-3.5-flash-lite có tới 1500 req/ngày)
+            // KHÔNG break model loop! Tiếp tục fallback sang model tiếp theo trên cùng key này!
+            serverLog('GEMINI', 'INFO', `Chuyển model fallback [${keyTag}]`, `${targetModel} lỗi → thử model tiếp theo trong danh sách`);
+            await new Promise(resolve => setTimeout(resolve, 200));
           }
         }
+
+        // Sau khi đã thử toàn bộ fallback models trên key này mà vẫn chưa thành công:
+        if (!streamSucceeded) {
+          const isLastQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(lastError?.message || '');
+          const isLast503 = /503|high demand|unavailable|overloaded/i.test(lastError?.message || '');
+          geminiKeyManager.markCooldown(
+            currentKey,
+            isLast503 ? 15000 : 35000,
+            isLastQuota ? '429 Rate Limit' : (isLast503 ? '503 Overloaded' : 'All models failed')
+          );
+          if (keyIdx + 1 < prioritizedKeys.length) {
+            serverLog('GEMINI', 'WARN', 'Key Rotation Active',
+              `${keyTag} tất cả model thất bại → tự động kích hoạt Key #${keyIdx + 2}/${prioritizedKeys.length}`);
+          }
+        }
+
         if (keyAcquired) {
-          geminiKeyManager.releaseKey(currentKey, false, lastError?.message);
+          geminiKeyManager.releaseKey(currentKey, streamSucceeded, lastError?.message);
         }
       }
 
