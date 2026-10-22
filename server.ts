@@ -814,6 +814,61 @@ async function startServer(isVercel = false) {
       return [...healthy.map(m => m.key), ...cooling.map(m => m.key)];
     }
 
+    /**
+     * ⚡ DYNAMIC LEAST-BUSY FAILOVER PICKER:
+     * Khi 1 luồng API bị lỗi/chạm hạn mức, hàm này sẽ quét động toàn bộ các key còn lại
+     * và chọn ngay key ĐANG RẢNH NHẤT (ít activeStreams nhất, khỏe mạnh nhất) để tiếp quản luồng.
+     */
+    public pickLeastBusyKey(configData?: any, excludedKeys?: Set<string>, clientSeed?: string): { key: string; activeStreams: number } | null {
+      const pool = getGeminiKeyPool(configData);
+      this.syncKeys(pool);
+
+      const now = Date.now();
+      const all = Array.from(this.keyMetas.values())
+        .filter(m => !excludedKeys || !excludedKeys.has(m.key));
+
+      if (all.length === 0) return null;
+
+      const healthy = all.filter(m => m.cooldownUntil <= now);
+      const cooling = all.filter(m => m.cooldownUntil > now);
+
+      if (healthy.length > 0) {
+        // Ưu tiên key có activeStreams thấp nhất (đang rảnh nhất)
+        healthy.sort((a, b) => {
+          if (a.activeStreams !== b.activeStreams) {
+            return a.activeStreams - b.activeStreams;
+          }
+          return a.lastUsed - b.lastUsed;
+        });
+
+        // Nếu có nhiều key cùng rảnh bằng nhau, dùng seed / counter để chia đều
+        const minStreams = healthy[0].activeStreams;
+        const candidates = healthy.filter(h => h.activeStreams === minStreams);
+        if (candidates.length > 1) {
+          this.requestCounter++;
+          let seedOffset = this.requestCounter;
+          if (clientSeed) {
+            let hash = 0;
+            for (let i = 0; i < clientSeed.length; i++) {
+              hash = ((hash << 5) - hash + clientSeed.charCodeAt(i)) | 0;
+            }
+            seedOffset += Math.abs(hash);
+          }
+          const chosen = candidates[seedOffset % candidates.length];
+          return { key: chosen.key, activeStreams: chosen.activeStreams };
+        }
+
+        return { key: healthy[0].key, activeStreams: healthy[0].activeStreams };
+      }
+
+      // Nếu tất cả key khả dụng đều đang cooldown, chọn key sắp hết hạn cooldown sớm nhất
+      cooling.sort((a, b) => a.cooldownUntil - b.cooldownUntil);
+      if (cooling.length > 0) {
+        return { key: cooling[0].key, activeStreams: cooling[0].activeStreams };
+      }
+      return null;
+    }
+
     public acquireKey(key: string): void {
       const meta = this.keyMetas.get(key);
       if (meta) {
@@ -4778,16 +4833,26 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
         isClientClosed = true;
       });
 
-      const prioritizedKeys = geminiKeyManager.getPrioritizedKeys(configData, clientIdentifier);
+      const poolKeys = getGeminiKeyPool(configData);
+      const totalKeysCount = poolKeys.length || 1;
+      const triedKeys = new Set<string>();
 
-      keyLoop: for (let keyIdx = 0; keyIdx < prioritizedKeys.length; keyIdx++) {
+      keyLoop: for (let attempt = 0; attempt < totalKeysCount; attempt++) {
         if (isClientClosed) break keyLoop;
-        const currentKey = prioritizedKeys[keyIdx];
+
+        // ⚡ DYNAMIC LEAST-BUSY SELECTION & FAILOVER:
+        // Quét động toàn bộ danh sách key chưa thử, chọn ngay key ĐANG RẢNH NHẤT (ít activeStreams nhất)
+        const picked = geminiKeyManager.pickLeastBusyKey(configData, triedKeys, clientIdentifier);
+        if (!picked) break keyLoop;
+
+        const currentKey = picked.key;
+        triedKeys.add(currentKey);
+
         geminiKeyManager.acquireKey(currentKey);
         let keyAcquired = true;
         const ai = getGeminiClient(currentKey);
         const maskedKey = maskApiKey(currentKey);
-        const keyTag = `Key #${keyIdx + 1}/${prioritizedKeys.length} (${maskedKey})`;
+        const keyTag = `Key [${maskedKey}] (Đang chạy: ${picked.activeStreams} luồng | Lần thử #${attempt + 1}/${totalKeysCount})`;
 
         for (const targetModel of fallbackModels) {
           if (isClientClosed) break;
@@ -4929,9 +4994,9 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
             // Nếu API Key hoàn toàn không hợp lệ (Auth Error 401/403) → key này hỏng, chuyển ngay sang key tiếp theo
             if (isAuth) {
               geminiKeyManager.markCooldown(currentKey, 3600000, 'Auth Error (Key Invalid)');
-              if (keyIdx + 1 < prioritizedKeys.length) {
-                serverLog('GEMINI', 'WARN', 'Key Rotation Active',
-                  `${keyTag} lỗi Auth → tự động kích hoạt Key #${keyIdx + 2}/${prioritizedKeys.length}`);
+              if (attempt + 1 < totalKeysCount) {
+                serverLog('GEMINI', 'WARN', 'Dynamic Failover Active',
+                  `${keyTag} lỗi Auth → quét và chuyển ngay sang API Key đang rảnh nhất tiếp theo`);
               }
               break; // break khỏi model loop để sang key tiếp theo
             }
@@ -4953,9 +5018,9 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
             isLast503 ? 15000 : 35000,
             isLastQuota ? '429 Rate Limit' : (isLast503 ? '503 Overloaded' : 'All models failed')
           );
-          if (keyIdx + 1 < prioritizedKeys.length) {
-            serverLog('GEMINI', 'WARN', 'Key Rotation Active',
-              `${keyTag} tất cả model thất bại → tự động kích hoạt Key #${keyIdx + 2}/${prioritizedKeys.length}`);
+          if (attempt + 1 < totalKeysCount) {
+            serverLog('GEMINI', 'WARN', 'Dynamic Failover → Chuyển sang Key Rảnh Nhất',
+              `${keyTag} lỗi → Đang tìm kiếm API Key đang rảnh nhất trong pool để tiếp quản luồng...`);
           }
         }
 
