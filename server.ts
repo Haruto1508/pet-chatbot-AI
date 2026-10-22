@@ -817,14 +817,15 @@ async function startServer(isVercel = false) {
       return false; // Proceed anyway on timeout
     }
 
-    public getSummary(): Array<{ masked: string; activeStreams: number; isCooldown: boolean; success: number; errors: number }> {
+    public getSummary(): Array<{ masked: string; activeStreams: number; isCooldown: boolean; success: number; errors: number; lastError?: string }> {
       const now = Date.now();
       return Array.from(this.keyMetas.values()).map(m => ({
         masked: m.masked,
         activeStreams: m.activeStreams,
         isCooldown: m.cooldownUntil > now,
         success: m.successCount,
-        errors: m.errorCount
+        errors: m.errorCount,
+        lastError: m.lastError
       }));
     }
   }
@@ -4707,10 +4708,10 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       }
       const modelCandidates = [
         requestedModel,
+        'gemini-3.5-flash',
+        'gemini-3.6-flash',
         'gemini-3.1-flash-lite',
-        'gemini-3.5-flash-lite',
-        'gemini-flash-lite-latest',
-        'gemini-3.6-flash'
+        'gemini-3.8-flash'
       ].filter(Boolean);
       const fallbackModels = [...new Set(modelCandidates)];
 
@@ -4747,7 +4748,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
             serverLog('GEMINI', 'INFO', `generateContentStream → ${targetModel}`, `${keyTag}, temp=${sysConfig.temperature}`);
             const stream = await ai.models.generateContentStream({
               model: targetModel,
-              contents: { parts: contents },
+              contents: contents,
               config: {
                 temperature: sysConfig.temperature || 0.4
               }
@@ -4902,12 +4903,16 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
     } catch (err: any) {
       console.error('Gemini API Error:', err);
       if (!res.headersSent) {
-        res.status(500).json(secureResponse({ error: 'Lỗi kết nối Gemini AI', details: err.message }));
+        res.status(500).json(secureResponse({
+          error: 'Máy chủ AI đang nhận được số lượng lớn yêu cầu hoặc đang làm mới hạn ngạch API. Vui lòng thử lại sau giây lát!',
+          details: err.message
+        }));
       } else {
-        res.write(`data: ${JSON.stringify({
+        const payload = encryptPayload({
           type: 'error',
-          message: 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
-        })}\n\n`);
+          message: 'Máy chủ AI đang nhận được số lượng lớn yêu cầu hoặc đang làm mới hạn ngạch API. Vui lòng thử lại sau giây lát!'
+        });
+        res.write(`data: ${JSON.stringify({ __enc: true, payload })}\n\n`);
         res.end();
       }
     }
