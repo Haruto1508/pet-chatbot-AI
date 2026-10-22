@@ -154,6 +154,10 @@ export const PetChatView: React.FC<Props> = ({
   const GUEST_MESSAGE_LIMIT = 8;
   const isGuest = currentUser.id === 'guest' || !currentUser.email;
 
+  const [allowGuestChat, setAllowGuestChat] = useState<boolean>(() => {
+    return (import.meta as any).env?.VITE_ALLOW_GUEST_CHAT !== 'false';
+  });
+
   const [pointSystemEnabled, setPointSystemEnabled] = useState<boolean>(() => {
     return (import.meta as any).env?.VITE_ENABLE_POINT_SYSTEM !== 'false';
   });
@@ -163,10 +167,11 @@ export const PetChatView: React.FC<Props> = ({
       if (typeof cfg?.enabled === 'boolean') {
         setPointSystemEnabled(cfg.enabled);
       }
+      if (typeof cfg?.allowGuestChat === 'boolean') {
+        setAllowGuestChat(cfg.allowGuestChat);
+      }
     }).catch(() => { });
   }, []);
-
-  const isOutOfPoints = !isGuest && pointSystemEnabled && (currentUser.points !== undefined && currentUser.points <= 0);
 
   const [guestMsgCount, setGuestMsgCount] = useState<number>(() => {
     const saved = localStorage.getItem('petcare_guest_msg_count');
@@ -177,6 +182,9 @@ export const PetChatView: React.FC<Props> = ({
   useEffect(() => {
     if (isGuest) {
       api.getGuestQuota().then(quota => {
+        if (typeof quota?.allowGuestChat === 'boolean') {
+          setAllowGuestChat(quota.allowGuestChat);
+        }
         if (typeof quota?.messageCount === 'number') {
           setGuestMsgCount(quota.messageCount);
           localStorage.setItem('petcare_guest_msg_count', quota.messageCount.toString());
@@ -184,6 +192,9 @@ export const PetChatView: React.FC<Props> = ({
       }).catch(() => { });
     }
   }, [isGuest]);
+
+  const isGuestBlocked = isGuest && (!allowGuestChat || guestMsgCount >= GUEST_MESSAGE_LIMIT);
+  const isOutOfPoints = !isGuest && pointSystemEnabled && (currentUser.points !== undefined && currentUser.points <= 0);
 
   const [isRetrying, setIsRetrying] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -554,7 +565,7 @@ export const PetChatView: React.FC<Props> = ({
   };
 
   const handleClipboardPaste = (e: React.ClipboardEvent) => {
-    if (isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints) return;
+    if (isLoading || isGuestBlocked || isOutOfPoints) return;
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -588,7 +599,7 @@ export const PetChatView: React.FC<Props> = ({
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingOver(false);
-    if (isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints) return;
+    if (isLoading || isGuestBlocked || isOutOfPoints) return;
 
     const file = e.dataTransfer?.files?.[0];
     if (file && file.type.startsWith('image/')) {
@@ -667,7 +678,13 @@ export const PetChatView: React.FC<Props> = ({
       return;
     }
 
-    // Enforce 8-message rate limit for guest users
+    // Enforce guest access check & rate limit
+    if (isGuest && !allowGuestChat) {
+      showError('Tính năng trò chuyện cho khách tạm đóng. Vui lòng đăng nhập để sử dụng Bác sĩ Thú y AI.');
+      onOpenLogin?.();
+      return;
+    }
+
     if (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) {
       showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập để nhận ngay 10 Point.');
       onOpenLogin?.();
@@ -905,6 +922,14 @@ export const PetChatView: React.FC<Props> = ({
         }
 
         const isTimeout = err?.name === 'AbortError' || err?.message?.toLowerCase().includes('timeout') || err?.message?.toLowerCase().includes('quá thời gian');
+        const isGuestDisabled = (err as any)?.guestChatDisabled ||
+          err?.message?.includes('tài khoản khách tạm thời đóng') ||
+          err?.message?.includes('khách tạm đóng');
+
+        if (isGuestDisabled && isGuest) {
+          setAllowGuestChat(false);
+        }
+
         const isRateLimit = err?.message?.includes('giới hạn 8 tin nhắn') ||
           err?.message?.includes('đạt giới hạn') ||
           err?.message?.includes('dùng thử miễn phí') ||
@@ -920,13 +945,15 @@ export const PetChatView: React.FC<Props> = ({
           err?.message?.toLowerCase().includes('lượng lớn người truy cập') ||
           err?.message?.toLowerCase().includes('tải lại trang');
 
-        const errorText = isPointLimit
-          ? 'Tài khoản của bạn đã hết điểm chat (0 Point). Vui lòng nạp thêm point hoặc chọn gói chat để tiếp tục trò chuyện!'
-          : isTimeout
-            ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại sau ít phút.'
-            : isOverload
-              ? 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
-              : (err?.message || 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
+        const errorText = isGuestDisabled
+          ? 'Tính năng trò chuyện cho tài khoản khách tạm thời đóng. Vui lòng đăng nhập hoặc tạo tài khoản để sử dụng Bác sĩ Thú y AI!'
+          : isPointLimit
+            ? 'Tài khoản của bạn đã hết điểm chat (0 Point). Vui lòng nạp thêm point hoặc chọn gói chat để tiếp tục trò chuyện!'
+            : isTimeout
+              ? 'Máy chủ phản hồi quá lâu hoặc mất kết nối. Vui lòng thử lại sau ít phút.'
+              : isOverload
+                ? 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.'
+                : (err?.message || 'Đang có lượng lớn người truy cập, vui lòng thử lại sau ít phút.');
 
         const errMsg: ChatMessage = {
           id: `err_${Date.now()}`,
@@ -1888,7 +1915,33 @@ export const PetChatView: React.FC<Props> = ({
                 {/* Guest Rate Limit Warning Banner */}
                 {isGuest && (
                   <div className="mb-2.5">
-                    {guestMsgCount >= GUEST_MESSAGE_LIMIT ? (
+                    {!allowGuestChat ? (
+                      <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-red-500/10 to-amber-500/15 border border-amber-300 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-800 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                            <Lock className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900">
+                              Tính năng chat dành cho khách tạm thời đóng
+                            </p>
+                            <p className="text-[11px] text-slate-600">
+                              Vui lòng đăng nhập tài khoản để nhận ngay 10 Point miễn phí và bắt đầu tư vấn với Bác sĩ Thú y AI!
+                            </p>
+                          </div>
+                        </div>
+                        {onOpenLogin && (
+                          <button
+                            type="button"
+                            onClick={onOpenLogin}
+                            className="shrink-0 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <span>Đăng nhập nhận 10 Point</span>
+                          </button>
+                        )}
+                      </div>
+                    ) : guestMsgCount >= GUEST_MESSAGE_LIMIT ? (
                       <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-red-500/10 to-amber-500/15 border border-amber-300 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-800 animate-in fade-in slide-in-from-bottom-2">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -2060,7 +2113,7 @@ export const PetChatView: React.FC<Props> = ({
                     type="button"
                     data-tour="image-upload"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints}
+                    disabled={isLoading || isGuestBlocked || isOutOfPoints}
                     title="Đính kèm ảnh triệu chứng (Tối đa 5MB • Hỗ trợ JPG, PNG, WEBP, GIF)"
                     className="p-2 rounded-full text-slate-400 hover:text-emerald-600 hover:bg-slate-100 disabled:opacity-40 transition-colors flex-shrink-0 cursor-pointer"
                   >
@@ -2071,11 +2124,16 @@ export const PetChatView: React.FC<Props> = ({
                     type="text"
                     ref={inputRef}
                     value={input}
-                    disabled={isLoading || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints}
+                    disabled={isLoading || isGuestBlocked || isOutOfPoints}
                     onChange={(e) => setInput(e.target.value)}
                     onPaste={handleClipboardPaste}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !isLoading) {
+                        if (isGuest && !allowGuestChat) {
+                          showError('Tính năng trò chuyện cho khách tạm đóng. Vui lòng đăng nhập để sử dụng Bác sĩ Thú y AI.');
+                          onOpenLogin?.();
+                          return;
+                        }
                         if (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) {
                           showError('Bạn đã sử dụng hết 8 tin nhắn dùng thử miễn phí dành cho khách. Vui lòng đăng nhập để nhận 10 Point.');
                           onOpenLogin?.();
@@ -2090,14 +2148,16 @@ export const PetChatView: React.FC<Props> = ({
                       }
                     }}
                     placeholder={
-                      isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT
-                        ? 'Bạn đã hết lượt dùng thử miễn phí. Vui lòng đăng nhập để tiếp tục...'
-                        : isOutOfPoints
-                          ? 'Bạn đã hết điểm chat (0 Point). Vui lòng nạp thêm point để tiếp tục...'
-                          : isRetrying ? 'Bác sĩ AI đang đối chiếu thông tin & tổng hợp phác đồ...'
-                            : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
-                              : selectedPet ? `Mô tả triệu chứng bệnh...`
-                                : 'Mô tả triệu chứng, tình trạng...'
+                      isGuest && !allowGuestChat
+                        ? 'Tính năng chat cho khách tạm đóng. Vui lòng đăng nhập để tiếp tục...'
+                        : isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT
+                          ? 'Bạn đã hết lượt dùng thử miễn phí. Vui lòng đăng nhập để tiếp tục...'
+                          : isOutOfPoints
+                            ? 'Bạn đã hết điểm chat (0 Point). Vui lòng nạp thêm point để tiếp tục...'
+                            : isRetrying ? 'Bác sĩ AI đang đối chiếu thông tin & tổng hợp phác đồ...'
+                              : isLoading ? 'AI đang phản hồi, vui lòng chờ hoặc bấm Dừng...'
+                                : selectedPet ? `Mô tả triệu chứng bệnh...`
+                                  : 'Mô tả triệu chứng, tình trạng...'
                     }
                     className="flex-1 text-sm bg-transparent focus:outline-none text-slate-800 placeholder:text-slate-400 disabled:text-slate-400 py-1.5 px-2"
                   />
@@ -2110,7 +2170,7 @@ export const PetChatView: React.FC<Props> = ({
                     </button>
                   ) : (
                     <button type="button" onClick={() => handleSend()}
-                      disabled={(!input.trim() && !selectedImage) || (isGuest && guestMsgCount >= GUEST_MESSAGE_LIMIT) || isOutOfPoints} title="Gửi"
+                      disabled={(!input.trim() && !selectedImage) || isGuestBlocked || isOutOfPoints} title="Gửi"
                       className="w-9 h-9 rounded-full bg-emerald-500 hover:bg-emerald-600 active:scale-95 disabled:opacity-40 text-white font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer disabled:cursor-not-allowed flex-shrink-0">
                       <Send className="w-4 h-4" />
                     </button>

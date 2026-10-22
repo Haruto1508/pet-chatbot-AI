@@ -87,11 +87,11 @@ export const api = {
     try {
       const res = await authFetch('/api/points/config');
       if (!res.ok) {
-        return { enabled: true, costPerChat: 1, costPerChatVnd: 1000, initialFreePoints: 10, guestMaxLimit: 8, isTrialMode: true };
+        return { enabled: true, costPerChat: 1, costPerChatVnd: 1000, initialFreePoints: 10, guestMaxLimit: 8, isTrialMode: true, allowGuestChat: true };
       }
       return res.json();
     } catch {
-      return { enabled: true, costPerChat: 1, costPerChatVnd: 1000, initialFreePoints: 10, guestMaxLimit: 8, isTrialMode: true };
+      return { enabled: true, costPerChat: 1, costPerChatVnd: 1000, initialFreePoints: 10, guestMaxLimit: 8, isTrialMode: true, allowGuestChat: true };
     }
   },
 
@@ -137,13 +137,13 @@ export const api = {
   },
 
   // Guest Quota & Machine Rate Limits
-  getGuestQuota: async (): Promise<{ messageCount: number; maxLimit: number; remaining: number }> => {
+  getGuestQuota: async (): Promise<{ messageCount: number; maxLimit: number; remaining: number; allowGuestChat?: boolean }> => {
     try {
       const res = await authFetch('/api/guest-quota');
-      if (!res.ok) return { messageCount: 0, maxLimit: 8, remaining: 8 };
+      if (!res.ok) return { messageCount: 0, maxLimit: 8, remaining: 8, allowGuestChat: true };
       return res.json();
     } catch {
-      return { messageCount: 0, maxLimit: 8, remaining: 8 };
+      return { messageCount: 0, maxLimit: 8, remaining: 8, allowGuestChat: true };
     }
   },
 
@@ -609,6 +609,9 @@ export const api = {
       body: JSON.stringify(payload)
     });
     if (!res.ok) {
+      if (res.status === 401) {
+        throw new Error('Tính năng trò chuyện cho tài khoản khách tạm thời đóng. Vui lòng đăng nhập hoặc tạo tài khoản để sử dụng!');
+      }
       if (res.status === 429) {
         throw new Error('Bạn đã đạt giới hạn tin nhắn. Vui lòng đăng nhập để tiếp tục sử dụng miễn phí!');
       }
@@ -657,11 +660,13 @@ export const api = {
       let errMsg = `Lỗi máy chủ (${res.status})`;
       let isPointLimit = res.status === 402;
       let isGuestLimit = res.status === 429;
+      let isGuestDisabled = res.status === 401;
       try {
         const errJson = await res.json();
         errMsg = errJson.message || errJson.error || errJson.details || errMsg;
         if (errJson.pointLimitReached) isPointLimit = true;
         if (errJson.guestLimitReached) isGuestLimit = true;
+        if (errJson.guestChatDisabled) isGuestDisabled = true;
       } catch { }
       api.writeLog({
         log_type: 'render',
@@ -674,6 +679,7 @@ export const api = {
       const errObj: any = new Error(errMsg);
       if (isPointLimit) errObj.pointLimitReached = true;
       if (isGuestLimit) errObj.guestLimitReached = true;
+      if (isGuestDisabled) errObj.guestChatDisabled = true;
       throw errObj;
     }
 
@@ -890,7 +896,7 @@ export const api = {
 
       return;
     } catch (err: any) {
-      if (signal?.aborted || err?.pointLimitReached || err?.guestLimitReached) throw err;
+      if (signal?.aborted || err?.pointLimitReached || err?.guestLimitReached || err?.guestChatDisabled) throw err;
       primaryFailed = true;
 
       api.writeLog({
@@ -934,7 +940,7 @@ export const api = {
         return;
       } catch (retryErr: any) {
         if (onRetry) onRetry(false);
-        if (signal?.aborted || retryErr?.pointLimitReached || retryErr?.guestLimitReached) throw retryErr;
+        if (signal?.aborted || retryErr?.pointLimitReached || retryErr?.guestLimitReached || retryErr?.guestChatDisabled) throw retryErr;
 
         api.writeLog({
           log_type: 'render',

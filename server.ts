@@ -2199,6 +2199,17 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     }, 1000);
   }
 
+  // ALLOW_GUEST_CHAT: When set to 'false' (or '0' / 'no'), unauthenticated guest users are blocked from chatting.
+  // Defaults to true for seamless backwards compatibility.
+  function isGuestChatAllowed(): boolean {
+    const envVal = process.env.ALLOW_GUEST_CHAT ?? process.env.ENABLE_GUEST_CHAT;
+    if (envVal !== undefined && envVal !== null) {
+      const str = String(envVal).trim().toLowerCase();
+      return str !== 'false' && str !== '0' && str !== 'off' && str !== 'no';
+    }
+    return true;
+  }
+
   async function getGuestQuota(clientIdentifier: string): Promise<{ messageCount: number; maxLimit: number; remaining: number }> {
     const maxLimit = 8;
     const store = getGuestLimitsStore();
@@ -2299,9 +2310,18 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     try {
       const clientIp = getClientIp(req);
       const quota = await getGuestQuota(clientIp);
-      res.json(secureResponse(quota));
+      res.json(secureResponse({
+        ...quota,
+        allowGuestChat: isGuestChatAllowed()
+      }));
     } catch (e: any) {
-      res.status(500).json(secureResponse({ error: e.message, messageCount: 0, maxLimit: 8, remaining: 8 }));
+      res.status(500).json(secureResponse({
+        error: e.message,
+        messageCount: 0,
+        maxLimit: 8,
+        remaining: 8,
+        allowGuestChat: isGuestChatAllowed()
+      }));
     }
   });
 
@@ -2535,7 +2555,8 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       costPerChatVnd: COST_PER_CHAT_VND,
       initialFreePoints: DEFAULT_INITIAL_POINTS,
       guestMaxLimit: 8,
-      isTrialMode: true
+      isTrialMode: true,
+      allowGuestChat: isGuestChatAllowed()
     }));
   });
 
@@ -3814,6 +3835,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
         fallbackGeminiApiKey,
         fallbackModel,
         fallbackTimeoutMs: dbData?.fallback_timeout_ms || local.fallbackTimeoutMs || 20000,
+        allowGuestChat: isGuestChatAllowed(),
         maintenanceMode: dbData?.maintenance_mode ?? local.maintenanceMode ?? false,
         maintenanceMessage: dbData?.maintenance_message || local.maintenanceMessage || 'Hệ thống đang bảo trì nâng cấp, vui lòng quay lại sau'
       }));
@@ -4344,6 +4366,16 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
   app.post('/api/generate-title', chatRateLimiter, async (req: Request, res: Response) => {
     try {
+      if (!isGuestChatAllowed()) {
+        const auth = await resolveAuthContext(req);
+        if (!auth?.user?.id) {
+          return res.status(401).json(secureResponse({
+            error: 'Tính năng trò chuyện cho khách tạm thời đóng. Vui lòng đăng nhập.',
+            title: 'Phiên khám thú cưng'
+          }));
+        }
+      }
+
       const { message } = req.body;
       const cleanMessage = (message || '').trim().substring(0, 500);
       if (!cleanMessage) return res.json(secureResponse({ title: 'Phiên khám thú cưng' }));
@@ -4549,9 +4581,24 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
     } catch { }
 
     try {
-      // 1. GUEST RATE LIMIT & USER POINT CHECK
+      // 1. GUEST ACCESS CHECK & GUEST RATE LIMIT & USER POINT CHECK
+      const allowGuestChat = isGuestChatAllowed();
       const clientIdentifier = getClientDeviceIdentifier(req);
-      if (!userId || userId === 'guest') {
+      const auth = await resolveAuthContext(req);
+      const verifiedUserId = auth?.user?.id;
+      let effectiveUserId = verifiedUserId || (userId && userId !== 'guest' ? userId : null);
+
+      if (!allowGuestChat) {
+        if (!verifiedUserId) {
+          serverLog('SYSTEM', 'WARN', '/api/chat', `Guest chat attempt blocked: ALLOW_GUEST_CHAT is disabled (device ${clientIdentifier})`);
+          return res.status(401).json(secureResponse({
+            error: 'Tính năng trò chuyện cho tài khoản khách tạm thời đóng. Vui lòng đăng nhập hoặc tạo tài khoản để sử dụng Bác sĩ Thú y AI!',
+            guestChatDisabled: true
+          }));
+        }
+      }
+
+      if (!effectiveUserId || effectiveUserId === 'guest') {
         const quota = await getGuestQuota(clientIdentifier);
         if (quota.messageCount >= 8) {
           serverLog('SYSTEM', 'WARN', '/api/chat', `Guest device ${clientIdentifier} exceeded limit (${quota.messageCount}/8)`);
@@ -4565,9 +4612,9 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
         await incrementGuestMessageCount(clientIdentifier, quota.messageCount);
       } else if (ENABLE_POINT_SYSTEM) {
         // Kiểm tra số point của người dùng đã đăng nhập
-        const currentPoints = await getUserPoints(userId);
+        const currentPoints = await getUserPoints(effectiveUserId);
         if (currentPoints <= 0) {
-          serverLog('SYSTEM', 'WARN', '/api/chat', `User ${userId} has 0 points. Chat blocked.`);
+          serverLog('SYSTEM', 'WARN', '/api/chat', `User ${effectiveUserId} has 0 points. Chat blocked.`);
           return res.status(402).json(secureResponse({
             error: 'Bạn đã sử dụng hết điểm chat (0 Point). Vui lòng nạp thêm point hoặc chọn gói chat để tiếp tục trò chuyện với Bác sĩ Thú y AI!',
             pointLimitReached: true,
@@ -4962,9 +5009,9 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 
             // Trừ 1 point nếu người dùng đã đăng nhập và tính năng point được bật
             let remainingPoints: number | undefined;
-            if (ENABLE_POINT_SYSTEM && userId && userId !== 'guest') {
+            if (ENABLE_POINT_SYSTEM && effectiveUserId && effectiveUserId !== 'guest') {
               try {
-                remainingPoints = await deductUserPoints(userId, 1, 'Trừ 1 điểm cho lượt chat tư vấn Bác sĩ Thú y AI');
+                remainingPoints = await deductUserPoints(effectiveUserId, 1, 'Trừ 1 điểm cho lượt chat tư vấn Bác sĩ Thú y AI');
                 sendEvent('point_update', { points: remainingPoints });
               } catch (e: any) {
                 serverLog('SYSTEM', 'WARN', 'deductUserPoints', e.message);

@@ -21,6 +21,7 @@ export interface PointConfig {
   initialFreePoints: number;
   guestMaxLimit: number;
   isTrialMode: boolean;
+  allowGuestChat?: boolean;
 }
 
 export interface PointTransaction {
