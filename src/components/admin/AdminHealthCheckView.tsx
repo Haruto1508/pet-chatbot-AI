@@ -432,6 +432,103 @@ export const AdminHealthCheckView: React.FC = () => {
         </div>
       </div>
 
+      {/* 🚀 Gemini Key Pool High Concurrency Balancer Card */}
+      {health?.gemini?.keyPoolStats && health.gemini.keyPoolStats.length > 0 && (
+        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <Radio className="w-4 h-4 text-blue-600" />
+                Bộ Điều Phối & Cân Bằng Tải Gemini Key Pool (High Concurrency)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Tự động chia tải luồng chat Least-Connections và kích hoạt Circuit Breaker Cooldown khi chạm quota.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-bold border border-blue-100">
+                {health.gemini.poolSize || health.gemini.keyPoolStats.length} Keys Trong Pool
+              </span>
+              <button
+                onClick={() => fetchHealthCheck()}
+                disabled={loadingHealth}
+                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-all"
+                title="Làm mới trạng thái Pool"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingHealth ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {health.gemini.keyPoolStats.map((item: any, idx: number) => {
+              const isCooling = item.isCooldown;
+              const hasStreams = item.activeStreams > 0;
+              return (
+                <div
+                  key={idx}
+                  className={`p-3.5 rounded-xl border transition-all ${
+                    isCooling
+                      ? 'bg-amber-50/60 border-amber-200'
+                      : hasStreams
+                      ? 'bg-blue-50/50 border-blue-200'
+                      : 'bg-slate-50 border-slate-200/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-md bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-700">
+                        #{idx + 1}
+                      </span>
+                      <span className="font-mono text-xs font-bold text-slate-800">
+                        {item.masked}
+                      </span>
+                    </div>
+                    {isCooling ? (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <AlertTriangle className="w-2.5 h-2.5" /> Cooldown 35s
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> Sẵn sàng
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-200/60 text-center text-[11px]">
+                    <div>
+                      <div className="text-slate-400 text-[10px]">Luồng chat</div>
+                      <div className={`font-bold ${item.activeStreams > 0 ? 'text-blue-600' : 'text-slate-700'}`}>
+                        {item.activeStreams}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-400 text-[10px]">Thành công</div>
+                      <div className="font-bold text-emerald-600">{item.success || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-400 text-[10px]">Lỗi / 429</div>
+                      <div className={`font-bold ${item.errors > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                        {item.errors || 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
+            <span>
+              💡 Nguồn nạp Key: <strong className="text-slate-700">{health.gemini.source === 'database' ? 'Admin DB (system_config)' : 'Môi trường (.env)'}</strong>
+            </span>
+            <span className="text-emerald-600 font-medium">
+              Chịu tải ước tính: ~{Math.max(10, (health.gemini.poolSize || 1) * 5)} người chat đồng thời
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Environment Variables Safe Inspector */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
         <div className="flex items-center justify-between">
