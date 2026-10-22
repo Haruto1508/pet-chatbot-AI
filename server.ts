@@ -142,7 +142,7 @@ async function startServer(isVercel = false) {
 
   // 1. First Gatekeeper: DDoS Shield, IP Jail & Malicious Scanner Auto-Blocker
   app.use((req: Request, res: Response, next: NextFunction) => {
-    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
 
     // A. Check if IP is in DDoS Jail
     const banRecord = bannedIps.get(clientIp);
@@ -253,7 +253,7 @@ async function startServer(isVercel = false) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Access-Control-Allow-Credentials', 'true');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-Guest-Device-Id, X-Guest-Session-Id');
       } else if (process.env.NODE_ENV === 'production') {
         serverLog('SYSTEM', 'WARN', 'CORS_BLOCKED', `Yêu cầu từ Origin lạ bị chặn: ${origin}`);
         return res.status(403).json({ error: 'CORS: Nguồn gốc yêu cầu bị từ chối bởi chính sách bảo mật' });
@@ -262,6 +262,16 @@ async function startServer(isVercel = false) {
 
     if (req.method === 'OPTIONS') {
       return res.status(204).end();
+    }
+    next();
+  });
+
+  // Vercel Serverless / Pre-parsed Body Compatibility Middleware
+  // If req.body is already populated (e.g. by @vercel/node), mark _body = true so express.json()
+  // does not attempt to read from an already-consumed readable stream (which throws 500 error).
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    if ((req as any).body !== undefined && typeof (req as any).body === 'object') {
+      (req as any)._body = true;
     }
     next();
   });
@@ -523,7 +533,7 @@ async function startServer(isVercel = false) {
         }
       }
 
-      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
       const key = options.keyGenerator ? options.keyGenerator(req) : `${clientIp}:${req.baseUrl || req.path}`;
       const now = Date.now();
 
@@ -580,7 +590,7 @@ async function startServer(isVercel = false) {
     if (bodyDev && bodyDev.length >= 6 && bodyDev.length <= 100) {
       return bodyDev;
     }
-    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
     return clientIp;
   }
 
@@ -5036,6 +5046,9 @@ YÊU CẦU:
   // Global Error Handler (Production-Hardened & Maintenance Recovery)
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     console.error('Unhandled Error:', err);
+    try {
+      serverLog('SYSTEM', 'ERROR', 'UNHANDLED_EXCEPTION', `${req.method} ${req.path}: ${err?.message || err}`);
+    } catch { }
 
     // If it's a browser page navigation request that failed, serve the beautiful maintenance page
     const acceptsHtml = req.accepts && req.accepts('html');

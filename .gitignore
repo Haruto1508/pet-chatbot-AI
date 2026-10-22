@@ -29,6 +29,7 @@ system_config.json
 !system_config.example.json
 analytics_store.json
 points_store.json
+guest_limits_store.json
 
 # Editor directories and files
 .vscode/*
