@@ -34,6 +34,16 @@ export async function authFetch(input: RequestInfo | URL, init?: RequestInit): P
   const headers = new Headers(init?.headers);
   if (isInternal) {
     try {
+      if (typeof window !== 'undefined') {
+        let guestDeviceId = localStorage.getItem('vethic_guest_device_id');
+        if (!guestDeviceId) {
+          guestDeviceId = 'dev_' + Math.random().toString(36).slice(2, 10) + '_' + Date.now().toString(36);
+          localStorage.setItem('vethic_guest_device_id', guestDeviceId);
+        }
+        if (!headers.has('X-Guest-Device-Id')) {
+          headers.set('X-Guest-Device-Id', guestDeviceId);
+        }
+      }
       const customToken = typeof window !== 'undefined' ? localStorage.getItem('vethic_auth_token') : null;
       if (customToken && !headers.has('Authorization')) {
         headers.set('Authorization', `Bearer ${customToken}`);

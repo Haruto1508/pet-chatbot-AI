@@ -548,8 +548,8 @@ async function startServer(isVercel = false) {
         res.setHeader('Retry-After', resetSeconds);
         serverLog('SYSTEM', 'WARN', 'RATE_LIMIT_EXCEEDED', `[ANTI-SPAM] IP ${clientIp} vượt hạn mức ${max} req/${options.windowMs / 1000}s. Chặn trong ${resetSeconds}s.`);
 
-        // Auto-jail IP into DDoS blacklist if flooding more than double the limit
-        if (record.count >= Math.max(20, max * 2)) {
+        // Auto-jail IP into DDoS blacklist only if massive flood (>800 reqs/min) to avoid false positives on shared Wi-Fi
+        if (record.count >= Math.max(800, max * 3)) {
           bannedIps.set(clientIp, {
             bannedUntil: now + 10 * 60 * 1000,
             reason: `Spam lũ lụt request (${record.count}/${max} reqs)`,
@@ -570,34 +570,48 @@ async function startServer(isVercel = false) {
     };
   }
 
-  // 1. Global API Protection: Max 120 reqs/min per IP
+  // Helper to extract unique client device identifier (isolates guests on shared office/home Wi-Fi)
+  function getClientDeviceIdentifier(req: Request): string {
+    const headerDev = ((req.headers['x-guest-device-id'] as string) || (req.headers['x-guest-session-id'] as string) || '')?.trim();
+    if (headerDev && headerDev.length >= 6 && headerDev.length <= 100) {
+      return headerDev;
+    }
+    const bodyDev = ((req.body?.guestDeviceId as string) || (req.body?.guestSessionId as string) || '')?.trim();
+    if (bodyDev && bodyDev.length >= 6 && bodyDev.length <= 100) {
+      return bodyDev;
+    }
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+    return clientIp;
+  }
+
+  // 1. Global API Protection: Max 500 reqs/min per IP (Allows 10+ concurrent users on shared office/home Wi-Fi)
   const globalApiLimiter = createSlidingRateLimiter({
     windowMs: 60 * 1000,
-    maxRequests: 120,
+    maxRequests: 500,
     message: 'Hệ thống phát hiện quá nhiều yêu cầu từ thiết bị của bạn. Vui lòng thử lại sau 1 phút.'
   });
   app.use('/api/', globalApiLimiter);
 
-  // 2. AI Chat & Generate Title Protection: Max 8 reqs/min for guests, 25 reqs/min for logged-in users
+  // 2. AI Chat & Generate Title Protection: Max 12 reqs/min for guests (per device), 35 reqs/min for logged-in users
   const chatRateLimiter = createSlidingRateLimiter({
     windowMs: 60 * 1000,
     maxRequests: (req: Request) => {
       const isGuest = !req.body?.userId || req.body.userId === 'guest';
-      return isGuest ? 8 : 25;
+      return isGuest ? 12 : 35;
     },
     keyGenerator: (req: Request) => {
-      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
-      const uid = req.body?.userId && req.body.userId !== 'guest' ? req.body.userId : `guest:${clientIp}`;
+      const devId = getClientDeviceIdentifier(req);
+      const uid = req.body?.userId && req.body.userId !== 'guest' ? req.body.userId : `guest:${devId}`;
       return `chat_rate:${uid}`;
     },
     message: 'Bạn đang gửi tin nhắn quá nhanh. Vui lòng chờ ít giây để máy chủ AI xử lý trước khi gửi tiếp.'
   });
 
-  // 3. Heavy AI Test & Evaluation Limiter: Max 10 reqs/min per IP
+  // 3. Heavy AI Test & Evaluation Limiter: Max 20 reqs/min per IP
   const heavyTestRateLimiter = createSlidingRateLimiter({
     windowMs: 60 * 1000,
-    maxRequests: 10,
-    message: 'Thao tác kiểm tra mô hình AI bị giới hạn tối đa 10 lần/phút để tránh cạn kiệt Quota.'
+    maxRequests: 20,
+    message: 'Thao tác kiểm tra mô hình AI bị giới hạn tối đa 20 lần/phút để tránh cạn kiệt Quota.'
   });
 
   // System Config File & Local Persistence Helper
@@ -671,26 +685,234 @@ async function startServer(isVercel = false) {
     return keys;
   }
 
-  // Gemini AI Client Helper (Lazy initialization with custom key or active pool key)
+  // ─────────────────────────────────────────────────────────────
+  // ⚡ HIGH-CONCURRENCY GEMINI LOAD BALANCER & KEY POOL MANAGER
+  // Handles 10+ concurrent users seamlessly by distributing streams,
+  // tracking active connections, and enforcing cooldowns on 429/503.
+  // ─────────────────────────────────────────────────────────────
+  interface GeminiKeyMeta {
+    key: string;
+    masked: string;
+    activeStreams: number;
+    cooldownUntil: number;
+    lastUsed: number;
+    successCount: number;
+    errorCount: number;
+    lastError?: string;
+  }
+
+  class GeminiKeyManager {
+    private keyMetas: Map<string, GeminiKeyMeta> = new Map();
+
+    public syncKeys(keys: string[]): void {
+      const currentKeys = new Set(keys);
+      for (const k of this.keyMetas.keys()) {
+        if (!currentKeys.has(k)) {
+          this.keyMetas.delete(k);
+        }
+      }
+      for (const k of keys) {
+        if (!this.keyMetas.has(k)) {
+          this.keyMetas.set(k, {
+            key: k,
+            masked: maskApiKey(k),
+            activeStreams: 0,
+            cooldownUntil: 0,
+            lastUsed: 0,
+            successCount: 0,
+            errorCount: 0
+          });
+        }
+      }
+    }
+
+    public getKeyMeta(key: string): GeminiKeyMeta | undefined {
+      return this.keyMetas.get(key);
+    }
+
+    /**
+     * Get keys prioritized by health and least active connections (Least-Connections Load Balancing)
+     */
+    public getPrioritizedKeys(configData?: any): string[] {
+      const pool = getGeminiKeyPool(configData);
+      this.syncKeys(pool);
+
+      const now = Date.now();
+      const all = Array.from(this.keyMetas.values());
+      if (all.length === 0) return pool;
+
+      const healthy = all.filter(m => m.cooldownUntil <= now);
+      const cooling = all.filter(m => m.cooldownUntil > now);
+
+      // Least-connections sorting: pick keys with lowest activeStreams first
+      healthy.sort((a, b) => {
+        if (a.activeStreams !== b.activeStreams) {
+          return a.activeStreams - b.activeStreams;
+        }
+        return a.lastUsed - b.lastUsed;
+      });
+
+      // Cooling keys sorted by earliest expiration
+      cooling.sort((a, b) => a.cooldownUntil - b.cooldownUntil);
+
+      return [...healthy.map(m => m.key), ...cooling.map(m => m.key)];
+    }
+
+    public acquireKey(key: string): void {
+      const meta = this.keyMetas.get(key);
+      if (meta) {
+        meta.activeStreams++;
+        meta.lastUsed = Date.now();
+      }
+    }
+
+    public releaseKey(key: string, success: boolean = true, errMsg?: string): void {
+      const meta = this.keyMetas.get(key);
+      if (!meta) return;
+      meta.activeStreams = Math.max(0, meta.activeStreams - 1);
+      if (success) {
+        meta.successCount++;
+      } else {
+        meta.errorCount++;
+        meta.lastError = errMsg;
+      }
+    }
+
+    public markCooldown(key: string, cooldownMs: number = 30000, reason?: string): void {
+      const meta = this.keyMetas.get(key);
+      if (meta) {
+        meta.cooldownUntil = Date.now() + cooldownMs;
+        meta.errorCount++;
+        meta.lastError = reason;
+        serverLog('GEMINI', 'WARN', 'Key Cooldown Active',
+          `Key ${meta.masked} tạm ngừng ${Math.round(cooldownMs / 1000)}s | ${reason || '429 Quota'}`);
+      }
+    }
+
+    /**
+     * Concurrency buffer: waits up to maxWaitMs for an active stream slot if all keys are heavily saturated
+     */
+    public async waitForSlot(maxWaitMs: number = 3000): Promise<boolean> {
+      const start = Date.now();
+      while (Date.now() - start < maxWaitMs) {
+        const keys = this.getPrioritizedKeys();
+        if (keys.length > 0) {
+          const topMeta = this.keyMetas.get(keys[0]);
+          if (topMeta && topMeta.activeStreams < 4 && topMeta.cooldownUntil <= Date.now()) {
+            return true;
+          }
+        }
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return false; // Proceed anyway on timeout
+    }
+
+    public getSummary(): Array<{ masked: string; activeStreams: number; isCooldown: boolean; success: number; errors: number }> {
+      const now = Date.now();
+      return Array.from(this.keyMetas.values()).map(m => ({
+        masked: m.masked,
+        activeStreams: m.activeStreams,
+        isCooldown: m.cooldownUntil > now,
+        success: m.successCount,
+        errors: m.errorCount
+      }));
+    }
+  }
+
+  const geminiKeyManager = new GeminiKeyManager();
+  const geminiClientCache = new Map<string, GoogleGenAI>();
+
+  // Gemini AI Client Helper with Client Instance Caching
   function getGeminiClient(customApiKey?: string): GoogleGenAI {
     let apiKey = customApiKey;
     if (!apiKey) {
-      const pool = getGeminiKeyPool();
+      const pool = geminiKeyManager.getPrioritizedKeys();
       apiKey = pool[0] || process.env.GEMINI_API_KEY;
     }
-    if (!apiKey) {
-      serverLog('GEMINI', 'ERROR', 'getGeminiClient()', 'GEMINI_API_KEY bị thiếu | sẽ dùng dummy-key');
+    const cleanKey = (apiKey || 'dummy-key-for-dev').trim();
+    let client = geminiClientCache.get(cleanKey);
+    if (!client) {
+      client = new GoogleGenAI({
+        apiKey: cleanKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+      });
+      geminiClientCache.set(cleanKey, client);
     }
-    return new GoogleGenAI({
-      apiKey: apiKey || 'dummy-key-for-dev',
-      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
-    });
+    return client;
   }
 
-  // Vector Embedding Helper with Key Rotation
+  // ─────────────────────────────────────────────────────────────
+  // ⚡ HIGH-SPEED IN-MEMORY CACHES (Zero DB Latency for Concurrency)
+  // ─────────────────────────────────────────────────────────────
+  let cachedSystemConfig: any = null;
+  let lastSystemConfigFetch = 0;
+  const SYSTEM_CONFIG_TTL_MS = 60 * 1000; // 60 seconds
+
+  async function getCachedSystemConfig(): Promise<{ data: any; error: any }> {
+    const now = Date.now();
+    if (cachedSystemConfig && (now - lastSystemConfigFetch < SYSTEM_CONFIG_TTL_MS)) {
+      return { data: cachedSystemConfig, error: null };
+    }
+    try {
+      const { data, error } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      if (!error && data) {
+        cachedSystemConfig = data;
+        lastSystemConfigFetch = now;
+      }
+      return { data, error };
+    } catch (e: any) {
+      return { data: cachedSystemConfig, error: e };
+    }
+  }
+
+  function invalidateCachedSystemConfig(): void {
+    cachedSystemConfig = null;
+    lastSystemConfigFetch = 0;
+  }
+
+  let cachedArticles: any[] | null = null;
+  let lastArticlesFetch = 0;
+  const ARTICLES_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+  async function getCachedArticles(): Promise<any[]> {
+    const now = Date.now();
+    if (cachedArticles && (now - lastArticlesFetch < ARTICLES_TTL_MS)) {
+      return cachedArticles;
+    }
+    try {
+      const { data, error } = await supabase.from('articles').select('*');
+      if (!error && data) {
+        cachedArticles = data;
+        lastArticlesFetch = now;
+        return data;
+      }
+    } catch { }
+    return cachedArticles || [];
+  }
+
+  function invalidateCachedArticles(): void {
+    cachedArticles = null;
+    lastArticlesFetch = 0;
+  }
+
+  // LRU Query Cache for Embeddings and RAG search results
+  const embeddingCache = new Map<string, number[]>();
+  const ragQueryCache = new Map<string, { result: string; timestamp: number }>();
+  const RAG_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+  // Vector Embedding Helper with Key Rotation & Caching
   async function generateEmbedding(text: string, customApiKey?: string): Promise<number[] | null> {
+    const cleanText = text.trim();
+    if (!cleanText) return null;
+
+    // Fast in-memory embedding cache hit
+    const cacheKey = cleanText.toLowerCase();
+    if (embeddingCache.has(cacheKey)) {
+      return embeddingCache.get(cacheKey)!;
+    }
+
     const t0 = Date.now();
-    const keys = customApiKey ? [customApiKey] : getGeminiKeyPool();
+    const keys = customApiKey ? [customApiKey] : geminiKeyManager.getPrioritizedKeys();
     if (keys.length === 0 && process.env.GEMINI_API_KEY) {
       keys.push(process.env.GEMINI_API_KEY);
     }
@@ -701,19 +923,30 @@ async function startServer(isVercel = false) {
         const ai = getGeminiClient(k);
         const response = await ai.models.embedContent({
           model: 'gemini-embedding-001',
-          contents: text,
+          contents: cleanText,
           config: {
             outputDimensionality: 768
           }
         });
-        const dims = response.embeddings?.[0]?.values?.length ?? 0;
-        serverLog('GEMINI', 'OK', 'Embedding generated', `gemini-embedding-001 → ${dims} dims [Key #${i + 1}/${keys.length}]`, Date.now() - t0);
-        return response.embeddings?.[0]?.values || null;
+        const values = response.embeddings?.[0]?.values || null;
+        if (values && values.length > 0) {
+          if (embeddingCache.size > 500) {
+            const first = embeddingCache.keys().next().value;
+            if (first) embeddingCache.delete(first);
+          }
+          embeddingCache.set(cacheKey, values);
+          const dims = values.length;
+          serverLog('GEMINI', 'OK', 'Embedding generated', `gemini-embedding-001 → ${dims} dims [Key #${i + 1}/${keys.length}]`, Date.now() - t0);
+          return values;
+        }
       } catch (e: any) {
         const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(e?.message || '');
-        if (isQuota && i + 1 < keys.length) {
-          serverLog('GEMINI', 'WARN', 'Embedding Key Quota Exceeded', `Key #${i + 1} hết quota → xoay sang Key #${i + 2}`, Date.now() - t0);
-          continue;
+        if (isQuota) {
+          geminiKeyManager.markCooldown(k, 30000, 'Embedding 429');
+          if (i + 1 < keys.length) {
+            serverLog('GEMINI', 'WARN', 'Embedding Key Quota Exceeded', `Key #${i + 1} hết quota → xoay sang Key #${i + 2}`, Date.now() - t0);
+            continue;
+          }
         }
         serverLog('GEMINI', 'ERROR', 'Embedding FAILED', e?.message?.substring(0, 80), Date.now() - t0);
       }
@@ -721,9 +954,18 @@ async function startServer(isVercel = false) {
     return null;
   }
 
-  // Helper for RAG Knowledge Search (Upgraded to Vector Search)
+  // Helper for RAG Knowledge Search (Upgraded to Vector Search + LRU Cache)
   async function searchRAGKnowledge(queryText: string): Promise<string> {
     if (!queryText.trim()) return '';
+
+    const normalizedQuery = queryText.trim().toLowerCase();
+    const cachedRAG = ragQueryCache.get(normalizedQuery);
+    if (cachedRAG && (Date.now() - cachedRAG.timestamp < RAG_CACHE_TTL_MS)) {
+      serverLog('SYSTEM', 'OK', 'RAG Query Cache Hit', `"${queryText.substring(0, 30)}" → 0ms`);
+      return cachedRAG.result;
+    }
+
+    let finalResult = '';
 
     // 1. Generate embedding for the query
     const queryEmbedding = await generateEmbedding(queryText);
@@ -731,15 +973,16 @@ async function startServer(isVercel = false) {
     if (queryEmbedding) {
       // 2. Perform Vector Search using Supabase RPC (pgvector)
       const t0 = Date.now();
-      const { data: matched, error } = await supabase.rpc('match_articles', {
-        query_embedding: queryEmbedding,
-        match_threshold: 0.6,
-        match_count: 3
-      });
+      try {
+        const { data: matched, error } = await supabase.rpc('match_articles', {
+          query_embedding: queryEmbedding,
+          match_threshold: 0.6,
+          match_count: 3
+        });
 
-      if (!error && matched && matched.length > 0) {
-        serverLog('SUPABASE', 'OK', 'RAG vector search', `${matched.length} bài khớp → "${queryText.substring(0, 40)}"`, Date.now() - t0);
-        return matched.map((art: any) => `
+        if (!error && matched && matched.length > 0) {
+          serverLog('SUPABASE', 'OK', 'RAG vector search', `${matched.length} bài khớp → "${queryText.substring(0, 40)}"`, Date.now() - t0);
+          finalResult = matched.map((art: any) => `
 [KIẾN THỨC RAG THAM KHẢO]:
 - Tiêu đề: ${art.title} (Độ khớp: ${Math.round(art.similarity * 100)}%)
 - Tóm tắt: ${art.summary}
@@ -748,45 +991,49 @@ async function startServer(isVercel = false) {
 - Lời khuyên bác sĩ: ${art.doctor_advice}
 - Nội dung chuyên môn: ${art.content}
 `).join('\n\n');
-      } else {
-        serverLog('SUPABASE', 'WARN', 'RAG vector search', error ? `Lỗi RPC: ${error.message}` : 'Không có kết quả | chuyển sang fallback keyword', Date.now() - t0);
+        } else {
+          serverLog('SUPABASE', 'WARN', 'RAG vector search', error ? `Lỗi RPC: ${error.message}` : 'Không có kết quả | chuyển sang fallback keyword', Date.now() - t0);
+        }
+      } catch (err: any) {
+        serverLog('SUPABASE', 'WARN', 'RAG vector RPC error', err.message);
       }
     }
 
-    // Fallback: In-memory intelligent keyword & symptom filter
-    const queryLower = queryText.toLowerCase();
-    const ft0 = Date.now();
-    const { data: articles, error: fetchErr } = await supabase.from('articles').select('*');
-    if (fetchErr || !articles) {
-      serverLog('SUPABASE', 'ERROR', 'RAG fallback fetch articles', fetchErr?.message, Date.now() - ft0);
-      return '';
-    }
+    // Fallback: In-memory intelligent keyword & symptom filter using cached articles
+    if (!finalResult) {
+      const queryLower = queryText.toLowerCase();
+      const ft0 = Date.now();
+      const articles = await getCachedArticles();
+      if (!articles || articles.length === 0) {
+        serverLog('SUPABASE', 'ERROR', 'RAG fallback fetch articles', 'No articles cached', Date.now() - ft0);
+        return '';
+      }
 
-    const matched = articles.filter((art: any) => {
-      const titleLower = (art.title || '').toLowerCase();
-      const summaryLower = (art.summary || '').toLowerCase();
-      const symptoms = (art.symptoms || []).map((s: string) => s.toLowerCase());
+      const matched = articles.filter((art: any) => {
+        const titleLower = (art.title || '').toLowerCase();
+        const summaryLower = (art.summary || '').toLowerCase();
+        const symptoms = (art.symptoms || []).map((s: string) => s.toLowerCase());
 
-      // 1. Direct phrase or sub-phrase match
-      if (titleLower.includes(queryLower) || summaryLower.includes(queryLower)) return true;
+        // 1. Direct phrase or sub-phrase match
+        if (titleLower.includes(queryLower) || summaryLower.includes(queryLower)) return true;
 
-      // 2. Symptom overlap
-      const symptomOverlap = symptoms.some((s: string) =>
-        queryLower.includes(s) || s.split(' ').some(w => w.length > 3 && queryLower.includes(w))
-      );
-      if (symptomOverlap) return true;
+        // 2. Symptom overlap
+        const symptomOverlap = symptoms.some((s: string) =>
+          queryLower.includes(s) || s.split(' ').some(w => w.length > 3 && queryLower.includes(w))
+        );
+        if (symptomOverlap) return true;
 
-      // 3. Keyword matching (tokens of length >= 3)
-      const keywords = queryLower.split(/[\s,.;!?]+/).filter((w: string) => w.length >= 3);
-      const matchesCount = keywords.filter((k: string) =>
-        titleLower.includes(k) || summaryLower.includes(k) || symptoms.some((s: string) => s.includes(k))
-      ).length;
-      return matchesCount >= 2;
-    });
+        // 3. Keyword matching (tokens of length >= 3)
+        const keywords = queryLower.split(/[\s,.;!?]+/).filter((w: string) => w.length >= 3);
+        const matchesCount = keywords.filter((k: string) =>
+          titleLower.includes(k) || summaryLower.includes(k) || symptoms.some((s: string) => s.includes(k))
+        ).length;
+        return matchesCount >= 2;
+      });
 
-    if (matched.length === 0) {
-      serverLog('SUPABASE', 'INFO', 'RAG fallback keyword', `Không tìm thấy bài nào cho "${queryText.substring(0, 40)}" | kích hoạt Ragas Out-of-Knowledge Fallback`, Date.now() - ft0);
-      return `
+      if (matched.length === 0) {
+        serverLog('SUPABASE', 'INFO', 'RAG fallback keyword', `Không tìm thấy bài nào cho "${queryText.substring(0, 40)}" | kích hoạt Ragas Out-of-Knowledge Fallback`, Date.now() - ft0);
+        finalResult = `
 [RAG QUY TẮC AN TOÀN Y TẾ - BỆNH LÝ CHƯA CÓ TRONG PHÁC ĐỒ NỘI BỘ VETHIC]:
 - THÔNG BÁO TỪ HỆ THỐNG KIỂM ĐỊNH RAG: Triệu chứng hoặc bệnh lý này hiện CHƯA có bài viết chuyên sâu chính thức trong Cơ sở tri thức thú y Vethic đã được phê duyệt.
 - NGUYÊN TẮC BÁC SĨ AI (THEO CHUẨN ĐÁNH GIÁ CHỐNG ẢO GIÁC RAGAS & TRULENS):
@@ -796,15 +1043,27 @@ async function startServer(isVercel = false) {
   4. Cảnh báo các dấu hiệu báo động đỏ (RED): Co giật, khó thở há miệng, niêm mạc tím tái, xuất huyết tiêu hóa, li bì bất tỉnh -> Cần đưa đi cấp cứu ngay lập tức.
   5. CẢNH BÁO NGUY HIỂM: Tuyệt đối không dùng thuốc giảm đau/hạ sốt của người (như Paracetamol, Panadol, Ibuprofen, Aspirin) vì gây ngộ độc hoại tử gan và tử vong nhanh chóng ở thú cưng.
 `;
-    }
-    serverLog('SUPABASE', 'OK', 'RAG fallback keyword', `${matched.length} bài khớp`, Date.now() - ft0);
-
-    return matched.slice(0, 3).map((art: any) => `
+      } else {
+        serverLog('SUPABASE', 'OK', 'RAG fallback keyword', `${matched.length} bài khớp`, Date.now() - ft0);
+        finalResult = matched.slice(0, 3).map((art: any) => `
 [KIẾN THỨC RAG THAM KHẢO (Cơ bản)]:
 - Tiêu đề: ${art.title}
 - Tóm tắt: ${art.summary}
 - Các bước sơ cứu chuẩn: ${(art.first_aid_steps || []).join(' -> ')}
 `).join('\n\n');
+      }
+    }
+
+    // Save to LRU query cache
+    if (finalResult) {
+      if (ragQueryCache.size > 300) {
+        const oldestKey = ragQueryCache.keys().next().value;
+        if (oldestKey) ragQueryCache.delete(oldestKey);
+      }
+      ragQueryCache.set(normalizedQuery, { result: finalResult, timestamp: Date.now() });
+    }
+
+    return finalResult;
   }
 
   let cachedClinicsSummary = '';
@@ -941,6 +1200,7 @@ async function startServer(isVercel = false) {
       latencyMs: geminiLatency,
       poolSize: keyPool.length,
       keysPreview: keyPool.map(k => maskApiKey(k)),
+      keyPoolStats: geminiKeyManager.getSummary(),
       message: geminiMsg,
       keyPreview: activeKey ? maskApiKey(activeKey) : null,
       source: customGeminiKey ? 'database' : (process.env.GEMINI_API_KEY ? 'env' : (keyPool.length > 0 ? 'pool' : 'missing'))
@@ -1799,75 +2059,85 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     lastMessageAt: string;
   }
 
+  let inMemoryGuestLimits: Record<string, GuestLimitRecord> | null = null;
+  let guestLimitsSaveTimer: NodeJS.Timeout | null = null;
+
   function getGuestLimitsStore(): Record<string, GuestLimitRecord> {
-    try {
-      if (fs.existsSync(GUEST_LIMITS_FILE)) {
-        const raw = fs.readFileSync(GUEST_LIMITS_FILE, 'utf-8');
-        return JSON.parse(raw) || {};
-      }
-    } catch { }
-    return {};
+    if (!inMemoryGuestLimits) {
+      try {
+        if (fs.existsSync(GUEST_LIMITS_FILE)) {
+          const raw = fs.readFileSync(GUEST_LIMITS_FILE, 'utf-8');
+          inMemoryGuestLimits = JSON.parse(raw) || {};
+        }
+      } catch { }
+      if (!inMemoryGuestLimits) inMemoryGuestLimits = {};
+    }
+    return inMemoryGuestLimits;
   }
 
   function saveGuestLimitsStore(data: Record<string, GuestLimitRecord>): void {
-    try {
-      fs.writeFileSync(GUEST_LIMITS_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    } catch { }
+    inMemoryGuestLimits = data;
+    if (guestLimitsSaveTimer) clearTimeout(guestLimitsSaveTimer);
+    guestLimitsSaveTimer = setTimeout(async () => {
+      try {
+        await fs.promises.writeFile(GUEST_LIMITS_FILE, JSON.stringify(data, null, 2), 'utf-8');
+      } catch (err: any) {
+        console.warn('Async saveGuestLimitsStore error:', err?.message);
+      }
+    }, 1000);
   }
 
-  async function getGuestQuota(clientIp: string): Promise<{ messageCount: number; maxLimit: number; remaining: number }> {
+  async function getGuestQuota(clientIdentifier: string): Promise<{ messageCount: number; maxLimit: number; remaining: number }> {
     const maxLimit = 8;
     const store = getGuestLimitsStore();
+
+    // Fast in-memory record check (0ms)
+    const existing = store[clientIdentifier];
+    if (existing && typeof existing.messageCount === 'number') {
+      return { messageCount: existing.messageCount, maxLimit, remaining: Math.max(0, maxLimit - existing.messageCount) };
+    }
 
     try {
       const { data: limitData, error: fetchErr } = await supabase
         .from('guest_rate_limits')
         .select('message_count')
-        .eq('ip_address', clientIp)
+        .eq('ip_address', clientIdentifier)
         .maybeSingle();
 
       if (!fetchErr) {
         if (limitData && typeof limitData.message_count === 'number') {
-          // Row found in Supabase
           const count = limitData.message_count;
-          store[clientIp] = { messageCount: count, lastMessageAt: new Date().toISOString() };
+          store[clientIdentifier] = { messageCount: count, lastMessageAt: new Date().toISOString() };
           saveGuestLimitsStore(store);
           return { messageCount: count, maxLimit, remaining: Math.max(0, maxLimit - count) };
         } else {
-          // Row NOT found in Supabase (e.g. Admin deleted the row in DB to reset limit!)
-          if (store[clientIp]) {
-            delete store[clientIp];
+          if (store[clientIdentifier]) {
+            delete store[clientIdentifier];
             saveGuestLimitsStore(store);
           }
           return { messageCount: 0, maxLimit, remaining: maxLimit };
         }
-      } else {
-        // Supabase error (e.g. RLS before SQL setup) - Fallback to local store
-        const count = store[clientIp]?.messageCount || 0;
-        return { messageCount: count, maxLimit, remaining: Math.max(0, maxLimit - count) };
       }
-    } catch {
-      const count = store[clientIp]?.messageCount || 0;
-      return { messageCount: count, maxLimit, remaining: Math.max(0, maxLimit - count) };
-    }
+    } catch { }
+
+    const count = store[clientIdentifier]?.messageCount || 0;
+    return { messageCount: count, maxLimit, remaining: Math.max(0, maxLimit - count) };
   }
 
-  async function incrementGuestMessageCount(clientIp: string, currentCount: number): Promise<number> {
+  async function incrementGuestMessageCount(clientIdentifier: string, currentCount: number): Promise<number> {
     const nextCount = currentCount + 1;
     const store = getGuestLimitsStore();
-    store[clientIp] = { messageCount: nextCount, lastMessageAt: new Date().toISOString() };
+    store[clientIdentifier] = { messageCount: nextCount, lastMessageAt: new Date().toISOString() };
     saveGuestLimitsStore(store);
 
-    // Sync to Supabase
-    try {
-      await supabase.from('guest_rate_limits').upsert({
-        ip_address: clientIp,
+    // Sync to Supabase in the background (fire-and-forget, non-blocking)
+    Promise.resolve(
+      supabase.from('guest_rate_limits').upsert({
+        ip_address: clientIdentifier,
         message_count: nextCount,
         last_message_at: new Date().toISOString()
-      }, { onConflict: 'ip_address' });
-    } catch (e: any) {
-      serverLog('SYSTEM', 'WARN', 'guest_rate_limits', `Supabase upsert: ${e.message}`);
-    }
+      }, { onConflict: 'ip_address' })
+    ).catch(() => { });
 
     return nextCount;
   }
@@ -1968,29 +2238,46 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     transactions: PointTransactionRecord[];
   }
 
+  let inMemoryPointsStore: PointsStoreData | null = null;
+  let pointsStoreSaveTimer: NodeJS.Timeout | null = null;
+
   function getPointsStore(): PointsStoreData {
-    try {
-      if (fs.existsSync(POINTS_STORE_FILE)) {
-        const raw = fs.readFileSync(POINTS_STORE_FILE, 'utf-8');
-        const parsed = JSON.parse(raw);
-        return {
-          userPoints: parsed.userPoints || {},
-          transactions: Array.isArray(parsed.transactions) ? parsed.transactions : []
-        };
-      }
-    } catch { }
-    return { userPoints: {}, transactions: [] };
+    if (!inMemoryPointsStore) {
+      try {
+        if (fs.existsSync(POINTS_STORE_FILE)) {
+          const raw = fs.readFileSync(POINTS_STORE_FILE, 'utf-8');
+          const parsed = JSON.parse(raw);
+          inMemoryPointsStore = {
+            userPoints: parsed.userPoints || {},
+            transactions: Array.isArray(parsed.transactions) ? parsed.transactions : []
+          };
+        }
+      } catch { }
+      if (!inMemoryPointsStore) inMemoryPointsStore = { userPoints: {}, transactions: [] };
+    }
+    return inMemoryPointsStore;
   }
 
   function savePointsStore(data: PointsStoreData): void {
-    try {
-      fs.writeFileSync(POINTS_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    } catch { }
+    inMemoryPointsStore = data;
+    if (pointsStoreSaveTimer) clearTimeout(pointsStoreSaveTimer);
+    pointsStoreSaveTimer = setTimeout(async () => {
+      try {
+        await fs.promises.writeFile(POINTS_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+      } catch (err: any) {
+        console.warn('Async savePointsStore error:', err?.message);
+      }
+    }, 1000);
   }
 
   async function getUserPoints(userId: string): Promise<number> {
     if (!userId || userId === 'guest') return 0;
     const store = getPointsStore();
+
+    // Fast in-memory check (0ms)
+    if (typeof store.userPoints[userId] === 'number') {
+      return store.userPoints[userId];
+    }
 
     // 1. Cố gắng lấy từ Supabase
     try {
@@ -2014,10 +2301,10 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       store.userPoints[userId] = DEFAULT_INITIAL_POINTS;
       savePointsStore(store);
 
-      // Thử đồng bộ ngược vào Supabase nếu được
-      try {
-        await supabase.from('users').update({ points: DEFAULT_INITIAL_POINTS }).eq('id', userId);
-      } catch { }
+      // Thử đồng bộ ngược vào Supabase nếu được (fire-and-forget)
+      Promise.resolve(
+        supabase.from('users').update({ points: DEFAULT_INITIAL_POINTS }).eq('id', userId)
+      ).catch(() => { });
     }
 
     return store.userPoints[userId];
@@ -2029,7 +2316,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     const current = await getUserPoints(userId);
     const newPoints = Math.max(0, current - pointsToDeduct);
 
-    // Cập nhật store local
+    // Cập nhật store local trong RAM (0ms)
     store.userPoints[userId] = newPoints;
     const tx: PointTransactionRecord = {
       id: (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `tx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`),
@@ -2045,18 +2332,18 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     if (store.transactions.length > 500) store.transactions.pop();
     savePointsStore(store);
 
-    // Cố gắng cập nhật Supabase
-    try {
-      await supabase.from('users').update({ points: newPoints }).eq('id', userId);
-      await supabase.from('point_transactions').insert([{
+    // Đồng bộ Supabase bất đồng bộ ngầm (không chặn response)
+    Promise.all([
+      supabase.from('users').update({ points: newPoints }).eq('id', userId),
+      supabase.from('point_transactions').insert([{
         user_id: userId,
         amount_vnd: 0,
         points: -pointsToDeduct,
         transaction_type: 'chat_usage',
         description,
         status: 'success'
-      }]);
-    } catch { }
+      }])
+    ]).catch(() => { });
 
     return newPoints;
   }
@@ -3306,6 +3593,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
       const { data, error } = await supabase.from('articles').insert([payload]).select().single();
       if (error) return res.status(500).json(secureResponse({ error: error.message }));
+      invalidateCachedArticles();
 
       res.json(secureResponse({
         ...data,
@@ -3344,6 +3632,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
 
       const { data, error } = await supabase.from('articles').update(payload).eq('id', id).select().single();
       if (error) return res.status(500).json(secureResponse({ error: error.message }));
+      invalidateCachedArticles();
 
       res.json(secureResponse({
         ...data,
@@ -3362,6 +3651,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
     const { id } = req.params;
     const { error } = await supabase.from('articles').delete().eq('id', id);
     if (error) return res.status(500).json(secureResponse({ error: error.message }));
+    invalidateCachedArticles();
     res.json(secureResponse({ success: true, id }));
   });
 
@@ -3502,6 +3792,8 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       } catch (dbErr) {
         console.warn('Failed to persist config to Supabase:', dbErr);
       }
+
+      invalidateCachedSystemConfig();
 
       // Return strictly masked and encrypted response to browser
       res.json(secureResponse({
@@ -3944,30 +4236,38 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
       const cleanMessage = (message || '').trim().substring(0, 500);
       if (!cleanMessage) return res.json(secureResponse({ title: 'Phiên khám thú cưng' }));
 
-      const prompt = `Tạo một tiêu đề SIÊU NGẮN (tối đa 4-6 chữ) tóm tắt nội dung sau (nếu là chào hỏi thì ghi "Trò chuyện chung", không dùng ngoặc kép): "${cleanMessage}"`;
-      const keyPool = getGeminiKeyPool();
-      let title = 'Phiên khám thú cưng';
+      // Fast instant heuristic for short messages to save API calls
+      const words = cleanMessage.split(/\s+/).filter(Boolean);
+      if (words.length <= 4) {
+        return res.json(secureResponse({ title: cleanMessage }));
+      }
 
-      for (const k of keyPool) {
+      const prompt = `Tạo một tiêu đề SIÊU NGẮN (tối đa 4-6 chữ) tóm tắt nội dung sau (nếu là chào hỏi thì ghi "Trò chuyện chung", không dùng ngoặc kép): "${cleanMessage}"`;
+      const keyPool = geminiKeyManager.getPrioritizedKeys();
+      let title = words.slice(0, 5).join(' '); // Instant fallback title
+
+      for (const k of keyPool.slice(0, 2)) {
         try {
           const ai = getGeminiClient(k);
-          const result = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents: { parts: [{ text: prompt }] }
-          });
-          const text = result.text?.replace(/["*\n]/g, '').trim();
+          // Use gemini-3.1-flash-lite for lightweight high-RPM title generation with 2.5s timeout
+          const result = await Promise.race([
+            ai.models.generateContent({
+              model: 'gemini-3.1-flash-lite',
+              contents: { parts: [{ text: prompt }] }
+            }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2500))
+          ]);
+          const text = (result as any).text?.replace(/["*\n]/g, '').trim();
           if (text) {
             title = text;
             break;
           }
-        } catch (err: any) {
-          const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(err?.message || '');
-          if (isQuota) continue;
+        } catch {
+          // If busy or timeout, move to next key or fallback
         }
       }
       res.json(secureResponse({ title }));
     } catch (e) {
-      console.error(e);
       res.json(secureResponse({ title: 'Phiên khám thú cưng' }));
     }
   });
@@ -3991,7 +4291,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không bọc trong markdown
   ): Promise<ImageVerificationResult> {
     const t0 = Date.now();
     try {
-      const keys = (keyPool && keyPool.length > 0) ? keyPool : getGeminiKeyPool();
+      const keys = (keyPool && keyPool.length > 0) ? keyPool : geminiKeyManager.getPrioritizedKeys();
       if (keys.length === 0 && process.env.GEMINI_API_KEY) {
         keys.push(process.env.GEMINI_API_KEY);
       }
@@ -4083,6 +4383,10 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
           const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(errMsg);
           const isAuth = /API_KEY_INVALID|key not valid|403|401/i.test(errMsg);
 
+          if (isQuota) {
+            geminiKeyManager.markCooldown(apiKey, 30000, 'Image Verification 429');
+          }
+
           if ((isQuota || isAuth) && kIdx + 1 < keys.length) {
             serverLog('GEMINI', 'WARN', 'Image Verification Key Rotation',
               `Key #${kIdx + 1} (${maskApiKey(apiKey)}) hết quota/lỗi ${isQuota ? "429" : "Auth"} → chuyển sang Key #${kIdx + 2}/${keys.length}`);
@@ -4134,11 +4438,11 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
 
     try {
       // 1. GUEST RATE LIMIT & USER POINT CHECK
+      const clientIdentifier = getClientDeviceIdentifier(req);
       if (!userId || userId === 'guest') {
-        const clientIp = getClientIp(req);
-        const quota = await getGuestQuota(clientIp);
+        const quota = await getGuestQuota(clientIdentifier);
         if (quota.messageCount >= 8) {
-          serverLog('SYSTEM', 'WARN', '/api/chat', `Guest machine IP ${clientIp} exceeded limit (${quota.messageCount}/8)`);
+          serverLog('SYSTEM', 'WARN', '/api/chat', `Guest device ${clientIdentifier} exceeded limit (${quota.messageCount}/8)`);
           return res.status(429).json(secureResponse({
             error: 'Bạn đã đạt giới hạn 8 tin nhắn dùng thử miễn phí trên thiết bị này. Vui lòng đăng nhập tài khoản để nhận ngay 10 Point miễn phí và tiếp tục tư vấn!',
             guestLimitReached: true,
@@ -4146,7 +4450,7 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
             limit: 8
           }));
         }
-        await incrementGuestMessageCount(clientIp, quota.messageCount);
+        await incrementGuestMessageCount(clientIdentifier, quota.messageCount);
       } else if (ENABLE_POINT_SYSTEM) {
         // Kiểm tra số point của người dùng đã đăng nhập
         const currentPoints = await getUserPoints(userId);
@@ -4160,12 +4464,11 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
         }
       }
 
-      // Retrieve System Config
+      // Retrieve System Config (from fast in-memory cache)
       const cfgT0 = Date.now();
-      const { data: configData, error: cfgErr } = await supabase.from('system_config').select('*').eq('id', 1).single();
+      const { data: configData, error: cfgErr } = await getCachedSystemConfig();
       serverLog('SUPABASE', cfgErr ? 'WARN' : 'OK', '/api/chat → load system_config',
         cfgErr ? cfgErr.message : `model=${configData?.ai_model || 'gemini-3.6-flash'}`, Date.now() - cfgT0);
-      const keyPool = getGeminiKeyPool(configData);
       const renderServiceUrl = configData?.render_service_url || 'https://pet-chatbot-ai.onrender.com';
 
       const isCasualGreeting = /^(chào|hi|hello|cảm ơn|thank|dạ|vâng|ok|dạ vâng|ok ạ|không có gì|bye|tạm biệt|hihi|haha|hey|alo)/i.test(cleanMessage) && cleanMessage.length < 40;
@@ -4211,7 +4514,7 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
       if (imageBase64) {
         // --- 0.2 XÁC THỰC ẢNH VÀ MÔ TẢ (Image & Symptom Verification Gatekeeper) ---
         const verifyT0 = Date.now();
-        const verification = await verifyImageAndDescription(imageBase64, cleanMessage, petInfo, keyPool);
+        const verification = await verifyImageAndDescription(imageBase64, cleanMessage, petInfo);
 
         if (!verification.isValid || !verification.isMatch || !verification.isPetImage) {
           serverLog('GEMINI', 'WARN', '/api/chat → REJECTED_BY_IMAGE_VERIFICATION',
@@ -4226,37 +4529,7 @@ HÃY QUAN SÁT THẬT KỸ BỨC ẢNH VÀ TRẢ LỜI ĐÚNG ĐỊNH DẠNG JSO
             res.write(`data: ${JSON.stringify({ __enc: true, payload })}\n\n`);
           };
 
-          sendRejectEvent('triage', {
-            triageLevel: 'YELLOW',
-            triageDetails: {
-              riskTitle: 'XÁC THỰC: ẢNH VÀ MÔ TẢ KHÔNG ĐỒNG NHẤT',
-              urgency: 'Yêu cầu tải đúng ảnh thú cưng để được tư vấn an toàn',
-              immediateActions: [
-                'Chụp trực tiếp vùng da hoặc vị trí bất thường của thú cưng',
-                'Tránh chụp cánh tay, bàn tay hoặc bộ phận cơ thể người',
-                'Đảm bảo ảnh rõ nét, đủ ánh sáng và không bị che khuất'
-              ]
-            }
-          });
-
-          const rejectionText = `⚠️ **PHÁT HIỆN HÌNH ẢNH KHÔNG ĐỒNG NHẤT VỚI MÔ TẢ TRIỆU CHỨNG**
-
-Hệ thống thẩm định an toàn y tế phát hiện hình ảnh bạn tải lên **không phù hợp hoặc không khớp** với mô tả lâm sàng:
-
-- 🔍 **Đối tượng nhận diện trong ảnh**: **${verification.detectedSubject}**
-- 📝 **Mô tả của bạn**: *"${cleanMessage}"*
-- ❌ **Lý do từ chối chẩn đoán**: ${verification.reason}
-
----
-
-### 🛡️ Tại sao Bác sĩ Thú y AI cần xác thực này?
-1. **Bảo vệ sức khỏe thú cưng**: Việc đưa ra phác đồ hay chẩn đoán dựa trên hình ảnh không phải thú cưng (như chụp cánh tay/bàn tay người, đồ vật, hoặc sai loài/vị trí tổn thương) có thể gây ra chẩn đoán sai lệch nghiêm trọng, chỉ định sai thuốc hoặc gây ngộ độc cho thú cưng.
-2. **Quy định đạo đức AI**: Bác sĩ Thú Y AI chỉ hỗ trợ chẩn đoán cho động vật (chó, mèo...), tuyệt đối từ chối tư vấn bệnh lý da liễu người.
-
-### 👉 Hướng dẫn thực hiện:
-- Vui lòng chụp lại ảnh rõ nét tại đúng vị trí có biểu hiện bất thường trên **thú cưng của bạn** (chó, mèo...).
-- Tránh để bàn tay/cánh tay người che khuất vùng tổn thương.
-- Gửi lại kèm mô tả chi tiết để được tư vấn chính xác và an toàn nhất!`;
+          const rejectionText = `⚠️ **Thông báo**: Hình ảnh bạn tải lên (nhận diện: **${verification.detectedSubject}**) không trùng khớp với mô tả triệu chứng hoặc không liên quan đến thú cưng (chó/mèo). Vui lòng kiểm tra và gửi lại ảnh phù hợp để được hỗ trợ.`;
 
           sendRejectEvent('chunk', { text: rejectionText });
           sendRejectEvent('done', { rawText: rejectionText });
@@ -4388,8 +4661,8 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 - KHÔNG viết đoạn kết lan man hay chúc tụng rườm rà. Kết thúc ngắn gọn trong 1 câu súc tích.
 
 4. 🛡️ QUY TẮC BẮT BUỘC XÁC THỰC ẢNH & MÔ TẢ:
-- Nếu quan sát thấy ảnh chụp bộ phận cơ thể người (cánh tay, bàn tay, chân, mặt người...) hoặc đồ vật/vật nuôi khác không phải thú cưng được mô tả: BẮT BUỘC từ chối tư vấn y tế cho ảnh đó, chọn mức YELLOW và yêu cầu người dùng cung cấp đúng ảnh thực tế của thú cưng.
-- Nếu ảnh và mô tả mâu thuẫn rõ rệt, phải chỉ rõ sự không khớp này trước khi đưa ra phân tích.
+- Nếu quan sát thấy ảnh chụp bộ phận cơ thể người (cánh tay, bàn tay, chân, mặt người...) hoặc đồ vật/vật nuôi khác không phải thú cưng được mô tả (chó/mèo): BẮT BUỘC chỉ trả lời thông báo ngắn gọn từ chối do ảnh không phù hợp hoặc không khớp với mô tả. TUYỆT ĐỐI KHÔNG tìm kiếm hay gợi ý phòng khám, KHÔNG thêm bất kỳ chỉ dẫn dư thừa nào.
+- Nếu ảnh và mô tả mâu thuẫn rõ rệt, chỉ thông báo ngắn gọn sự không khớp và đề nghị gửi lại ảnh đúng.
 
 🚨 BẢO MẬT & GIỚI HẠN (QUAN TRỌNG):
 - BẠN CHỈ LÀ BÁC SĨ THÚ Y AI. TUYỆT ĐỐI KHÔNG trả lời các chủ đề chính trị, tôn giáo, code lập trình, hay bất cứ gì ngoài thú y/động vật.
@@ -4437,13 +4710,28 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
         res.write(`data: ${JSON.stringify({ __enc: true, payload })}\n\n`);
       };
 
-      keyLoop: for (let keyIdx = 0; keyIdx < keyPool.length; keyIdx++) {
-        const currentKey = keyPool[keyIdx];
+      // ⚡ High Concurrency Buffer: Wait for an available slot if keys are at burst capacity
+      await geminiKeyManager.waitForSlot(3000);
+
+      // Track client disconnect to immediately stop stream and free up connection & quota
+      let isClientClosed = false;
+      req.on('close', () => {
+        isClientClosed = true;
+      });
+
+      const prioritizedKeys = geminiKeyManager.getPrioritizedKeys(configData);
+
+      keyLoop: for (let keyIdx = 0; keyIdx < prioritizedKeys.length; keyIdx++) {
+        if (isClientClosed) break keyLoop;
+        const currentKey = prioritizedKeys[keyIdx];
+        geminiKeyManager.acquireKey(currentKey);
+        let keyAcquired = true;
         const ai = getGeminiClient(currentKey);
         const maskedKey = maskApiKey(currentKey);
-        const keyTag = `Key #${keyIdx + 1}/${keyPool.length} (${maskedKey})`;
+        const keyTag = `Key #${keyIdx + 1}/${prioritizedKeys.length} (${maskedKey})`;
 
         for (const targetModel of fallbackModels) {
+          if (isClientClosed) break;
           const gemT0 = Date.now();
           try {
             serverLog('GEMINI', 'INFO', `generateContentStream → ${targetModel}`, `${keyTag}, temp=${sysConfig.temperature}`);
@@ -4470,7 +4758,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
             let triageSent = false;
 
             const handleChunk = (chunkText: string) => {
-              if (!chunkText) return;
+              if (!chunkText || isClientClosed) return;
               fullText += chunkText;
 
               if (!triageSent && !isCasualGreeting) {
@@ -4518,12 +4806,19 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
             }
 
             // Gửi các chunk tiếp theo
-            while (true) {
+            while (!isClientClosed) {
               const nextResult = await iterator.next();
               if (nextResult.done) break;
               if (nextResult.value?.text) {
                 handleChunk(nextResult.value.text);
               }
+            }
+
+            if (isClientClosed) {
+              serverLog('GEMINI', 'WARN', `stream aborted ← ${targetModel}`, `Client disconnected`);
+              geminiKeyManager.releaseKey(currentKey, true);
+              keyAcquired = false;
+              return;
             }
 
             // Check fallback keywords nếu chưa gửi triage
@@ -4557,6 +4852,8 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
             serverLog('GEMINI', 'OK', `stream done ← ${targetModel}`,
               `${fullText.length} chars [${keyTag}]`, Date.now() - gemT0);
             streamSucceeded = true;
+            geminiKeyManager.releaseKey(currentKey, true);
+            keyAcquired = false;
             break keyLoop; // Hoàn tất thành công toàn bộ!
 
           } catch (err: any) {
@@ -4564,22 +4861,27 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
             const errMsg = err?.message || String(err);
             const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(errMsg);
             const isAuth = /API_KEY_INVALID|key not valid|403|401/i.test(errMsg);
+            const is503 = /503|high demand|unavailable|overloaded/i.test(errMsg);
 
-            serverLog('GEMINI', isQuota || isAuth ? 'WARN' : 'WARN', `stream FAILED ← ${targetModel} [${keyTag}]`,
-              isQuota ? `🔴 HẾT QUOTA (429): ${errMsg.substring(0, 80)}` : errMsg.substring(0, 80),
+            serverLog('GEMINI', isQuota || isAuth || is503 ? 'WARN' : 'WARN', `stream FAILED ← ${targetModel} [${keyTag}]`,
+              isQuota ? `🔴 HẾT QUOTA (429): ${errMsg.substring(0, 80)}` : (is503 ? `🟡 QUÁ TẢI (503): ${errMsg.substring(0, 80)}` : errMsg.substring(0, 80)),
               Date.now() - gemT0);
 
-            // Nếu key chạm quota 429 hoặc lỗi Auth: xoay ngay sang Key tiếp theo trong keyLoop
-            if (isQuota || isAuth) {
-              if (keyIdx + 1 < keyPool.length) {
+            // Đưa key vào cooldown để các request đồng thời khác tự động chuyển sang key khác
+            if (isQuota || isAuth || is503) {
+              geminiKeyManager.markCooldown(currentKey, is503 ? 15000 : 35000, isQuota ? '429 Rate Limit' : (is503 ? '503 Overloaded' : 'Auth Error'));
+              if (keyIdx + 1 < prioritizedKeys.length) {
                 serverLog('GEMINI', 'WARN', 'Key Rotation Active',
-                  `${keyTag} chạm giới hạn Quota → tự động kích hoạt Key #${keyIdx + 2}/${keyPool.length}`);
+                  `${keyTag} tạm dừng → tự động kích hoạt Key #${keyIdx + 2}/${prioritizedKeys.length}`);
               }
               break; // break khỏi model loop để sang key tiếp theo
             }
 
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 300));
           }
+        }
+        if (keyAcquired) {
+          geminiKeyManager.releaseKey(currentKey, false, lastError?.message);
         }
       }
 
@@ -4607,8 +4909,8 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
     const { petInfo, chatHistory, userId } = req.body;
 
     try {
-      const { data: configData } = await supabase.from('system_config').select('*').eq('id', 1).single();
-      const keyPool = getGeminiKeyPool(configData);
+      const { data: configData } = await getCachedSystemConfig();
+      const keyPool = geminiKeyManager.getPrioritizedKeys(configData);
       const sysConfig = configData ? { aiModel: configData.ai_model } : { aiModel: 'gemini-3.6-flash' };
 
       const summaryPrompt = `
@@ -4659,6 +4961,7 @@ YÊU CẦU:
           } catch (err: any) {
             const isQuota = /quota|rate.?limit|429|RESOURCE_EXHAUSTED/i.test(err?.message || '');
             if (isQuota) {
+              geminiKeyManager.markCooldown(k, 30000, 'Summarize 429');
               console.warn(`[SUMMARIZE] Key ${maskApiKey(k)} out of quota (429), rotating to next key...`);
               break; // break to next key
             }

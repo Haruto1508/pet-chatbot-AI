@@ -597,39 +597,37 @@ export function App() {
                   />
                 )}
 
-                {/* Quản lý hồ sơ bệnh án của User tạm thời tắt theo yêu cầu, có thể mở lại khi cần:
-            {currentTab === 'records' && (
-              <MedicalHistoryView
-                pets={pets}
-                currentUser={currentUser}
-                onViewRecordDetail={(record) => {
-                  setSelectedRecord(record);
-                  setCurrentTab('record_detail');
-                }}
-              />
-            )}
+                {currentTab === 'records' && (
+                  <MedicalHistoryView
+                    pets={pets}
+                    currentUser={currentUser}
+                    onViewRecordDetail={(record) => {
+                      setSelectedRecord(record);
+                      setCurrentTab('record_detail');
+                    }}
+                  />
+                )}
 
-            {currentTab === 'record_detail' && (
-              selectedRecord ? (
-                <MedicalRecordDetailView
-                  record={selectedRecord}
-                  onBack={() => setCurrentTab('records')}
-                  onDelete={async (id) => {
-                    if (window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn hồ sơ bệnh án này?')) {
-                      try {
-                        await api.deleteMedicalRecord(id);
-                        setCurrentTab('records');
-                      } catch (e) {
-                        console.error(e);
-                      }
-                    }
-                  }}
-                />
-              ) : (
-                <PageLoader />
-              )
-            )}
-            */}
+                {currentTab === 'record_detail' && (
+                  selectedRecord ? (
+                    <MedicalRecordDetailView
+                      record={selectedRecord}
+                      onBack={() => setCurrentTab('records')}
+                      onDelete={async (id) => {
+                        if (window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn hồ sơ bệnh án này?')) {
+                          try {
+                            await api.deleteMedicalRecord(id);
+                            setCurrentTab('records');
+                          } catch (e) {
+                            console.error(e);
+                          }
+                        }
+                      }}
+                    />
+                  ) : (
+                    <UniversalPageLoader currentTab={currentTab} />
+                  )
+                )}
 
                 {(currentTab === 'news' || currentTab === 'emergency') && (
                   <ArticlesNewsView />

@@ -375,7 +375,7 @@ export const PetChatView: React.FC<Props> = ({
     }
     setIsLoadingSessions(true);
     try {
-      const data = await api.getChatSessions(currentUser.id, selectedPet?.id);
+      const data = await api.getChatSessions(currentUser.id);
       const safeData = Array.isArray(data) ? data : [];
       setSessions(safeData);
       if (safeData.length > 0) {
@@ -395,7 +395,7 @@ export const PetChatView: React.FC<Props> = ({
 
   useEffect(() => {
     loadSessions();
-  }, [currentUser.id, selectedPet?.id]);
+  }, [currentUser.id]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -605,6 +605,10 @@ export const PetChatView: React.FC<Props> = ({
     setCurrentSessionId(session.id);
     setMessages(session.messages);
     setIsMobileHistoryOpen(false);
+    if (session.petId) {
+      const pet = pets.find(p => p.id === session.petId);
+      if (pet) setSelectedPet(pet);
+    }
   };
 
   const handleDeleteSessionClick = (id: string, e: React.MouseEvent) => {
@@ -1613,7 +1617,12 @@ export const PetChatView: React.FC<Props> = ({
                         const isYellow = msg.triageLevel === 'YELLOW' ||
                           (!msg.triageLevel && Boolean(msg.triageDetails?.urgency && /theo dõi|thăm khám|cần khám/i.test(msg.triageDetails.urgency)));
 
-                        if (msg.status === 'error' || (!isRed && !isYellow) || emergencyClinics.length === 0) return null;
+                        const isImageRejected = Boolean(msg.text && (
+                          msg.text.includes('không trùng khớp với mô tả') ||
+                          msg.text.includes('không liên quan đến thú cưng') ||
+                          msg.text.includes('không phù hợp hoặc không khớp')
+                        ));
+                        if (msg.status === 'error' || isImageRejected || (!isRed && !isYellow) || emergencyClinics.length === 0) return null;
 
                         return (
                           <div className="pl-8 mt-2.5">
