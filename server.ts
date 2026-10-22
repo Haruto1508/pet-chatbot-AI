@@ -732,6 +732,7 @@ async function startServer(isVercel = false) {
 
   class GeminiKeyManager {
     private keyMetas: Map<string, GeminiKeyMeta> = new Map();
+    private requestCounter: number = 0;
 
     public syncKeys(keys: string[]): void {
       const currentKeys = new Set(keys);
@@ -760,9 +761,10 @@ async function startServer(isVercel = false) {
     }
 
     /**
-     * Get keys prioritized by health and least active connections (Least-Connections Load Balancing)
+     * Get keys prioritized by health, least active connections, and parallel distributed sharding
+     * (Distributes users across keys simultaneously so they don't all contend on Key #1)
      */
-    public getPrioritizedKeys(configData?: any): string[] {
+    public getPrioritizedKeys(configData?: any, clientSeed?: string): string[] {
       const pool = getGeminiKeyPool(configData);
       this.syncKeys(pool);
 
@@ -773,13 +775,38 @@ async function startServer(isVercel = false) {
       const healthy = all.filter(m => m.cooldownUntil <= now);
       const cooling = all.filter(m => m.cooldownUntil > now);
 
-      // Least-connections sorting: pick keys with lowest activeStreams first
+      // 1. Least-connections sorting: pick keys with lowest activeStreams first
       healthy.sort((a, b) => {
         if (a.activeStreams !== b.activeStreams) {
           return a.activeStreams - b.activeStreams;
         }
         return a.lastUsed - b.lastUsed;
       });
+
+      // 2. ⚡ PARALLEL SHARDING & ROUND-ROBIN DISTRIBUTION:
+      // Thay vì dồn mọi người dùng vào Key #1 rồi đợi sập mới sang Key #2,
+      // chia luồng phân tán song song ngay từ đầu (User A -> Key 1, User B -> Key 2, User C -> Key 3...).
+      if (healthy.length > 1) {
+        this.requestCounter++;
+        let seedOffset = this.requestCounter;
+        if (clientSeed) {
+          let hash = 0;
+          for (let i = 0; i < clientSeed.length; i++) {
+            hash = ((hash << 5) - hash + clientSeed.charCodeAt(i)) | 0;
+          }
+          seedOffset += Math.abs(hash);
+        }
+
+        // Chỉ rotate giữa các key có cùng activeStreams thấp nhất để bảo toàn tính ưu tiên Least-Connections
+        const minStreams = healthy[0].activeStreams;
+        const leastBusy = healthy.filter(h => h.activeStreams === minStreams);
+        if (leastBusy.length > 1) {
+          const rot = seedOffset % leastBusy.length;
+          const rotatedLeast = [...leastBusy.slice(rot), ...leastBusy.slice(0, rot)];
+          const rest = healthy.filter(h => h.activeStreams > minStreams);
+          healthy.splice(0, healthy.length, ...rotatedLeast, ...rest);
+        }
+      }
 
       // Cooling keys sorted by earliest expiration
       cooling.sort((a, b) => a.cooldownUntil - b.cooldownUntil);
@@ -4751,7 +4778,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
         isClientClosed = true;
       });
 
-      const prioritizedKeys = geminiKeyManager.getPrioritizedKeys(configData);
+      const prioritizedKeys = geminiKeyManager.getPrioritizedKeys(configData, clientIdentifier);
 
       keyLoop: for (let keyIdx = 0; keyIdx < prioritizedKeys.length; keyIdx++) {
         if (isClientClosed) break keyLoop;
