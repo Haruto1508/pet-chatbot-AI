@@ -31,6 +31,7 @@ export const MedicalHistoryView: React.FC<Props> = ({ pets, currentUser, onViewR
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [activeRecordModal, setActiveRecordModal] = useState<MedicalRecord | null>(null);
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { showSuccess, showError } = useNotification();
 
   const loadRecords = async () => {
@@ -57,6 +58,7 @@ export const MedicalHistoryView: React.FC<Props> = ({ pets, currentUser, onViewR
 
   const confirmDelete = async () => {
     if (!recordToDelete) return;
+    setIsDeleting(true);
     try {
       await api.deleteMedicalRecord(recordToDelete);
       setRecords(prev => (Array.isArray(prev) ? prev : []).filter(r => r.id !== recordToDelete));
@@ -65,6 +67,7 @@ export const MedicalHistoryView: React.FC<Props> = ({ pets, currentUser, onViewR
     } catch (e) {
       showError('Xóa hồ sơ bệnh án thất bại.');
     } finally {
+      setIsDeleting(false);
       setRecordToDelete(null);
     }
   };
@@ -321,15 +324,24 @@ export const MedicalHistoryView: React.FC<Props> = ({ pets, currentUser, onViewR
             <div className="flex gap-3">
               <button
                 onClick={() => setRecordToDelete(null)}
-                className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors"
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Hủy
               </button>
               <button
                 onClick={confirmDelete}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-xs"
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-xs flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Xóa ngay
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  'Xóa ngay'
+                )}
               </button>
             </div>
           </div>

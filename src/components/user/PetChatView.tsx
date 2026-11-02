@@ -214,6 +214,7 @@ export const PetChatView: React.FC<Props> = ({
 
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editRecordDraft, setEditRecordDraft] = useState<Partial<MedicalRecord> | null>(null);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
@@ -629,6 +630,7 @@ export const PetChatView: React.FC<Props> = ({
 
   const confirmDeleteSession = async () => {
     if (!sessionToDelete) return;
+    setIsDeleting(true);
     try {
       await api.deleteChatSession(sessionToDelete);
       setSessions(prev => (Array.isArray(prev) ? prev : []).filter(s => s.id !== sessionToDelete));
@@ -639,11 +641,13 @@ export const PetChatView: React.FC<Props> = ({
     } catch (e) {
       showError('Xóa thất bại');
     } finally {
+      setIsDeleting(false);
       setSessionToDelete(null);
     }
   };
 
   const confirmDeleteAll = async () => {
+    setIsDeleting(true);
     try {
       await api.deleteAllChatSessions(currentUser.id);
       setSessions([]);
@@ -652,6 +656,7 @@ export const PetChatView: React.FC<Props> = ({
     } catch (e) {
       showError('Xóa tất cả thất bại');
     } finally {
+      setIsDeleting(false);
       setIsDeletingAll(false);
     }
   };
@@ -1503,8 +1508,8 @@ export const PetChatView: React.FC<Props> = ({
                       </div>
                     </div>
 
-                    {activeSessionSummary.triage && (
-                      <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
+                      {activeSessionSummary.triage && (
                         <span className={`text-[10px] font-bold px-2 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 ${
                           activeSessionSummary.triage === 'RED'
                             ? 'bg-red-500 text-white shadow-xs'
@@ -1514,8 +1519,30 @@ export const PetChatView: React.FC<Props> = ({
                         }`}>
                           <span>{activeSessionSummary.triage === 'RED' ? '🔴 Cấp cứu' : activeSessionSummary.triage === 'YELLOW' ? '🟡 Cần theo dõi' : '🟢 Ổn định'}</span>
                         </span>
-                      </div>
-                    )}
+                      )}
+
+                      {!isGuest && (
+                        <button
+                          type="button"
+                          onClick={handleCreateMedicalRecord}
+                          disabled={isSummarizing || messages.length <= 1}
+                          title={messages.length <= 1 ? "Hãy trò chuyện với AI để cung cấp triệu chứng trước" : "Lưu vào Hồ Sơ Bệnh Án"}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {isSummarizing ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Đang tổng hợp...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FilePlus className="w-3.5 h-3.5" />
+                              <span>Lưu Bệnh Án</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
                 {messages.filter(m => m.id !== 'msg_welcome').map((msg, idx) => {
@@ -2205,15 +2232,24 @@ export const PetChatView: React.FC<Props> = ({
                   setSessionToDelete(null);
                   setIsDeletingAll(false);
                 }}
-                className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                disabled={isDeleting}
+                className="px-4 py-2 font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Hủy bỏ
               </button>
               <button
                 onClick={isDeletingAll ? confirmDeleteAll : confirmDeleteSession}
-                className="px-4 py-2 font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-xs"
+                disabled={isDeleting}
+                className="px-4 py-2 font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-xs flex items-center justify-center gap-2 min-w-[110px] disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Xác nhận Xóa
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  'Xác nhận Xóa'
+                )}
               </button>
             </div>
           </div>

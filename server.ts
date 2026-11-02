@@ -5111,19 +5111,24 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
       const summaryPrompt = `
 Bạn là Bác sĩ Thú y AI cực kỳ tận tâm và có chuyên môn cao. Hãy đọc đoạn hội thoại chat tư vấn dưới đây và tổng hợp thành 1 Hồ Sơ Bệnh Án chuẩn y khoa thú y chi tiết, đầy đủ và dễ hiểu cho người nuôi.
 
-[THÔNG TIN THÚ CƯNG]:
-- Tên: ${petInfo?.name || 'Thú cưng'}
-- Loài: ${petInfo?.species || 'Không rõ'} (${petInfo?.breed || 'Chưa rõ giống'})
-- Cân nặng: ${petInfo?.weight || '3'} kg, Tuổi: ${petInfo?.age || '12'} tháng
+[THÔNG TIN THÚ CƯNG KHAI BÁO BAN ĐẦU]:
+- Tên: ${petInfo?.name || 'Chưa cung cấp tên'}
+- Loài: ${petInfo?.species || 'Chưa rõ'} (${petInfo?.breed || 'Chưa rõ giống'})
+- Cân nặng: ${petInfo?.weight ? petInfo.weight + ' kg' : 'Chưa rõ'}, Tuổi: ${petInfo?.age ? petInfo.age + ' tháng' : 'Chưa rõ'}
 
 [ĐOẠN HỘI THOẠI TƯ VẤN KHÁM]:
 ${JSON.stringify(chatHistory)}
 
 YÊU CẦU:
-1. Mỗi trường thông tin trong JSON phải được viết thật chi tiết, đầy đủ, chia theo các gạch đầu dòng rõ ràng, phân tích sâu chuyên môn và cung cấp hướng dẫn thực tế cụ thể. Tránh viết chung chung, sơ sài hoặc quá ngắn gọn.
-2. Viết bằng tiếng Việt tự nhiên, chuyên nghiệp nhưng vẫn thân thiện với chủ nuôi.
-3. TRẢ VỀ CHÍNH XÁC ĐỊNH DẠNG JSON SAU (KHÔNG THÊM BẤT KỲ CHỮ NÀO KHÁC BÊN NGOÀI JSON):
+1. TRÍCH XUẤT TÊN & LOÀI THÚ CƯNG TỪ ĐOẠN CHAT:
+   - "extractedPetName": Nếu người dùng có nhắc đến tên thú cưng trong cuộc trò chuyện (ví dụ: "Bé Miu", "Cún Lu", "Bông", "Miu Miu", "Bé Bơ"...), hoặc thông tin khai báo đã có tên hợp lệ, hãy lấy đúng tên đó. Nếu hoàn toàn không có bất kỳ tên riêng nào được nhắc tới, hãy đặt tên tự nhiên theo loài (ví dụ: "Bé Mèo", "Bé Cún", "Bé Thú Cưng"). TUYỆT ĐỐI không tự bịa tên lạ hoặc gán cứng "Thú cưng" khi người dùng đã nói rõ tên!
+   - "extractedPetSpecies": Nhận diện chính xác loài vật từ đoạn chat hoặc thông tin khai báo (ví dụ: "Mèo", "Chó", "Chim", "Thỏ", "Hamster"...). Nếu nhắc đến "mèo", "miu", "hoàng thượng" -> "Mèo". Nếu nhắc đến "chó", "cún", "poodle", "corgi", "husky"... -> "Chó".
+2. Mỗi trường thông tin trong JSON phải được viết thật chi tiết, đầy đủ, chia theo các gạch đầu dòng rõ ràng, phân tích sâu chuyên môn và cung cấp hướng dẫn thực tế cụ thể. Tránh viết chung chung, sơ sài hoặc quá ngắn gọn.
+3. Viết bằng tiếng Việt tự nhiên, chuyên nghiệp nhưng vẫn thân thiện với chủ nuôi.
+4. TRẢ VỀ CHÍNH XÁC ĐỊNH DẠNG JSON SAU (KHÔNG THÊM BẤT KỲ CHỮ NÀO KHÁC BÊN NGOÀI JSON):
 {
+  "extractedPetName": "Tên thú cưng được nhận diện từ đoạn chat hoặc thông tin khai báo",
+  "extractedPetSpecies": "Loài vật (Mèo / Chó / Chim / Thú nhỏ...)",
   "symptomSummary": "Tóm tắt đầy đủ, chi tiết tất cả triệu chứng lâm sàng, hành vi bất thường, thời gian khởi phát và diễn tiến của triệu chứng được người chủ mô tả trong cuộc trò chuyện",
   "diagnosis": "Chẩn đoán phân biệt và chẩn đoán sơ bộ chi tiết về các nguyên nhân có thể gây ra triệu chứng, giải thích rõ cơ chế tại sao thú cưng bị như vậy dựa trên loài, giống, tuổi và các dữ kiện đã cung cấp",
   "triageLevel": "RED" | "YELLOW" | "GREEN",
@@ -5200,11 +5205,37 @@ YÊU CẦU:
         };
       }
 
+      // Auto-detect pet species and name from conversation if not explicitly provided
+      const conversationText = chatHistory.map((m: any) => m.text || '').join(' ').toLowerCase();
+      let detectedSpecies = petInfo?.species || jsonResult.extractedPetSpecies;
+      if (!detectedSpecies || detectedSpecies === 'Không rõ') {
+        if (/\b(mèo|meo|miu|cat|hoàng thượng|meow)\b/i.test(conversationText)) {
+          detectedSpecies = 'Mèo';
+        } else if (/\b(chó|cho|cún|cun|dog|poodle|corgi|husky|chihuahua|pug|golden)\b/i.test(conversationText)) {
+          detectedSpecies = 'Chó';
+        } else if (/\b(chim|vẹt|khướu|chích chòe|yến phụng)\b/i.test(conversationText)) {
+          detectedSpecies = 'Chim';
+        } else if (/\b(thỏ|rabbit|hamster|chuột)\b/i.test(conversationText)) {
+          detectedSpecies = 'Thú nhỏ khác';
+        } else {
+          detectedSpecies = 'Thú cưng';
+        }
+      }
+
+      let detectedPetName = petInfo?.name && petInfo.name !== 'Thú cưng'
+        ? petInfo.name
+        : (jsonResult.extractedPetName || (detectedSpecies === 'Mèo' ? 'Bé Mèo' : detectedSpecies === 'Chó' ? 'Bé Cún' : 'Bé Thú Cưng'));
+
+      // Clean up fallback petName
+      if (detectedPetName === 'Chưa cung cấp tên' || detectedPetName === 'Thú cưng') {
+        detectedPetName = detectedSpecies === 'Mèo' ? 'Bé Mèo' : detectedSpecies === 'Chó' ? 'Bé Cún' : 'Bé Thú Cưng';
+      }
+
       // Compile the draft medical record
       const draftRecord = {
         petId: petInfo?.id || '',
-        petName: petInfo?.name || 'Thú cưng',
-        petSpecies: petInfo?.species || 'Mèo',
+        petName: detectedPetName,
+        petSpecies: detectedSpecies,
         userId: userId || petInfo?.userId || 'user_01',
         date: new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }),
         symptomSummary: jsonResult.symptomSummary || 'Không có triệu chứng rõ ràng',
