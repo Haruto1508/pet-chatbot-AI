@@ -5247,14 +5247,14 @@ YÊU CẦU:
         chatSnippet: chatHistory.slice(-2).map((m: any) => `${m.sender}: ${m.text}`).join('\n')
       };
 
-      res.json({
+      res.json(secureResponse({
         success: true,
         record: draftRecord
-      });
+      }));
 
     } catch (err: any) {
       console.error('Error generating medical record:', err);
-      res.status(500).json({ error: 'Không thể tạo hồ sơ bệnh án từ AI' });
+      res.status(500).json(secureResponse({ error: 'Không thể tạo hồ sơ bệnh án từ AI: ' + (err?.message || err) }));
     }
   });
 

@@ -1005,7 +1005,13 @@ export const PetChatView: React.FC<Props> = ({
   };
 
   const handleCreateMedicalRecord = async () => {
-    if (messages.length <= 1) {
+    if (isGuest) {
+      showError('Vui lòng đăng nhập tài khoản để tạo và lưu trữ hồ sơ bệnh án cho thú cưng.');
+      onOpenLogin?.();
+      return;
+    }
+
+    if (messages.filter(m => m.sender === 'user').length === 0) {
       showError('Vui lòng trò chuyện với AI để cung cấp triệu chứng trước khi tạo hồ sơ bệnh án.');
       return;
     }
@@ -1013,11 +1019,14 @@ export const PetChatView: React.FC<Props> = ({
     setIsSummarizing(true);
     try {
       const res = await api.summarizeMedicalRecordFromChat(selectedPet, messages, currentUser.id);
-      if (res.success) {
+      if (res && res.success && res.record) {
         setEditRecordDraft(res.record);
+      } else {
+        const errorMsg = (res as any)?.error || 'Không thể tổng hợp triệu chứng lúc này. Vui lòng thử lại.';
+        showError(errorMsg);
       }
-    } catch (e) {
-      showError('Không thể tổng hợp triệu chứng lúc này. Vui lòng thử lại.');
+    } catch (e: any) {
+      showError(e?.message || 'Không thể tổng hợp triệu chứng lúc này. Vui lòng thử lại.');
     } finally {
       setIsSummarizing(false);
     }
@@ -1028,10 +1037,13 @@ export const PetChatView: React.FC<Props> = ({
     setIsSavingRecord(true);
     try {
       const savedRecord = await api.createMedicalRecord(editRecordDraft);
-      showSuccess(`Đã lưu hồ sơ bệnh án thành công cho thú cưng ${savedRecord.petName}!`);
+      if ((savedRecord as any)?.error) {
+        throw new Error((savedRecord as any).error);
+      }
+      showSuccess(`Đã lưu hồ sơ bệnh án thành công cho thú cưng ${savedRecord.petName || 'thú cưng'}!`);
       setEditRecordDraft(null);
-    } catch (e) {
-      showError('Lưu hồ sơ bệnh án thất bại. Vui lòng thử lại.');
+    } catch (e: any) {
+      showError(e?.message || 'Lưu hồ sơ bệnh án thất bại. Vui lòng thử lại.');
     } finally {
       setIsSavingRecord(false);
     }
@@ -1328,6 +1340,27 @@ export const PetChatView: React.FC<Props> = ({
 
         {/* Top Right Actions: Point balance badge & Mobile History & New Chat */}
         <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+          {messages.filter(m => m.sender === 'user').length > 0 && !isGuest && (
+            <button
+              type="button"
+              onClick={handleCreateMedicalRecord}
+              disabled={isSummarizing}
+              title="Tổng hợp và lưu hồ sơ bệnh án từ cuộc trò chuyện này"
+              className="h-10 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5 font-bold text-xs disabled:opacity-50"
+            >
+              {isSummarizing ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span className="hidden sm:inline">Đang tổng hợp...</span>
+                </>
+              ) : (
+                <>
+                  <Stethoscope className="w-4 h-4 shrink-0 text-emerald-200" />
+                  <span className="hidden sm:inline">Lưu Bệnh Án</span>
+                </>
+              )}
+            </button>
+          )}
           {!isGuest && (
             <button
               type="button"
