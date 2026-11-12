@@ -4924,59 +4924,89 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
 
             // Model phản hồi tốt! Tiến hành stream đầy đủ cho client
             let fullText = '';
-            let isInsideTriage = false;
-            let triageBuffer = '';
             let triageSent = false;
-            const TRIAGE_START_TAG = '[[TRIAGE_ALERT]]';
-            const TRIAGE_END_TAG = '[[/TRIAGE_ALERT]]';
+            let streamBuffer = '';
+            let isTriageHeaderDone = false;
 
             const handleChunk = (chunkText: string) => {
               if (!chunkText || isClientClosed) return;
               fullText += chunkText;
 
-              if (!triageSent && !isCasualGreeting) {
-                // Nếu fullText đang là phần đầu khớp với tiền tố của [[TRIAGE_ALERT]]
-                // hoặc đã chứa [[TRIAGE_ALERT]] nhưng chưa đóng [[/TRIAGE_ALERT]], tiếp tục buffer
-                const trimmedStart = fullText.trimStart();
-                const isPrefixOfTag = trimmedStart.length > 0 && TRIAGE_START_TAG.startsWith(trimmedStart);
+              if (isCasualGreeting) {
+                sendEvent('chunk', { text: chunkText });
+                return;
+              }
 
-                if (isPrefixOfTag || (!isInsideTriage && fullText.includes(TRIAGE_START_TAG))) {
-                  isInsideTriage = true;
-                }
+              // Giai đoạn đầu: Chặn mọi mảnh vỡ Triage Alert (hoặc bất kỳ ký tự tiền tố rác nào [[TRI...)
+              if (!isTriageHeaderDone) {
+                streamBuffer += chunkText;
 
-                if (isInsideTriage) {
-                  triageBuffer = fullText;
-                  if (triageBuffer.includes(TRIAGE_END_TAG)) {
-                    isInsideTriage = false;
-                    triageSent = true;
-                    const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
-                    if (alertMatch && alertMatch[1]) {
-                      try {
-                        const parsed = JSON.parse(alertMatch[1].trim());
-                        sendEvent('triage', {
-                          triageLevel: parsed.level || 'GREEN',
-                          triageDetails: {
-                            riskTitle: parsed.title || 'THÔNG TIN SỨC KHỎE',
-                            urgency: parsed.urgency || '',
-                            immediateActions: parsed.actions || []
-                          }
-                        });
-                      } catch (e) {
-                        console.error('Error parsing Triage Alert JSON from Gemini response:', e);
-                      }
-                    }
-                    const afterTriage = triageBuffer.split(TRIAGE_END_TAG)[1];
-                    if (afterTriage && afterTriage.length > 0) {
-                      const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
-                      if (cleanAfterTriage.length > 0) {
-                        sendEvent('chunk', { text: cleanAfterTriage });
-                      }
+                // 1. Kiểm tra xem đã có đầy đủ thẻ đóng [[/TRIAGE_ALERT]] chưa
+                if (streamBuffer.includes('[[/TRIAGE_ALERT]]')) {
+                  isTriageHeaderDone = true;
+                  triageSent = true;
+
+                  const alertMatch = streamBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/i);
+                  if (alertMatch && alertMatch[1]) {
+                    try {
+                      const parsed = JSON.parse(alertMatch[1].trim());
+                      sendEvent('triage', {
+                        triageLevel: parsed.level || 'GREEN',
+                        triageDetails: {
+                          riskTitle: parsed.title || 'THÔNG TIN SỨC KHỎE',
+                          urgency: parsed.urgency || '',
+                          immediateActions: parsed.actions || []
+                        }
+                      });
+                    } catch (e) {
+                      console.error('Error parsing Triage Alert JSON from Gemini response:', e);
                     }
                   }
-                  return; // Đang trong quá trình đọc thẻ Triage, không gửi chunk rác ra client
+
+                  // Lấy toàn bộ phần sau thẻ đóng [[/TRIAGE_ALERT]], loại bỏ triệt để mọi tag rác còn sót lại
+                  let afterTriage = streamBuffer.split(/\[\[\/TRIAGE_ALERT\]\]/i)[1] || '';
+                  afterTriage = afterTriage
+                    .replace(/\[\[TRI(?:AGE(?:_ALERT)?)?[^\]\n]*\]?\]?/gi, '')
+                    .replace(/^\[\[TRI[^\s#]*/gi, '')
+                    .trimStart();
+
+                  if (afterTriage.length > 0) {
+                    sendEvent('chunk', { text: afterTriage });
+                  }
+                  streamBuffer = '';
+                  return;
                 }
+
+                // 2. Nếu model không xuất thẻ đóng hợp lệ mà bắt đầu bằng Markdown (###) hoặc chữ bình thường
+                // hoặc chứa các dấu hiệu [[TRI###, [[TRIAGE... nhưng không có JSON hợp lệ:
+                const cleanCheck = streamBuffer.trimStart();
+                const startsWithTriageTag = cleanCheck.startsWith('[[TRIAGE_ALERT]]') || '[[TRIAGE_ALERT]]'.startsWith(cleanCheck);
+
+                if (!startsWithTriageTag || cleanCheck.includes('###') || streamBuffer.length > 500) {
+                  // Model không tạo thẻ Triage JSON chuẩn mà xả text / Markdown ngay
+                  isTriageHeaderDone = true;
+                  let sanitizedStart = streamBuffer
+                    .replace(/\[\[TRIAGE_ALERT\]\][\s\S]*?\[\[\/TRIAGE_ALERT\]\]\s*/gi, '')
+                    .replace(/\[\[\/?TRI(?:AGE(?:_ALERT)?)?[^\]\n]*\]?\]?/gi, '')
+                    .replace(/^\[\[TRI[^\s#]*/gi, '')
+                    .trimStart();
+
+                  if (sanitizedStart.length > 0) {
+                    sendEvent('chunk', { text: sanitizedStart });
+                  }
+                  streamBuffer = '';
+                  return;
+                }
+
+                // Vẫn đang tích lũy khối Triage Alert ở đầu dòng, KHÔNG gửi ra client
+                return;
               }
-              sendEvent('chunk', { text: chunkText });
+
+              // Sau khi đã xong phần header Triage, dọn sạch nếu lọt ký tự [[TRI rác rồi gửi chunk bình thường
+              const cleanChunk = chunkText.replace(/\[\[\/?TRI(?:AGE(?:_ALERT)?)?[^\]\n]*\]?\]?/gi, '');
+              if (cleanChunk.length > 0) {
+                sendEvent('chunk', { text: cleanChunk });
+              }
             };
 
             // Gửi chunk đầu tiên

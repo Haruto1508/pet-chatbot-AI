@@ -1340,23 +1340,23 @@ export const PetChatView: React.FC<Props> = ({
 
         {/* Top Right Actions: Point balance badge & Mobile History & New Chat */}
         <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
-          {messages.filter(m => m.sender === 'user').length > 0 && !isGuest && (
+          {messages.filter(m => m.sender === 'user').length > 0 && (
             <button
               type="button"
               onClick={handleCreateMedicalRecord}
               disabled={isSummarizing}
-              title="Tổng hợp và lưu hồ sơ bệnh án từ cuộc trò chuyện này"
-              className="h-10 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5 font-bold text-xs disabled:opacity-50"
+              title={isGuest ? "Đăng nhập để tạo và lưu trữ hồ sơ bệnh án" : "Tổng hợp và lưu hồ sơ bệnh án từ cuộc trò chuyện này"}
+              className="h-10 px-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white shadow-md transition-all cursor-pointer flex items-center gap-1.5 font-extrabold text-xs disabled:opacity-50 border border-emerald-500/30"
             >
               {isSummarizing ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span className="hidden sm:inline">Đang tổng hợp...</span>
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                  <span>Đang tổng hợp...</span>
                 </>
               ) : (
                 <>
-                  <Stethoscope className="w-4 h-4 shrink-0 text-emerald-200" />
-                  <span className="hidden sm:inline">Lưu Bệnh Án</span>
+                  <FilePlus className="w-4 h-4 shrink-0 text-emerald-100" />
+                  <span>Lưu Bệnh Án</span>
                 </>
               )}
             </button>
@@ -1843,7 +1843,26 @@ export const PetChatView: React.FC<Props> = ({
                       })()}
 
                       {/* Action buttons | appear on hover */}
-                      <div className="pl-8 mt-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                      <div className="pl-8 mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                        <button
+                          type="button"
+                          onClick={handleCreateMedicalRecord}
+                          disabled={isSummarizing}
+                          title="Tạo & Lưu Hồ Sơ Bệnh Án từ tư vấn này"
+                          className="flex items-center gap-1.5 px-2.5 py-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg text-xs font-bold transition-all border border-emerald-200/80 cursor-pointer shadow-2xs active:scale-95 disabled:opacity-50"
+                        >
+                          {isSummarizing ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                              <span>Đang tổng hợp...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FilePlus className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Lưu vào Bệnh Án</span>
+                            </>
+                          )}
+                        </button>
                         <button
                           onClick={() => {
                             navigator.clipboard.writeText(msg.text);
