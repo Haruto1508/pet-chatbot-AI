@@ -1689,7 +1689,13 @@ export const PetChatView: React.FC<Props> = ({
                             )
                           }}
                         >
-                          {msg.text}
+                          {msg.text
+                            ? msg.text
+                                .replace(/\[\[TRIAGE_ALERT\]\][\s\S]*?\[\[\/TRIAGE_ALERT\]\]\s*/g, '')
+                                .replace(/^\[\[TRI(?:AGE(?:_ALERT)?)?/g, '')
+                                .replace(/\[\[TRIAGE_ALERT\]\][\s\S]*$/g, '')
+                                .trimStart()
+                            : ''}
                         </Markdown>
                         {isLoading && idx === messages.length - 1 && (
                           <span className="inline-block w-1.5 h-3.5 ml-1 bg-emerald-600 animate-pulse align-middle rounded-xs" />

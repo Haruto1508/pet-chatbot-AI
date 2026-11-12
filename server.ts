@@ -4927,18 +4927,26 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
             let isInsideTriage = false;
             let triageBuffer = '';
             let triageSent = false;
+            const TRIAGE_START_TAG = '[[TRIAGE_ALERT]]';
+            const TRIAGE_END_TAG = '[[/TRIAGE_ALERT]]';
 
             const handleChunk = (chunkText: string) => {
               if (!chunkText || isClientClosed) return;
               fullText += chunkText;
 
               if (!triageSent && !isCasualGreeting) {
-                if (!isInsideTriage && fullText.includes('[[TRIAGE_ALERT]]')) {
+                // Nếu fullText đang là phần đầu khớp với tiền tố của [[TRIAGE_ALERT]]
+                // hoặc đã chứa [[TRIAGE_ALERT]] nhưng chưa đóng [[/TRIAGE_ALERT]], tiếp tục buffer
+                const trimmedStart = fullText.trimStart();
+                const isPrefixOfTag = trimmedStart.length > 0 && TRIAGE_START_TAG.startsWith(trimmedStart);
+
+                if (isPrefixOfTag || (!isInsideTriage && fullText.includes(TRIAGE_START_TAG))) {
                   isInsideTriage = true;
                 }
+
                 if (isInsideTriage) {
                   triageBuffer = fullText;
-                  if (triageBuffer.includes('[[/TRIAGE_ALERT]]')) {
+                  if (triageBuffer.includes(TRIAGE_END_TAG)) {
                     isInsideTriage = false;
                     triageSent = true;
                     const alertMatch = triageBuffer.match(/\[\[TRIAGE_ALERT\]\]([\s\S]*?)\[\[\/TRIAGE_ALERT\]\]/);
@@ -4957,7 +4965,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
                         console.error('Error parsing Triage Alert JSON from Gemini response:', e);
                       }
                     }
-                    const afterTriage = triageBuffer.split('[[/TRIAGE_ALERT]]')[1];
+                    const afterTriage = triageBuffer.split(TRIAGE_END_TAG)[1];
                     if (afterTriage && afterTriage.length > 0) {
                       const cleanAfterTriage = afterTriage.replace(/^\s+/, '');
                       if (cleanAfterTriage.length > 0) {
@@ -4965,7 +4973,7 @@ Tóm tắt trong 1-2 câu ngắn gọn về nguyên nhân và mức độ nguy h
                       }
                     }
                   }
-                  return;
+                  return; // Đang trong quá trình đọc thẻ Triage, không gửi chunk rác ra client
                 }
               }
               sendEvent('chunk', { text: chunkText });
